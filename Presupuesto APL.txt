@@ -1,0 +1,230 @@
+Presupuesto APL 
+
+Aplicación WEB y 
+MOBILE. 
+
+ 
+
+Línea corta
+Catalina Galgani - Analista de Sistemas y Negocios. 
+
+Jesús José Copes - Desarrollador WEB 
+
+Pablo Ezequiel Florentin - Desarrollador MOBILE 
+17 de diciembre de 2025 
+
+ 
+
+
+Resumen 
+
+El presente documento tendrá como fin exponer el análisis de la necesidad del modelaje y 
+creación de una base de datos aplicación web y mobile para poder gestionar compra de 
+prótesis, pedidos de las clínicas odontológicas u odontólogos/as. 
+
+Introducción 
+
+Se requiere realizar una base de datos, aplicación web y mobile para poder gestionar la 
+administración contable de un laboratorio dental (APL). 
+
+Objetivos 
+
+● Análisis detallado de los requerimientos y necesidad para la gestión gestionar la 
+administración contable de un laboratorio dental. 
+● La correcta realización del DER y MR. 
+● Los scripts correctos para realizar las siguiente acción, más la creación de la base de 
+datos en el motor MySQL. 
+○ La creación de tablas. 
+○ La creación de triggers. 
+○ Los insert de datos. 
+○ Los select para las consultas pertinentes y pruebas de triggers. 
+
+
+● Desarrollo robusto de backend y base de datos para poder funcionar correctamente 
+frente a muchos datos que deberá analizar la aplicación constantemente. 
+● Desarrollo de aplicación WEB para poder utilizarla desde diferentes ips. 
+● Desarrollo de aplicación MOBILE para poder utilizarla en todos los software (andriod e 
+ios) 
+● Licencia en google store para que se pueda utilizar la app MOBILE en el software que 
+tenga el dispositivo mobile. 
+
+
+Alcance 
+
+El alcance contará con: 
+
+● el diagrama correctamente realizado del modelado de la base de datos, tanto el 
+diagrama entidad-relación como el modelo relacional. 
+
+
+
+● El prototipo realizado en figma para la iteración con el cliente y llegar a un acuerdo con 
+los diseños: https://www.figma.com/make/u2T9J0rlSj2DUwC1Xt9RpB/Dental-Lab-
+Management-App?p=f&t=ozImKe0ZaTjVcm3j-0&fullscreen=1 
+● Una aplicación WEB MVP para que utilice por el momento un usuario Administrador. 
+● Una aplicación MOBILE MVP para que utilice por el momento un usuario Administrador. 
+
+
+Análisis de Requerimientos 
+
+El alcance contará con: 
+
+Análisis de base de datos: 
+
+● Análisis 1: Se realizará un diseño contemplando 3 tipos de normalización de tablas 
+○ Tablas normalización 1: 
+■ Administrador 
+■ Cliente 
+■ Pedidos 
+
+
+○ Tablas normalización 2: 
+■ Detalle_pedido 
+■ Pago 
+
+
+○ Tabla normalización tipo 3: 
+■ Auditoría. 
+
+
+
+
+● Análisis 2: Se realizarán las relaciones de la siguiente manera: 
+● Análisis 3: necesidad de expandir 
+
+
+Análisis de página WEB: 
+
+Análisis de aplicación MOBILE: 
+
+
+Diseño de la Base de Datos 
+
+DER 
+
+ 
+
+Diccionario de base de datos. 
+
+1. Tabla: 
+
+
+Implementación 
+
+● Se realiza la creación de la base, junto con usuarios mas sus permisos, los index y los 
+triggers con los comandos informados en archivo .sql: 
+CREACION_DE_BBDD_GESTION_ADMINISTRATIVA_DENTAL.sql 
+● Se insertan los datos correspondiente, más se pueden realizar las queris y las pruebas de 
+los triggers informadas en el archivo .sql: 
+INSERT_GESTION_ADMINISTRATIVA_DENTAL.sql 
+● CONSULTAS_Y_PRUEBAS_TRIGGERS_GESTION_ADMINISTRATIVA_DENTAL.sql 
+● La página web se podrá ingresar mediante la siguiente URL 
+○ Usuario: AdminAnto 
+○ Contraseña: AdminAnto17$ 
+
+
+
+
+
+● La aplicación MOBILE en el siguiente link se podrá descargar la aplicación en el 
+dispositivo móvil que se requiera descargar para su uso. 
+○ Usuario: AdminAnto 
+○ Contraseña: AdminAnto17$ 
+
+
+● De querer modificar la contraseña tendrá la posibilidad de gestionar el pedido mediante 
+la misma aplicación, sea por la página WEB o por la aplicación MOBILE. 
+
+
+Modelo de Inteligencia de Negocios 
+
+Como propuesta de valor es sumar una base de datos bien ordenada y modelada con 3 tipos de 
+tablas (normal1, normal 2 y normal 3), las cuales facilitara el analisis, modififcación y el guardado 
+de datos importantes para la gestión administrativa del laboratorio dental. 
+
+Más también su desarrollo a nivel backend y frontend, para portal WEB y aplicación Mobile. 
+
+Las actividades claves a tener en cuenta es: 
+
+● Analizar que el diseño de la base (DER y MR) sea adecuado a lo solicitado. 
+● La creación de la base, las tablas, usuarios, permisos, triggers esten adecuados. 
+● El insert de la información asi se cuenta con los datos precargados 
+● Se puede utilizar las consultas brindadas en el documento para ver y validar la 
+información cargada. 
+● También en la carpeta zip encontraran pruebas para realizar a los triggers de ser 
+necesario. 
+● También se disponibilizara un prototipo interactivo realizado con figma para que el 
+cliente pueda iterar el diseño del mismo. 
+
+
+Es importante contar con un motor MySQL instalado para poder realizar la creación y consultas 
+de los datos. Más de un analista de sistema y negocios que se encargue de esta tarea respecto 
+a la base de datos, en conjunto de analizar el negocio y el sistema integral. 
+
+También contar con dos desarrolladores que realizarán: La aplicación WEB y la aplicación 
+MOBILE. 
+
+
+Presupuesto y planes de pago 
+
+Presupuesto presentado por el equipo: 
+
+Valor de hora: $5.500 (Cinco mil quinientos pesos argentinos) 
+
+● Horas de desarrollador WEB: 80 horas. 
+○ Divididas en 4 horas por día. 
+○ Total de ingreso: $440.000 (Cuatrocientos cuarenta mil pesos argentinos) 
+
+
+● Horas de desarrollador MOBILE: 80 horas. 
+○ Divididas en 4 horas por día. 
+○ Total de ingreso: $440.000 (Cuatrocientos cuarenta mil pesos argentinos) 
+
+
+● Horas de Analista de sistemas: 40 horas. 
+○ Divididas en 2 horas por día. 
+○ Total de ingreso: $220.000 (Doscientos veinte mil pesos argentinos) 
+
+
+
+
+Total de horas: 200 horas. 
+
+Total de ingreso general por el entregable completo del primer MVP de la aplicación 
+“Administración para laboratorio dental - APL” : $1.100.000 (Un millón cien mil pesos 
+argentinos) 
+
+Planes de pago: 
+
+1 Cuota sin interés de $1.100.000 (Un millón cien mil pesos argentinos) 
+
+● Fecha de entrega a acordar desde el pago 
+● Contemplar mínimo un mes y medio de desarrollo. 
+
+
+2 Cuotas sin interés $550.000 (Quinientos cincuenta mil pesos argentinos) 
+
+● Fecha de entrega se acordará una vez realizado los 2 pagos. 
+● La aplicación comenzará a desarrollarse una vez realizado el primer pago. 
+
+
+3 Cuotas de $370.000 (Trescientos setenta mil pesos argentinos) 
+
+● Fecha de entrega se acordará una vez realizado los 3 pagos. 
+● La aplicación comenzará a desarrollarse una vez realizado el primer pago. 
+
+
+Plan de pago opcional: 
+
+El acuerdo que se llegue junto al cliente. 
+
+
+● Fecha de entrega se acordará una vez realizado el total de los pagos. 
+● La aplicación comenzará a desarrollarse una vez realizado el primer pago. 
+
+
+ 
+
+ 
+
+
