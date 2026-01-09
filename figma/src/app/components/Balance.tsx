@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Mail, MessageCircle, Download, Plus, DollarSign, CheckCircle } from "lucide-react";
+import { mockClients, mockOrders } from "../data/mockData";
 import {
   Select,
   SelectContent,
@@ -13,51 +14,20 @@ import { toast } from "sonner";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { PaymentDialog } from "./PaymentDialog";
 import * as XLSX from "xlsx";
-import { clientService, Client } from "../../services/client.service";
-import { orderService, Order } from "../../services/order.service";
 
 interface BalanceProps {
   selectedClientId: string | null;
 }
 
 export function Balance({ selectedClientId }: BalanceProps) {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [currentClientId, setCurrentClientId] = useState<string>("");
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentClientId, setCurrentClientId] = useState<string>(
+    selectedClientId || mockClients[0].id
+  );
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
-
-  const fetchClients = async () => {
-    try {
-      const fetchedClients = await clientService.getAllClients();
-      setClients(fetchedClients);
-      if (fetchedClients.length > 0 && !currentClientId) {
-        setCurrentClientId(fetchedClients[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-      toast.error("Error al cargar clientes");
-    }
-  };
-
-  const fetchOrders = async (clientId: string) => {
-    try {
-      setIsLoading(true);
-      const fetchedOrders = await orderService.getOrdersByClient(clientId);
-      setOrders(fetchedOrders);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      toast.error("Error al cargar pedidos");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  const [orders, setOrders] = useState(mockOrders);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Update current client if selectedClientId changes
   useEffect(() => {
@@ -66,18 +36,15 @@ export function Balance({ selectedClientId }: BalanceProps) {
     }
   }, [selectedClientId]);
 
-  // Fetch orders when currentClientId changes
-  useEffect(() => {
-    if (currentClientId) {
-      fetchOrders(currentClientId);
-    }
-  }, [currentClientId]);
+  const handleOrderCreated = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
-  const selectedClient = clients.find((c) => c.id === currentClientId);
-  const clientOrders = orders;
+  const selectedClient = mockClients.find((c) => c.id === currentClientId);
+  const clientOrders = orders.filter((o) => o.clientId === currentClientId);
 
   const totalAmount = clientOrders.reduce((sum, order) => sum + order.total, 0);
-  const paidAmount = clientOrders.reduce((sum, order) => sum + order.montoPagado, 0);
+  const paidAmount = clientOrders.reduce((sum, order) => sum + order.amountPaid, 0);
   const pendingAmount = totalAmount - paidAmount;
 
   const handleSendEmail = () => {
@@ -96,14 +63,14 @@ export function Balance({ selectedClientId }: BalanceProps) {
     try {
       // Crear datos para Excel
       const excelData = clientOrders.map((order) => ({
-        Fecha: new Date(order.fecha).toLocaleDateString(),
-        Paciente: order.nombrePaciente,
-        Trabajo: order.tipo,
-        Descripción: order.descripcion,
+        Fecha: order.date,
+        Paciente: order.patientName,
+        Trabajo: order.type,
+        Descripción: order.description,
         Total: order.total,
-        Pagado: order.montoPagado,
-        Falta: order.total - order.montoPagado,
-        Estado: getStatusText(order.estado),
+        Pagado: order.amountPaid,
+        Falta: order.total - order.amountPaid,
+        Estado: getStatusText(order.status),
       }));
 
       // Agregar fila de total
@@ -137,27 +104,33 @@ export function Balance({ selectedClientId }: BalanceProps) {
     }
   };
 
-  const handleRegisterPayment = async (orderId: string, amount: number) => {
-    // Refresh orders after payment
-    if (currentClientId) {
-      await fetchOrders(currentClientId);
-    }
+  const handleRegisterPayment = (orderId: string, amount: number) => {
+    setOrders((prevOrders) =>
+      prevOrders.map((order) => {
+        if (order.id === orderId) {
+          const newAmountPaid = order.amountPaid + amount;
+          const isPaid = newAmountPaid >= order.total;
+          return {
+            ...order,
+            amountPaid: newAmountPaid,
+            status: isPaid ? ("paid" as const) : order.status,
+          };
+        }
+        return order;
+      })
+    );
     toast.success("Pago registrado exitosamente", {
       description: `Se registró un pago de $${amount.toLocaleString()}`,
     });
   };
 
-  const handleMarkAsDelivered = async (orderId: string) => {
-    try {
-      await orderService.updateOrderStatus(orderId, "ENTREGADO");
-      if (currentClientId) {
-        await fetchOrders(currentClientId);
-      }
-      toast.success("Pedido marcado como entregado");
-    } catch (error: any) {
-      console.error("Error marking as delivered:", error);
-      toast.error(error.response?.data?.error || "Error al actualizar estado");
-    }
+  const handleMarkAsDelivered = (orderId: string) => {
+    setOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order.id === orderId ? { ...order, status: "delivered" as const } : order
+      )
+    );
+    toast.success("Pedido marcado como entregado");
   };
 
   const handleOpenPaymentDialog = (orderId: string) => {
@@ -165,51 +138,33 @@ export function Balance({ selectedClientId }: BalanceProps) {
     setShowPaymentDialog(true);
   };
 
-  const getStatusColor = (estado: string) => {
-    switch (estado) {
-      case "PENDIENTE":
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
         return "bg-[#fedc97]/70 text-[#b5b682]";
-      case "PAGADO":
+      case "paid":
         return "bg-[#7c9885]/30 text-[#28666e]";
-      case "ENTREGADO":
+      case "delivered":
         return "bg-[#7c9885]/50 text-[#033f63]";
-      case "COMPLETADO":
-        return "bg-blue-100 text-blue-800";
-      case "EN_PROCESO":
-        return "bg-yellow-100 text-yellow-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  const getStatusText = (estado: string) => {
-    switch (estado) {
-      case "PENDIENTE":
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending":
         return "Pendiente";
-      case "PAGADO":
+      case "paid":
         return "Pagado";
-      case "ENTREGADO":
+      case "delivered":
         return "Entregado";
-      case "COMPLETADO":
-        return "Completado";
-      case "EN_PROCESO":
-        return "En Proceso";
       default:
-        return estado;
+        return status;
     }
   };
 
   const selectedOrderData = orders.find((o) => o.id === selectedOrder);
-
-  if (isLoading) {
-    return (
-      <div className="p-4">
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#033f63]"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 space-y-4">
@@ -233,9 +188,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
             <SelectValue placeholder="Seleccionar cliente" />
           </SelectTrigger>
           <SelectContent>
-            {clients.map((client) => (
+            {mockClients.map((client) => (
               <SelectItem key={client.id} value={client.id}>
-                {client.nombre}
+                {client.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -320,7 +275,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               </thead>
               <tbody>
                 {clientOrders.map((order, index) => {
-                  const remaining = order.total - order.montoPagado;
+                  const remaining = order.total - order.amountPaid;
                   const isFullyPaid = remaining <= 0;
                   
                   return (
@@ -330,15 +285,15 @@ export function Balance({ selectedClientId }: BalanceProps) {
                         index % 2 === 0 ? "bg-gray-50" : ""
                       }`}
                     >
-                      <td className="py-3 px-2 text-gray-700">{new Date(order.fecha).toLocaleDateString()}</td>
+                      <td className="py-3 px-2 text-gray-700">{order.date}</td>
                       <td className="py-3 px-2 text-gray-700">
-                        {order.nombrePaciente}
+                        {order.patientName}
                       </td>
                       <td className="py-3 px-2">
                         <div>
-                          <p className="text-gray-800">{order.tipo}</p>
+                          <p className="text-gray-800">{order.type}</p>
                           <p className="text-xs text-gray-500">
-                            {order.descripcion}
+                            {order.description}
                           </p>
                         </div>
                       </td>
@@ -346,7 +301,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                         ${order.total.toLocaleString()}
                       </td>
                       <td className="py-3 px-2 text-right text-[#7c9885]">
-                        ${order.montoPagado.toLocaleString()}
+                        ${order.amountPaid.toLocaleString()}
                       </td>
                       <td
                         className={`py-3 px-2 text-right font-medium ${
@@ -358,16 +313,16 @@ export function Balance({ selectedClientId }: BalanceProps) {
                       <td className="py-3 px-2 text-center">
                         <span
                           className={`text-xs px-2 py-1 rounded-full inline-block ${getStatusColor(
-                            order.estado
+                            order.status
                           )}`}
                         >
-                          {getStatusText(order.estado)}
+                          {getStatusText(order.status)}
                         </span>
                       </td>
                       <td className="py-3 px-2">
                         <div className="flex gap-1 justify-center">
                           {/* Botón Registrar Pago - siempre visible si no está completamente pagado */}
-                          {!isFullyPaid && order.estado !== "ENTREGADO" && (
+                          {!isFullyPaid && order.status !== "delivered" && (
                             <Button
                               onClick={() => handleOpenPaymentDialog(order.id)}
                               size="sm"
@@ -380,7 +335,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                           )}
                           
                           {/* Botón Entregar - solo si está pagado completamente y no entregado */}
-                          {isFullyPaid && order.estado !== "ENTREGADO" && (
+                          {isFullyPaid && order.status !== "delivered" && (
                             <Button
                               onClick={() => handleMarkAsDelivered(order.id)}
                               size="sm"
@@ -422,7 +377,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
         open={showNewOrderDialog}
         onOpenChange={setShowNewOrderDialog}
         preselectedClientId={currentClientId}
-        onOrderCreated={() => currentClientId && fetchOrders(currentClientId)}
+        onOrderCreated={handleOrderCreated}
       />
 
       {selectedOrderData && (
@@ -430,9 +385,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
           open={showPaymentDialog}
           onOpenChange={setShowPaymentDialog}
           orderId={selectedOrderData.id}
-          patientName={selectedOrderData.nombrePaciente}
+          patientName={selectedOrderData.patientName}
           total={selectedOrderData.total}
-          amountPaid={selectedOrderData.montoPagado}
+          amountPaid={selectedOrderData.amountPaid}
           onPayment={handleRegisterPayment}
         />
       )}

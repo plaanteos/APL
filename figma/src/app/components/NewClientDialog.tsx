@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { toast } from "sonner";
 import { clientService } from "../../services/client.service";
+import { toast } from "sonner";
 
 interface NewClientDialogProps {
   open: boolean;
@@ -32,38 +32,26 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
     email: "",
     telefono: "",
     whatsapp: "",
-    tipo: "" as "CLINICA" | "DENTISTA" | "PARTICULAR" | "",
+    tipo: "CLINICA" as "CLINICA" | "ODONTOLOGO" | "PARTICULAR",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.tipo) {
-      toast.error("Debes seleccionar un tipo de cliente");
-      return;
-    }
-
     setIsSubmitting(true);
+    
     try {
-      await clientService.createClient({
-        nombre: formData.nombre,
-        email: formData.email,
-        telefono: formData.telefono,
-        whatsapp: formData.whatsapp,
-        tipo: formData.tipo as "CLINICA" | "DENTISTA" | "PARTICULAR",
-      });
+      await clientService.createClient(formData);
       toast.success("Cliente creado exitosamente");
       onOpenChange(false);
+      onClientCreated?.();
       setFormData({
         nombre: "",
         email: "",
         telefono: "",
         whatsapp: "",
-        tipo: "",
+        tipo: "CLINICA",
       });
-      if (onClientCreated) {
-        onClientCreated();
-      }
     } catch (error: any) {
       console.error("Error creating client:", error);
       toast.error(error.response?.data?.error || "Error al crear cliente");
@@ -93,7 +81,6 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
               }
               placeholder="Nombre del cliente o clínica"
               required
-              disabled={isSubmitting}
             />
           </div>
 
@@ -101,17 +88,16 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
             <Label htmlFor="type">Tipo</Label>
             <Select
               value={formData.tipo}
-              onValueChange={(value: "CLINICA" | "DENTISTA" | "PARTICULAR") =>
+              onValueChange={(value: any) =>
                 setFormData({ ...formData, tipo: value })
               }
-              disabled={isSubmitting}
             >
               <SelectTrigger id="type">
                 <SelectValue placeholder="Seleccionar tipo" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="CLINICA">Clínica</SelectItem>
-                <SelectItem value="DENTISTA">Odontólogo</SelectItem>
+                <SelectItem value="ODONTOLOGO">Odontólogo</SelectItem>
                 <SelectItem value="PARTICULAR">Particular</SelectItem>
               </SelectContent>
             </Select>
@@ -128,7 +114,6 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
               }
               placeholder="email@ejemplo.com"
               required
-              disabled={isSubmitting}
             />
           </div>
 
@@ -143,7 +128,6 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
               }
               placeholder="+598 99 123 456"
               required
-              disabled={isSubmitting}
             />
           </div>
 
@@ -157,7 +141,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
                 setFormData({ ...formData, whatsapp: e.target.value })
               }
               placeholder="+598991234567"
-              disabled={isSubmitting}
+              required
             />
           </div>
 

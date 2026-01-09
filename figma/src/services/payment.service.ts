@@ -2,14 +2,15 @@ import apiClient from './api';
 
 export interface Payment {
   id: string;
-  ordenId: string;
+  pedidoId: string;
   monto: number;
-  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA';
-  fecha: string;
-  comprobante?: string;
-  notas?: string;
+  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA' | 'TARJETA_CREDITO' | 'TARJETA_DEBITO';
+  fechaPago: string;
+  numeroRecibo?: string;
+  numeroTransf?: string;
+  observaciones?: string;
   createdAt?: string;
-  orden?: {
+  pedido?: {
     id: string;
     nombrePaciente: string;
     cliente: {
@@ -19,12 +20,13 @@ export interface Payment {
 }
 
 export interface CreatePaymentData {
-  ordenId: string;
+  pedidoId: string;
   monto: number;
-  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA';
-  fecha?: string;
-  comprobante?: string;
-  notas?: string;
+  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA_CREDITO' | 'TARJETA_DEBITO';
+  fechaPago?: string;
+  numeroRecibo?: string;
+  numeroTransf?: string;
+  observaciones?: string;
 }
 
 export interface PaymentSummary {
@@ -86,4 +88,6 @@ export const paymentService = {
     const response = await apiClient.get('/payments', {
       params: { fechaDesde, fechaHasta },
     });
-    return response
+    return response.data.data;
+  },
+};

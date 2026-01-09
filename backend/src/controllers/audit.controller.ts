@@ -56,10 +56,10 @@ export class AuditController {
 
       if (filters.search) {
         where.OR = [
-          { descripcion: { contains: filters.search, mode: 'insensitive' } },
-          { tipoEntidad: { contains: filters.search, mode: 'insensitive' } },
-          { administrador: { email: { contains: filters.search, mode: 'insensitive' } } },
-          { administrador: { username: { contains: filters.search, mode: 'insensitive' } } },
+          { descripcion: { contains: filters.search } },
+          { tipoEntidad: { contains: filters.search } },
+          { administrador: { email: { contains: filters.search } } },
+          { administrador: { username: { contains: filters.search } } },
         ];
       }
 
@@ -650,6 +650,522 @@ export class AuditController {
       }
     } catch (error) {
       console.error('Export audit logs error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // GET /api/audit/dashboard
+  static async getDashboard(req: Request, res: Response) {
+    try {
+      const { dias = '30' } = req.query;
+      const daysCount = Number(dias);
+
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysCount);
+      const endDate = new Date();
+
+      // Obtener todas las métricas del dashboard
+      const [
+        quickStats,
+        activityTimeline,
+        userComparison,
+        performanceMetrics,
+        suspiciousActivity,
+        recentLogs,
+      ] = await Promise.all([
+        // Estadísticas rápidas
+        (async () => {
+          const where = { timestamp: { gte: startDate } };
+          const [total, byAction, byEntity, uniqueUsers] = await Promise.all([
+            prisma.auditoria.count({ where }),
+            prisma.auditoria.groupBy({
+              by: ['accion'],
+              where,
+              _count: { accion: true },
+            }),
+            prisma.auditoria.groupBy({
+              by: ['tipoEntidad'],
+              where,
+              _count: { tipoEntidad: true },
+            }),
+            prisma.auditoria.findMany({
+              where,
+              select: { administradorId: true },
+              distinct: ['administradorId'],
+            }),
+          ]);
+
+          return {
+            totalLogs: total,
+            logsByAction: byAction.reduce((acc, item) => {
+              acc[item.accion] = item._count.accion;
+              return acc;
+            }, {} as Record<string, number>),
+            logsByEntity: byEntity.reduce((acc, item) => {
+              acc[item.tipoEntidad] = item._count.tipoEntidad;
+              return acc;
+            }, {} as Record<string, number>),
+            uniqueUsers: uniqueUsers.length,
+          };
+        })(),
+
+        // Timeline de actividad
+        (async () => {
+          const logs = await prisma.auditoria.findMany({
+            where: { timestamp: { gte: startDate, lte: endDate } },
+            select: { timestamp: true, accion: true },
+            orderBy: { timestamp: 'asc' },
+          });
+
+          const timeline: Map<string, { count: number; actions: Record<string, number> }> = new Map();
+
+          logs.forEach(log => {
+            const key = log.timestamp.toISOString().substring(0, 10); // YYYY-MM-DD
+            
+            if (!timeline.has(key)) {
+              timeline.set(key, { count: 0, actions: {} });
+            }
+
+            const entry = timeline.get(key)!;
+            entry.count++;
+            entry.actions[log.accion] = (entry.actions[log.accion] || 0) + 1;
+          });
+
+          return Array.from(timeline.entries()).map(([date, data]) => ({
+            date,
+            count: data.count,
+            actions: data.actions,
+          }));
+        })(),
+
+        // Comparación de usuarios
+        (async () => {
+          const logs = await prisma.auditoria.findMany({
+            where: { timestamp: { gte: startDate, lte: endDate } },
+            include: {
+              administrador: {
+                select: {
+                  id: true,
+                  email: true,
+                  username: true,
+                  nombres: true,
+                  apellidos: true,
+                },
+              },
+            },
+          });
+
+          const userStats = new Map<string, any>();
+
+          logs.forEach(log => {
+            const userId = log.administradorId;
+            
+            if (!userStats.has(userId)) {
+              userStats.set(userId, {
+                usuario: {
+                  id: log.administrador.id,
+                  email: log.administrador.email,
+                  username: log.administrador.username,
+                  nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+                },
+                totalAcciones: 0,
+                accionesPorTipo: {},
+                entidadesUnicas: new Set<string>(),
+              });
+            }
+
+            const stats = userStats.get(userId);
+            stats.totalAcciones++;
+            stats.accionesPorTipo[log.accion] = (stats.accionesPorTipo[log.accion] || 0) + 1;
+            stats.entidadesUnicas.add(`${log.tipoEntidad}:${log.entidadId}`);
+          });
+
+          return Array.from(userStats.values())
+            .map(stat => ({
+              ...stat,
+              entidadesModificadas: stat.entidadesUnicas.size,
+              entidadesUnicas: undefined, // Remover el Set para JSON
+            }))
+            .sort((a, b) => b.totalAcciones - a.totalAcciones)
+            .slice(0, 10); // Top 10
+        })(),
+
+        // Métricas de rendimiento
+        (async () => {
+          const logs = await prisma.auditoria.findMany({
+            where: { timestamp: { gte: startDate } },
+            select: { timestamp: true, accion: true, tipoEntidad: true },
+          });
+
+          const avgOperationsPerDay = logs.length / daysCount;
+
+          const hourCounts: Record<number, number> = {};
+          logs.forEach(log => {
+            const hour = log.timestamp.getHours();
+            hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+          });
+
+          const peakHour = Object.entries(hourCounts).reduce(
+            (max, [hour, count]) => (count > max.count ? { hour: Number(hour), count } : max),
+            { hour: 0, count: 0 }
+          );
+
+          return {
+            avgOperationsPerDay: Math.round(avgOperationsPerDay),
+            peakHour,
+            totalOperations: logs.length,
+          };
+        })(),
+
+        // Actividad sospechosa
+        (async () => {
+          const lastHour = new Date();
+          lastHour.setHours(lastHour.getHours() - 1);
+
+          const last24Hours = new Date();
+          last24Hours.setHours(last24Hours.getHours() - 24);
+
+          // Operaciones masivas
+          const massOperations = await prisma.auditoria.groupBy({
+            by: ['administradorId', 'accion', 'tipoEntidad'],
+            where: {
+              timestamp: { gte: lastHour },
+              accion: { in: ['CREAR', 'ACTUALIZAR', 'ELIMINAR'] },
+            },
+            _count: { id: true },
+            having: { id: { _count: { gt: 20 } } },
+          });
+
+          // Actividad en horarios inusuales
+          const unusualLogs = await prisma.auditoria.findMany({
+            where: { timestamp: { gte: last24Hours } },
+            include: {
+              administrador: {
+                select: { email: true, username: true },
+              },
+            },
+          });
+
+          const unusualActivityTimes = unusualLogs.filter(log => {
+            const hour = log.timestamp.getHours();
+            return hour >= 2 && hour <= 6;
+          });
+
+          return {
+            massOperations: massOperations.length,
+            unusualActivityCount: unusualActivityTimes.length,
+            hasAlerts: massOperations.length > 0 || unusualActivityTimes.length > 0,
+          };
+        })(),
+
+        // Logs recientes
+        prisma.auditoria.findMany({
+          where: { timestamp: { gte: startDate } },
+          include: {
+            administrador: {
+              select: {
+                username: true,
+                nombres: true,
+                apellidos: true,
+              },
+            },
+          },
+          orderBy: { timestamp: 'desc' },
+          take: 20,
+        }),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          periodo: {
+            dias: daysCount,
+            desde: startDate,
+            hasta: endDate,
+          },
+          estadisticas: quickStats,
+          timeline: activityTimeline,
+          topUsuarios: userComparison,
+          rendimiento: performanceMetrics,
+          alertas: suspiciousActivity,
+          actividadReciente: recentLogs.map(log => ({
+            id: log.id,
+            accion: log.accion,
+            tipoEntidad: log.tipoEntidad,
+            descripcion: log.descripcion,
+            administrador: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+            timestamp: log.timestamp,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('Get audit dashboard error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // GET /api/audit/suspicious
+  static async getSuspiciousActivity(req: Request, res: Response) {
+    try {
+      const lastHour = new Date();
+      lastHour.setHours(lastHour.getHours() - 1);
+
+      const last24Hours = new Date();
+      last24Hours.setHours(last24Hours.getHours() - 24);
+
+      // Operaciones masivas en la última hora
+      const massOpsRaw = await prisma.auditoria.groupBy({
+        by: ['administradorId', 'accion', 'tipoEntidad'],
+        where: {
+          timestamp: { gte: lastHour },
+          accion: { in: ['CREAR', 'ACTUALIZAR', 'ELIMINAR'] },
+        },
+        _count: { id: true },
+        having: { id: { _count: { gt: 20 } } },
+      });
+
+      // Obtener información de usuarios para operaciones masivas
+      const userIds = massOpsRaw.map(op => op.administradorId);
+      const users = await prisma.administrador.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true, nombres: true, apellidos: true },
+      });
+
+      const massOperations = massOpsRaw.map(op => {
+        const user = users.find(u => u.id === op.administradorId);
+        return {
+          administrador: user ? {
+            id: user.id,
+            username: user.username,
+            nombreCompleto: `${user.nombres} ${user.apellidos}`,
+          } : null,
+          accion: op.accion,
+          tipoEntidad: op.tipoEntidad,
+          cantidad: op._count.id,
+          periodo: 'última hora',
+        };
+      });
+
+      // Actividad en horarios inusuales (2am - 6am)
+      const unusualLogs = await prisma.auditoria.findMany({
+        where: { timestamp: { gte: last24Hours } },
+        include: {
+          administrador: {
+            select: { id: true, username: true, nombres: true, apellidos: true },
+          },
+        },
+      });
+
+      const unusualActivityTimes = unusualLogs
+        .filter(log => {
+          const hour = log.timestamp.getHours();
+          return hour >= 2 && hour <= 6;
+        })
+        .map(log => ({
+          id: log.id,
+          administrador: {
+            id: log.administrador.id,
+            username: log.administrador.username,
+            nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+          },
+          accion: log.accion,
+          tipoEntidad: log.tipoEntidad,
+          timestamp: log.timestamp,
+          hora: log.timestamp.getHours(),
+        }));
+
+      // Múltiples IPs para un mismo usuario
+      const multipleIPs = await prisma.auditoria.groupBy({
+        by: ['administradorId', 'direccionIP'],
+        where: { timestamp: { gte: last24Hours } },
+        _count: { id: true },
+      });
+
+      const userIPCounts = new Map<string, Set<string>>();
+      multipleIPs.forEach(item => {
+        if (!userIPCounts.has(item.administradorId)) {
+          userIPCounts.set(item.administradorId, new Set());
+        }
+        if (item.direccionIP) {
+          userIPCounts.get(item.administradorId)!.add(item.direccionIP);
+        }
+      });
+
+      const suspiciousIPs = Array.from(userIPCounts.entries())
+        .filter(([_, ips]) => ips.size > 3) // Más de 3 IPs diferentes
+        .map(([userId, ips]) => {
+          const user = users.find(u => u.id === userId);
+          return {
+            administrador: user ? {
+              id: user.id,
+              username: user.username,
+              nombreCompleto: `${user.nombres} ${user.apellidos}`,
+            } : null,
+            cantidadIPs: ips.size,
+            ips: Array.from(ips),
+          };
+        });
+
+      res.json({
+        success: true,
+        data: {
+          operacionesMasivas: massOperations,
+          actividadHorariosInusuales: unusualActivityTimes,
+          multiplesIPsPorUsuario: suspiciousIPs,
+          totalAlertas: massOperations.length + unusualActivityTimes.length + suspiciousIPs.length,
+        },
+      });
+    } catch (error) {
+      console.error('Get suspicious activity error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // GET /api/audit/timeline
+  static async getActivityTimeline(req: Request, res: Response) {
+    try {
+      const {
+        fechaDesde,
+        fechaHasta,
+        groupBy = 'day',
+        administradorId,
+        tipoEntidad,
+      } = req.query;
+
+      const startDate = fechaDesde ? new Date(fechaDesde as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const endDate = fechaHasta ? new Date(fechaHasta as string) : new Date();
+
+      const where: any = {
+        timestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      };
+
+      if (administradorId) where.administradorId = administradorId;
+      if (tipoEntidad) where.tipoEntidad = tipoEntidad;
+
+      const logs = await prisma.auditoria.findMany({
+        where,
+        select: { timestamp: true, accion: true },
+        orderBy: { timestamp: 'asc' },
+      });
+
+      const timeline: Map<string, { count: number; actions: Record<string, number> }> = new Map();
+
+      logs.forEach(log => {
+        let key: string;
+        
+        if (groupBy === 'hour') {
+          key = log.timestamp.toISOString().substring(0, 13); // YYYY-MM-DDTHH
+        } else if (groupBy === 'day') {
+          key = log.timestamp.toISOString().substring(0, 10); // YYYY-MM-DD
+        } else {
+          // week
+          const week = Math.ceil(
+            ((log.timestamp.getTime() - new Date(log.timestamp.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7
+          );
+          key = `${log.timestamp.getFullYear()}-W${week}`;
+        }
+
+        if (!timeline.has(key)) {
+          timeline.set(key, { count: 0, actions: {} });
+        }
+
+        const entry = timeline.get(key)!;
+        entry.count++;
+        entry.actions[log.accion] = (entry.actions[log.accion] || 0) + 1;
+      });
+
+      const result = Array.from(timeline.entries()).map(([date, data]) => ({
+        date,
+        count: data.count,
+        actions: data.actions,
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          periodo: {
+            desde: startDate,
+            hasta: endDate,
+            agrupacion: groupBy,
+          },
+          timeline: result,
+          totalRegistros: logs.length,
+        },
+      });
+    } catch (error) {
+      console.error('Get activity timeline error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // GET /api/audit/entity-history/:type/:id
+  static async getEntityHistory(req: Request, res: Response) {
+    try {
+      const { type, id } = req.params;
+
+      const history = await prisma.auditoria.findMany({
+        where: {
+          tipoEntidad: type,
+          entidadId: id,
+        },
+        include: {
+          administrador: {
+            select: {
+              id: true,
+              username: true,
+              nombres: true,
+              apellidos: true,
+            },
+          },
+        },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      const formatted = history.map(log => ({
+        id: log.id,
+        timestamp: log.timestamp,
+        accion: log.accion,
+        administrador: {
+          id: log.administrador.id,
+          username: log.administrador.username,
+          nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+        },
+        cambios: {
+          anterior: log.valoresAnteriores,
+          nuevo: log.valoresNuevos,
+        },
+        descripcion: log.descripcion,
+        direccionIP: log.direccionIP,
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          entidad: {
+            tipo: type,
+            id: id,
+          },
+          historial: formatted,
+          totalCambios: formatted.length,
+        },
+      });
+    } catch (error) {
+      console.error('Get entity history error:', error);
       res.status(500).json({
         success: false,
         error: 'Error interno del servidor',

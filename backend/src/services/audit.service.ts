@@ -314,4 +314,201 @@ export class AuditService {
       massOperations,
     };
   }
+
+  /**
+   * Obtiene métricas de rendimiento del sistema
+   */
+  static async getPerformanceMetrics(days: number = 7): Promise<{
+    avgOperationsPerDay: number;
+    peakHour: { hour: number; count: number };
+    slowestOperations: any[];
+  }> {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const logs = await prisma.auditoria.findMany({
+      where: { timestamp: { gte: since } },
+      select: { timestamp: true, accion: true, tipoEntidad: true },
+    });
+
+    // Operaciones promedio por día
+    const avgOperationsPerDay = logs.length / days;
+
+    // Hora pico de actividad
+    const hourCounts: Record<number, number> = {};
+    logs.forEach(log => {
+      const hour = log.timestamp.getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+
+    const peakHour = Object.entries(hourCounts).reduce(
+      (max, [hour, count]) => (count > max.count ? { hour: Number(hour), count } : max),
+      { hour: 0, count: 0 }
+    );
+
+    return {
+      avgOperationsPerDay: Math.round(avgOperationsPerDay),
+      peakHour,
+      slowestOperations: [], // Para futuras optimizaciones
+    };
+  }
+
+  /**
+   * Obtiene timeline de actividades
+   */
+  static async getActivityTimeline(
+    startDate: Date,
+    endDate: Date,
+    groupBy: 'hour' | 'day' | 'week' = 'day'
+  ): Promise<Array<{ date: string; count: number; actions: Record<string, number> }>> {
+    const logs = await prisma.auditoria.findMany({
+      where: {
+        timestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: { timestamp: true, accion: true },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    const timeline: Map<string, { count: number; actions: Record<string, number> }> = new Map();
+
+    logs.forEach(log => {
+      let key: string;
+      
+      if (groupBy === 'hour') {
+        key = log.timestamp.toISOString().substring(0, 13); // YYYY-MM-DDTHH
+      } else if (groupBy === 'day') {
+        key = log.timestamp.toISOString().substring(0, 10); // YYYY-MM-DD
+      } else {
+        // week - calcular semana del año
+        const week = Math.ceil(
+          ((log.timestamp.getTime() - new Date(log.timestamp.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7
+        );
+        key = `${log.timestamp.getFullYear()}-W${week}`;
+      }
+
+      if (!timeline.has(key)) {
+        timeline.set(key, { count: 0, actions: {} });
+      }
+
+      const entry = timeline.get(key)!;
+      entry.count++;
+      entry.actions[log.accion] = (entry.actions[log.accion] || 0) + 1;
+    });
+
+    return Array.from(timeline.entries()).map(([date, data]) => ({
+      date,
+      count: data.count,
+      actions: data.actions,
+    }));
+  }
+
+  /**
+   * Obtiene comparación de actividad por usuarios
+   */
+  static async getUserActivityComparison(
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{
+    usuario: any;
+    totalAcciones: number;
+    accionesPorTipo: Record<string, number>;
+    entidadesModificadas: Set<string>;
+  }>> {
+    const logs = await prisma.auditoria.findMany({
+      where: {
+        timestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        administrador: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
+      },
+    });
+
+    const userStats = new Map<string, any>();
+
+    logs.forEach(log => {
+      const userId = log.administradorId;
+      
+      if (!userStats.has(userId)) {
+        userStats.set(userId, {
+          usuario: {
+            id: log.administrador.id,
+            email: log.administrador.email,
+            username: log.administrador.username,
+            nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+          },
+          totalAcciones: 0,
+          accionesPorTipo: {},
+          entidadesModificadas: new Set<string>(),
+        });
+      }
+
+      const stats = userStats.get(userId);
+      stats.totalAcciones++;
+      stats.accionesPorTipo[log.accion] = (stats.accionesPorTipo[log.accion] || 0) + 1;
+      stats.entidadesModificadas.add(`${log.tipoEntidad}:${log.entidadId}`);
+    });
+
+    return Array.from(userStats.values());
+  }
+
+  /**
+   * Obtiene cambios realizados en una entidad específica
+   */
+  static async getEntityChangeHistory(
+    tipoEntidad: EntityType,
+    entidadId: string
+  ): Promise<Array<{
+    id: string;
+    timestamp: Date;
+    accion: string;
+    administrador: any;
+    cambios: any;
+  }>> {
+    const logs = await prisma.auditoria.findMany({
+      where: {
+        tipoEntidad,
+        entidadId,
+      },
+      include: {
+        administrador: {
+          select: {
+            id: true,
+            username: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    return logs.map(log => ({
+      id: log.id,
+      timestamp: log.timestamp,
+      accion: log.accion,
+      administrador: {
+        id: log.administrador.id,
+        username: log.administrador.username,
+        nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
+      },
+      cambios: {
+        anterior: log.valoresAnteriores,
+        nuevo: log.valoresNuevos,
+      },
+    }));
+  }
 }

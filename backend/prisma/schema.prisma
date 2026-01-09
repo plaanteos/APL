@@ -135,7 +135,7 @@ model Pago {
 }
 
 // ================================================================
-// TABLAS NORMALIZACIÓN 3 (3NF) - AUDITORÍA
+// TABLAS NORMALIZACIÓN 3 (3NF) - AUDITORÍA Y RECORDATORIOS
 // ================================================================
 
 // Tabla: auditoria
@@ -156,6 +156,33 @@ model Auditoria {
   administrador     Administrador @relation(fields: [administradorId], references: [id])
 
   @@map("auditoria")
+}
+
+// Tabla: recordatorios
+model Recordatorio {
+  id                String              @id @default(cuid())
+  titulo            String
+  descripcion       String?             @db.Text
+  tipo              TipoRecordatorio
+  tipoEntidad       String              // "pedido", "cliente", "pago"
+  entidadId         String              // ID de la entidad relacionada
+  fechaRecordatorio DateTime
+  fechaCreacion     DateTime            @default(now())
+  estado            EstadoRecordatorio  @default(PENDIENTE)
+  prioridad         Prioridad           @default(NORMAL)
+  notificado        Boolean             @default(false)
+  fechaNotificacion DateTime?
+  administradorId   String?             // Usuario asignado (opcional)
+  repetir           Boolean             @default(false)
+  frecuencia        String?             // "diario", "semanal", "mensual"
+  observaciones     String?             @db.Text
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([fechaRecordatorio])
+  @@index([estado])
+  @@index([tipoEntidad, entidadId])
+  @@map("recordatorios")
 }
 
 // ================================================================
@@ -202,4 +229,20 @@ enum AccionAudit {
   LOGIN
   LOGOUT
   CAMBIO_ESTADO
+}
+
+enum TipoRecordatorio {
+  VENCIMIENTO_PEDIDO
+  SEGUIMIENTO_CLIENTE
+  PAGO_PENDIENTE
+  REUNION
+  LLAMADA
+  OTRO
+}
+
+enum EstadoRecordatorio {
+  PENDIENTE
+  COMPLETADO
+  CANCELADO
+  VENCIDO
 }

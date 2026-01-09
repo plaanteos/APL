@@ -7,8 +7,8 @@ import { toast } from "sonner";
 
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("admin@apl-dental.com");
+  const [password, setPassword] = useState("AdminAnto17$");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,12 +16,10 @@ export function Login() {
     setIsLoading(true);
     
     try {
-      await login({ email, password });
-      toast.success("Inicio de sesión exitoso");
+      await login(email, password);
+      toast.success("Sesión iniciada correctamente");
     } catch (error: any) {
-      console.error('Login error:', error);
-      const errorMessage = error.response?.data?.error || "Usuario o contraseña incorrectos";
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.error || "Error al iniciar sesión");
     } finally {
       setIsLoading(false);
     }
@@ -54,9 +52,8 @@ export function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
-              placeholder="ejemplo@email.com"
+              placeholder="admin@apl-dental.com"
               required
-              disabled={isLoading}
             />
           </div>
 
@@ -73,16 +70,15 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
-              placeholder="Ingresa tu contraseña"
+              placeholder="••••••••"
               required
-              disabled={isLoading}
             />
           </div>
 
           <Button
             type="submit"
-            className="w-full bg-[#033f63] hover:bg-[#28666e] text-white py-2 rounded-lg transition-colors"
             disabled={isLoading}
+            className="w-full bg-[#033f63] hover:bg-[#28666e] text-white py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
           </Button>

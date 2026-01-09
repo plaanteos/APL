@@ -7,6 +7,18 @@ const router = express.Router();
 // Apply authentication to all routes
 router.use(authenticate);
 
+// GET /api/audit/dashboard - Dashboard con todas las métricas
+router.get('/dashboard', authorize('ADMIN'), AuditController.getDashboard);
+
+// GET /api/audit/suspicious - Detectar actividad sospechosa
+router.get('/suspicious', authorize('ADMIN'), AuditController.getSuspiciousActivity);
+
+// GET /api/audit/timeline - Timeline de actividad
+router.get('/timeline', authorize('ADMIN'), AuditController.getActivityTimeline);
+
+// GET /api/audit/entity-history/:type/:id - Historial de una entidad específica
+router.get('/entity-history/:type/:id', authorize('ADMIN'), AuditController.getEntityHistory);
+
 // GET /api/audit/stats (accessible to all authenticated users)
 router.get('/stats', AuditController.getAuditStats);
 

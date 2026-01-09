@@ -4,33 +4,42 @@ export interface Order {
   id: string;
   clienteId: string;
   nombrePaciente: string;
-  fecha: string;
+  fechaPedido: string;
+  fechaVencimiento: string;
   descripcion: string;
-  tipo: string;
+  tipoPedido: string;
   cantidad: number;
   precioUnitario: number;
-  total: number;
+  montoTotal: number;
   montoPagado: number;
-  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO';
-  fechaEntrega?: string;
-  notas?: string;
+  montoPendiente: number;
+  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO' | 'CANCELADO';
+  prioridad?: 'BAJA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+  observaciones?: string;
+  numeroPedido?: string;
   createdAt?: string;
   updatedAt?: string;
   cliente?: {
     id: string;
     nombre: string;
+    email?: string;
+    tipo?: string;
   };
+  detallesPedido?: any[];
+  pagos?: any[];
+  totalPagado?: number;
 }
 
 export interface CreateOrderData {
-  clienteId: string;
-  nombrePaciente: string;
+  clienteId: number;
+  paciente: string;
   descripcion: string;
-  tipo: string;
+  tipoPedido: string;
   cantidad: number;
   precioUnitario: number;
-  fechaEntrega?: string;
-  notas?: string;
+  estado?: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO' | 'CANCELADO';
+  fechaVencimiento?: string;
+  observaciones?: string;
 }
 
 export interface UpdateOrderData extends Partial<CreateOrderData> {
@@ -87,8 +96,10 @@ export const orderService = {
   },
 
   // Get orders by client
-  getOrdersByClient: async (clientId: string): Promise<Order[]> => {
-    const response = await apiClient.get(`/orders/client/${clientId}`);
+  getOrdersByClient: async (clienteId: string): Promise<Order[]> => {
+    const response = await apiClient.get('/orders', {
+      params: { clienteId },
+    });
     return response.data.data;
   },
 

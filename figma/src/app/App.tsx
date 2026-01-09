@@ -5,28 +5,23 @@ import { Orders } from "./components/Orders";
 import { Clients } from "./components/Clients";
 import { Balance } from "./components/Balance";
 import { Login } from "./components/Login";
-import { Toaster } from "./components/ui/sonner";
 import { useAuth } from "../hooks/useAuth";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
 
 export default function App() {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<View>("dashboard");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [navigationHistory, setNavigationHistory] = useState<View[]>(["dashboard"]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setCurrentView("dashboard");
-      setSelectedClientId(null);
-      setOrderFilter("all");
-      setNavigationHistory(["dashboard"]);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+  const handleLogout = () => {
+    logout();
+    setCurrentView("dashboard");
+    setSelectedClientId(null);
+    setOrderFilter("all");
+    setNavigationHistory(["dashboard"]);
   };
 
   const navigateTo = (view: View, clientId?: string, filter?: string) => {
@@ -81,7 +76,6 @@ export default function App() {
 
   const canGoBack = navigationHistory.length > 1 && currentView !== "dashboard";
 
-  // Show loading state while checking authentication
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -93,7 +87,7 @@ export default function App() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!user) {
     return <Login />;
   }
 
@@ -182,8 +176,6 @@ export default function App() {
           </button>
         </div>
       </nav>
-
-      <Toaster />
     </div>
   );
 }

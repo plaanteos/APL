@@ -19,8 +19,10 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "sonner";
-import { clientService, Client } from "../../services/client.service";
+import { clientService } from "../../services/client.service";
 import { orderService } from "../../services/order.service";
+import type { Client } from "../types";
+import { Plus } from "lucide-react";
 
 interface NewOrderDialogProps {
   open: boolean;
@@ -30,88 +32,124 @@ interface NewOrderDialogProps {
   onOrderCreated?: () => void;
 }
 
-export function NewOrderDialog({ open, onOpenChange, preselectedClientId, preselectedDate, onOrderCreated }: NewOrderDialogProps) {
+export function NewOrderDialog({ 
+  open, 
+  onOpenChange, 
+  preselectedClientId, 
+  preselectedDate,
+  onOrderCreated 
+}: NewOrderDialogProps) {
   const [clients, setClients] = useState<Client[]>([]);
-  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    clienteId: preselectedClientId || "",
-    nombrePaciente: "",
-    descripcion: "",
-    tipo: "",
-    cantidad: "1",
-    precioUnitario: "",
-    fechaEntrega: preselectedDate || "",
+    clientId: preselectedClientId || "",
+    patientName: "",
+    description: "",
+    type: "",
+    quantity: "1",
+    unitPrice: "",
+    status: "PENDIENTE",
+    dueDate: preselectedDate || "",
   });
 
+  const [newClientData, setNewClientData] = useState({
+    nombre: "",
+    telefono: "",
+    tipo: "PARTICULAR" as "CLINICA" | "ODONTOLOGO" | "PARTICULAR",
+  });
+
+  // Fetch clients
   useEffect(() => {
     if (open) {
-      const fetchClients = async () => {
-        setIsLoadingClients(true);
-        try {
-          const fetchedClients = await clientService.getAllClients();
-          setClients(fetchedClients);
-        } catch (error) {
-          console.error("Error fetching clients:", error);
-          toast.error("Error al cargar clientes");
-        } finally {
-          setIsLoadingClients(false);
-        }
-      };
       fetchClients();
     }
   }, [open]);
 
+  const fetchClients = async () => {
+    try {
+      const data = await clientService.getAllClients();
+      setClients(data);
+    } catch (error) {
+      console.error("Error al cargar clientes:", error);
+      toast.error("Error al cargar la lista de clientes");
+    }
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClientData.nombre || !newClientData.telefono) {
+      toast.error("Por favor complete nombre y teléfono");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const newClient = await clientService.createClient(newClientData);
+      toast.success("Cliente creado exitosamente");
+      await fetchClients();
+      setFormData({ ...formData, clientId: newClient.id.toString() });
+      setShowNewClientForm(false);
+      setNewClientData({
+        nombre: "",
+        telefono: "",
+        tipo: "PARTICULAR",
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Error al crear cliente");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Update clientId when preselectedClientId changes
   useEffect(() => {
     if (preselectedClientId) {
-      setFormData(prev => ({ ...prev, clienteId: preselectedClientId }));
+      setFormData(prev => ({ ...prev, clientId: preselectedClientId }));
     }
   }, [preselectedClientId]);
 
   // Update dueDate when preselectedDate changes
   useEffect(() => {
     if (preselectedDate) {
-      setFormData(prev => ({ ...prev, fechaEntrega: preselectedDate }));
+      setFormData(prev => ({ ...prev, dueDate: preselectedDate }));
     }
   }, [preselectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.clienteId) {
-      toast.error("Debes seleccionar un cliente");
+    if (!formData.clientId) {
+      toast.error("Por favor seleccione un cliente");
       return;
     }
 
     setIsSubmitting(true);
     try {
       await orderService.createOrder({
-        clienteId: formData.clienteId,
-        nombrePaciente: formData.nombrePaciente,
-        descripcion: formData.descripcion,
-        tipo: formData.tipo,
-        cantidad: Number(formData.cantidad),
-        precioUnitario: Number(formData.precioUnitario),
-        fechaEntrega: formData.fechaEntrega || undefined,
+        clienteId: Number(formData.clientId),
+        paciente: formData.patientName,
+        descripcion: formData.description,
+        tipoPedido: formData.type,
+        cantidad: Number(formData.quantity),
+        precioUnitario: Number(formData.unitPrice),
+        estado: formData.status as any,
+        fechaVencimiento: formData.dueDate,
       });
       
       toast.success("Pedido creado exitosamente");
       onOpenChange(false);
+      onOrderCreated?.();
       setFormData({
-        clienteId: "",
-        nombrePaciente: "",
-        descripcion: "",
-        tipo: "",
-        cantidad: "1",
-        precioUnitario: "",
-        fechaEntrega: "",
+        clientId: "",
+        patientName: "",
+        description: "",
+        type: "",
+        quantity: "1",
+        unitPrice: "",
+        status: "PENDIENTE",
+        dueDate: "",
       });
-      if (onOrderCreated) {
-        onOrderCreated();
-      }
     } catch (error: any) {
-      console.error("Error creating order:", error);
       toast.error(error.response?.data?.error || "Error al crear pedido");
     } finally {
       setIsSubmitting(false);
@@ -119,7 +157,7 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
   };
 
   const total =
-    Number(formData.cantidad) * Number(formData.precioUnitario) || 0;
+    Number(formData.quantity) * Number(formData.unitPrice) || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,25 +171,92 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="client">Cliente</Label>
-            <Select
-              value={formData.clienteId}
-              onValueChange={(value) =>
-                setFormData({ ...formData, clienteId: value })
-              }
-              disabled={isSubmitting || isLoadingClients}
-            >
-              <SelectTrigger id="client">
-                <SelectValue placeholder={isLoadingClients ? "Cargando..." : "Seleccionar cliente"} />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between mb-2">
+              <Label htmlFor="client">Cliente</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNewClientForm(!showNewClientForm)}
+                className="h-8 text-xs"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                {showNewClientForm ? "Cancelar" : "Nuevo Cliente"}
+              </Button>
+            </div>
+
+            {showNewClientForm ? (
+              <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                <div>
+                  <Label htmlFor="newClientName">Nombre</Label>
+                  <Input
+                    id="newClientName"
+                    type="text"
+                    value={newClientData.nombre}
+                    onChange={(e) =>
+                      setNewClientData({ ...newClientData, nombre: e.target.value })
+                    }
+                    placeholder="Ej: Dr. Juan Pérez"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newClientPhone">Teléfono</Label>
+                  <Input
+                    id="newClientPhone"
+                    type="tel"
+                    value={newClientData.telefono}
+                    onChange={(e) =>
+                      setNewClientData({ ...newClientData, telefono: e.target.value })
+                    }
+                    placeholder="Ej: +54 11 1234-5678"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newClientType">Tipo</Label>
+                  <Select
+                    value={newClientData.tipo}
+                    onValueChange={(value: any) =>
+                      setNewClientData({ ...newClientData, tipo: value })
+                    }
+                  >
+                    <SelectTrigger id="newClientType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CLINICA">Clínica</SelectItem>
+                      <SelectItem value="ODONTOLOGO">Odontólogo</SelectItem>
+                      <SelectItem value="PARTICULAR">Particular</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleCreateClient}
+                  disabled={isSubmitting}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {isSubmitting ? "Creando..." : "Crear Cliente"}
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={formData.clientId}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, clientId: value })
+                }
+              >
+                <SelectTrigger id="client">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id.toString()}>
+                      {client.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div>
@@ -159,24 +264,22 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Input
               id="patientName"
               type="text"
-              value={formData.nombrePaciente}
+              value={formData.patientName}
               onChange={(e) =>
-                setFormData({ ...formData, nombrePaciente: e.target.value })
+                setFormData({ ...formData, patientName: e.target.value })
               }
               placeholder="Ej: María Rodríguez"
               required
-              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <Label htmlFor="type">Tipo de Trabajo</Label>
             <Select
-              value={formData.tipo}
+              value={formData.type}
               onValueChange={(value) =>
-                setFormData({ ...formData, tipo: value })
+                setFormData({ ...formData, type: value })
               }
-              disabled={isSubmitting}
             >
               <SelectTrigger id="type">
                 <SelectValue placeholder="Seleccionar tipo" />
@@ -197,13 +300,12 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Label htmlFor="description">Descripción</Label>
             <Textarea
               id="description"
-              value={formData.descripcion}
+              value={formData.description}
               onChange={(e) =>
-                setFormData({ ...formData, descripcion: e.target.value })
+                setFormData({ ...formData, description: e.target.value })
               }
               placeholder="Ej: Corona de porcelana sobre metal"
               rows={3}
-              disabled={isSubmitting}
             />
           </div>
 
@@ -214,11 +316,10 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
                 id="quantity"
                 type="number"
                 min="1"
-                value={formData.cantidad}
+                value={formData.quantity}
                 onChange={(e) =>
-                  setFormData({ ...formData, cantidad: e.target.value })
+                  setFormData({ ...formData, quantity: e.target.value })
                 }
-                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -228,12 +329,11 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
                 type="number"
                 min="0"
                 step="0.01"
-                value={formData.precioUnitario}
+                value={formData.unitPrice}
                 onChange={(e) =>
-                  setFormData({ ...formData, precioUnitario: e.target.value })
+                  setFormData({ ...formData, unitPrice: e.target.value })
                 }
                 placeholder="$"
-                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -243,11 +343,10 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Input
               id="dueDate"
               type="date"
-              value={formData.fechaEntrega}
+              value={formData.dueDate}
               onChange={(e) =>
-                setFormData({ ...formData, fechaEntrega: e.target.value })
+                setFormData({ ...formData, dueDate: e.target.value })
               }
-              disabled={isSubmitting}
             />
           </div>
 

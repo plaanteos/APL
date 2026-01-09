@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { mockOrders } from "../data/mockData";
 import { NewOrderDialog } from "./NewOrderDialog";
+import { DayOrdersDialog } from "./DayOrdersDialog";
+import { orderService, Order } from "../../services/order.service";
+import { toast } from "sonner";
 
 interface CalendarWidgetProps {
   onNavigateToBalance?: (clientId: string) => void;
@@ -12,7 +14,33 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
+  const [showDayOrdersDialog, setShowDayOrdersDialog] = useState(false);
   const [preselectedDate, setPreselectedDate] = useState<string>("");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      setIsLoading(true);
+      const fetchedOrders = await orderService.getAllOrders();
+      // Filtrar pedidos válidos que tengan los campos necesarios
+      const validOrders = fetchedOrders.filter(order => 
+        order && 
+        order.fechaVencimiento && 
+        order.tipoPedido
+      );
+      setOrders(validOrders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Error al cargar pedidos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -46,7 +74,25 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
 
   const getOrdersForDate = (date: Date) => {
     const dateString = date.toISOString().split('T')[0];
-    return mockOrders.filter(order => order.dueDate === dateString);
+    return orders.filter(order => {
+      const orderDate = new Date(order.fechaVencimiento).toISOString().split('T')[0];
+      return orderDate === dateString;
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "PENDIENTE":
+        return "bg-[#fedc97]/80 text-[#b5b682] border-l-2 border-[#b5b682]";
+      case "EN_PROCESO":
+        return "bg-blue-50 text-blue-700 border-l-2 border-blue-500";
+      case "PAGADO":
+        return "bg-[#7c9885]/40 text-[#28666e] border-l-2 border-[#28666e]";
+      case "ENTREGADO":
+        return "bg-[#7c9885]/60 text-[#033f63] border-l-2 border-[#033f63]";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
   };
 
   const previousMonth = () => {
@@ -78,12 +124,15 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
-    const orders = getOrdersForDate(date);
-    if (orders.length === 0) {
+    const dayOrders = getOrdersForDate(date);
+    if (dayOrders.length === 0) {
       // No orders for this date, open new order dialog
       const dateString = date.toISOString().split('T')[0];
       setPreselectedDate(dateString);
       setShowNewOrderDialog(true);
+    } else {
+      // Show all orders for this date in dialog
+      setShowDayOrdersDialog(true);
     }
   };
 
@@ -95,8 +144,11 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     setShowNewOrderDialog(true);
   };
 
+  const handleOrderCreated = () => {
+    fetchOrders();
+  };
+
   const days = getDaysInMonth(currentDate);
-  const ordersForSelectedDate = selectedDate ? getOrdersForDate(selectedDate) : [];
 
   return (
     <>
@@ -139,7 +191,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
             {daysOfWeek.map((day) => (
               <div
                 key={day}
-                className="text-center text-xs text-gray-500 py-1"
+                className="text-center text-xs text-gray-500 py-1 font-medium"
               >
                 {day}
               </div>
@@ -154,34 +206,49 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
               }
 
               const ordersCount = getOrdersForDate(day).length;
+              const dayOrders = getOrdersForDate(day);
               const hasOrders = ordersCount > 0;
               const isSelected = isSameDay(day, selectedDate);
               const isTodayDate = isToday(day);
+              const firstOrder = dayOrders[0];
 
               return (
                 <button
                   key={index}
                   onClick={() => handleDateClick(day)}
                   className={`
-                    aspect-square p-1 rounded-lg text-sm relative transition-all
-                    ${isSelected ? 'bg-[#033f63] text-white' : ''}
-                    ${!isSelected && isTodayDate ? 'bg-[#7c9885]/30 text-[#033f63] font-semibold' : ''}
-                    ${!isSelected && !isTodayDate && hasOrders ? 'bg-[#fedc97]/40' : ''}
+                    relative p-3 rounded-lg text-sm transition-all aspect-square
+                    ${isSelected ? 'bg-[#033f63] text-white ring-2 ring-[#033f63] ring-offset-2' : ''}
+                    ${!isSelected && isTodayDate ? 'bg-[#7c9885]/30 text-[#033f63] font-semibold ring-2 ring-[#7c9885]' : ''}
+                    ${!isSelected && !isTodayDate && hasOrders ? 'bg-[#fedc97]/40 hover:bg-[#fedc97]/60' : ''}
                     ${!isSelected && !isTodayDate && !hasOrders ? 'hover:bg-gray-100' : ''}
                   `}
+                  title={hasOrders ? `${ordersCount} ${ordersCount === 1 ? 'pedido' : 'pedidos'}` : ''}
                 >
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <span>{day.getDate()}</span>
-                    {hasOrders && (
-                      <div className="flex gap-0.5 mt-0.5">
-                        {Array.from({ length: Math.min(ordersCount, 3) }).map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-1 h-1 rounded-full ${
-                              isSelected ? 'bg-white' : 'bg-[#b5b682]'
-                            }`}
-                          />
-                        ))}
+                  <div className="flex flex-col items-start h-full w-full">
+                    <span className={`mb-1 ${hasOrders ? 'font-semibold' : ''}`}>
+                      {day.getDate()}
+                    </span>
+                    
+                    {hasOrders && firstOrder && (
+                      <div className="w-full text-left space-y-1 mt-auto">
+                        <div className={`text-[10px] leading-tight truncate ${
+                          isSelected ? 'text-white' : 'text-[#033f63]'
+                        }`}>
+                          {firstOrder.cliente?.nombre || "Cliente"}
+                        </div>
+                        <div className={`text-[9px] leading-tight truncate font-medium ${
+                          isSelected ? 'text-white/90' : 'text-[#28666e]'
+                        }`}>
+                          {firstOrder.tipoPedido}
+                        </div>
+                        {ordersCount > 1 && (
+                          <div className={`text-[9px] font-semibold ${
+                            isSelected ? 'text-white' : 'text-[#b5b682]'
+                          }`}>
+                            +{ordersCount - 1} más
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -190,60 +257,21 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
             })}
           </div>
         </div>
-
-        {/* Selected Date Orders */}
-        {selectedDate && (
-          <div className="mt-4 pt-4 border-t">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm text-[#033f63]">
-                {selectedDate.getDate()} de {monthNames[selectedDate.getMonth()]}
-              </h3>
-              {ordersForSelectedDate.length > 0 && (
-                <span className="text-xs text-gray-500">
-                  {ordersForSelectedDate.length} {ordersForSelectedDate.length === 1 ? 'pedido' : 'pedidos'}
-                </span>
-              )}
-            </div>
-
-            {ordersForSelectedDate.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {ordersForSelectedDate.map((order) => (
-                  <div
-                    key={order.id}
-                    onClick={() => onNavigateToBalance?.(order.clientId)}
-                    className="p-2 bg-[#7c9885]/10 rounded-md hover:bg-[#7c9885]/20 cursor-pointer transition-colors"
-                  >
-                    <p className="text-sm truncate text-[#033f63]">{order.clientName}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {order.description}
-                    </p>
-                    <p className="text-xs text-[#28666e] mt-1">
-                      ${order.total.toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-sm text-gray-500 mb-3">
-                  No hay entregas para esta fecha
-                </p>
-                <button
-                  onClick={handleAddOrder}
-                  className="text-sm text-[#033f63] hover:text-[#28666e]"
-                >
-                  + Agregar pedido
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </Card>
 
       <NewOrderDialog
         open={showNewOrderDialog}
         onOpenChange={setShowNewOrderDialog}
         preselectedDate={preselectedDate}
+        onOrderCreated={handleOrderCreated}
+      />
+
+      <DayOrdersDialog
+        open={showDayOrdersDialog}
+        onOpenChange={setShowDayOrdersDialog}
+        date={selectedDate}
+        orders={selectedDate ? getOrdersForDate(selectedDate) : []}
+        onNavigateToBalance={onNavigateToBalance}
       />
     </>
   );

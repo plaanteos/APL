@@ -261,7 +261,7 @@ export class OrderController {
         data: result,
       });
     } catch (error) {
-      console.error('Create order error:', error);
+      console.error('Create order error:', error instanceof Error ? error.message : 'Unknown error');
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({

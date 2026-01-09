@@ -181,6 +181,13 @@ export class PaymentController {
       const paymentData = createPaymentSchema.parse(req.body);
       const userId = (req as any).user?.id;
 
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Usuario no autenticado',
+        });
+      }
+
       // Verificar que el pedido existe
       const pedido = await prisma.pedido.findUnique({
         where: { id: paymentData.pedidoId },
@@ -270,7 +277,7 @@ export class PaymentController {
         data: result,
       });
     } catch (error) {
-      console.error('Create payment error:', error);
+      console.error('Create payment error:', error instanceof Error ? error.message : 'Unknown error');
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({

@@ -11,10 +11,15 @@ import clientRoutes from './routes/client.routes';
 import orderRoutes from './routes/order.routes';
 import paymentRoutes from './routes/payment.routes';
 import auditRoutes from './routes/audit.routes';
+import reminderRoutes from './routes/reminder.routes';
+import searchRoutes from './routes/search.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+
+// Import services
+import { ReminderService } from './services/reminder.service';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +69,8 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/search', searchRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -80,9 +87,20 @@ async function connectDatabase() {
   }
 }
 
+// Initialize reminder system
+async function initializeReminderSystem() {
+  try {
+    await ReminderService.initialize();
+    console.log('✅ Sistema de recordatorios inicializado');
+  } catch (error) {
+    console.error('❌ Error inicializando sistema de recordatorios:', error);
+  }
+}
+
 // Start server
 async function startServer() {
   await connectDatabase();
+  await initializeReminderSystem();
   
   app.listen(PORT, () => {
     console.log(`🚀 APL Backend API server running on port ${PORT}`);
@@ -94,12 +112,14 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
+  ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
+  ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
 });
