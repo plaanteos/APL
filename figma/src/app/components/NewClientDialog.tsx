@@ -18,32 +18,58 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "sonner";
+import { clientService } from "../../services/client.service";
 
 interface NewClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onClientCreated?: () => void;
 }
 
-export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
+export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClientDialogProps) {
   const [formData, setFormData] = useState({
-    name: "",
+    nombre: "",
     email: "",
-    phone: "",
+    telefono: "",
     whatsapp: "",
-    type: "",
+    tipo: "" as "CLINICA" | "DENTISTA" | "PARTICULAR" | "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Cliente creado exitosamente");
-    onOpenChange(false);
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      whatsapp: "",
-      type: "",
-    });
+    if (!formData.tipo) {
+      toast.error("Debes seleccionar un tipo de cliente");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await clientService.createClient({
+        nombre: formData.nombre,
+        email: formData.email,
+        telefono: formData.telefono,
+        whatsapp: formData.whatsapp,
+        tipo: formData.tipo as "CLINICA" | "DENTISTA" | "PARTICULAR",
+      });
+      toast.success("Cliente creado exitosamente");
+      onOpenChange(false);
+      setFormData({
+        nombre: "",
+        email: "",
+        telefono: "",
+        whatsapp: "",
+        tipo: "",
+      });
+      if (onClientCreated) {
+        onClientCreated();
+      }
+    } catch (error: any) {
+      console.error("Error creating client:", error);
+      toast.error(error.response?.data?.error || "Error al crear cliente");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -61,29 +87,32 @@ export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
             <Label htmlFor="name">Nombre</Label>
             <Input
               id="name"
-              value={formData.name}
+              value={formData.nombre}
               onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
+                setFormData({ ...formData, nombre: e.target.value })
               }
               placeholder="Nombre del cliente o clínica"
               required
+              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <Label htmlFor="type">Tipo</Label>
             <Select
-              value={formData.type}
-              onValueChange={(value) =>
-                setFormData({ ...formData, type: value })
+              value={formData.tipo}
+              onValueChange={(value: "CLINICA" | "DENTISTA" | "PARTICULAR") =>
+                setFormData({ ...formData, tipo: value })
               }
+              disabled={isSubmitting}
             >
               <SelectTrigger id="type">
                 <SelectValue placeholder="Seleccionar tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="clinic">Clínica</SelectItem>
-                <SelectItem value="dentist">Odontólogo</SelectItem>
+                <SelectItem value="CLINICA">Clínica</SelectItem>
+                <SelectItem value="DENTISTA">Odontólogo</SelectItem>
+                <SelectItem value="PARTICULAR">Particular</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -99,6 +128,7 @@ export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
               }
               placeholder="email@ejemplo.com"
               required
+              disabled={isSubmitting}
             />
           </div>
 
@@ -107,12 +137,13 @@ export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
             <Input
               id="phone"
               type="tel"
-              value={formData.phone}
+              value={formData.telefono}
               onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
+                setFormData({ ...formData, telefono: e.target.value })
               }
               placeholder="+598 99 123 456"
               required
+              disabled={isSubmitting}
             />
           </div>
 
@@ -126,7 +157,7 @@ export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
                 setFormData({ ...formData, whatsapp: e.target.value })
               }
               placeholder="+598991234567"
-              required
+              disabled={isSubmitting}
             />
           </div>
 
@@ -135,14 +166,16 @@ export function NewClientDialog({ open, onOpenChange }: NewClientDialogProps) {
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={isSubmitting}
             >
-              Crear Cliente
+              {isSubmitting ? "Creando..." : "Crear Cliente"}
             </Button>
           </DialogFooter>
         </form>

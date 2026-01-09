@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { FileText, Users, DollarSign, Clock } from "lucide-react";
-import { mockOrders, mockClients } from "../data/mockData";
 import { CalendarWidget } from "./CalendarWidget";
+import { orderService } from "../../services/order.service";
+import { clientService } from "../../services/client.service";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
 
@@ -11,17 +13,44 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps) {
-  const totalOrders = mockOrders.length;
-  const totalClients = mockClients.length;
-  const totalRevenue = mockOrders.reduce((sum, order) => sum + order.total, 0);
-  const pendingOrders = mockOrders.filter(
-    (o) => o.status === "pending"
-  ).length;
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalClients, setTotalClients] = useState(0);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [orders, clients] = await Promise.all([
+          orderService.getAllOrders(),
+          clientService.getAllClients(),
+        ]);
+
+        setTotalOrders(orders.length);
+        setTotalClients(clients.length);
+        setTotalRevenue(orders.reduce((sum, order) => sum + order.total, 0));
+        setPendingOrders(orders.filter((o) => o.estado === "PENDIENTE").length);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   return (
     <div className="p-4 space-y-4">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3">
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#033f63]"></div>
+        </div>
+      ) : (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 gap-3">
         <Card 
           className="p-4 cursor-pointer hover:shadow-md transition-shadow active:scale-95 transition-transform"
           onClick={() => onNavigateTo("orders")}
@@ -85,6 +114,8 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
 
       {/* Calendar Widget - Replaces Recent Orders */}
       <CalendarWidget onNavigateToBalance={onNavigateToBalance} />
+        </>
+      )}
     </div>
   );
 }

@@ -2,25 +2,28 @@ import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { useAuth } from "../../hooks/useAuth";
+import { toast } from "sonner";
 
-interface LoginProps {
-  onLogin: () => void;
-}
-
-export function Login({ onLogin }: LoginProps) {
-  const [username, setUsername] = useState("");
+export function Login() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
-    // Validación simple - en producción conectarías con un backend real
-    if (username === "admin" && password === "1234") {
-      onLogin();
-    } else {
-      setError("Usuario o contraseña incorrectos");
-      setTimeout(() => setError(""), 3000);
+    try {
+      await login({ email, password });
+      toast.success("Inicio de sesión exitoso");
+    } catch (error: any) {
+      console.error('Login error:', error);
+      const errorMessage = error.response?.data?.error || "Usuario o contraseña incorrectos";
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -40,19 +43,20 @@ export function Login({ onLogin }: LoginProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
-              htmlFor="username"
+              htmlFor="email"
               className="block text-sm mb-2 text-[#033f63]"
             >
-              Usuario
+              Email
             </label>
             <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
-              placeholder="Ingresa tu usuario"
+              placeholder="ejemplo@email.com"
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -71,20 +75,16 @@ export function Login({ onLogin }: LoginProps) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
               placeholder="Ingresa tu contraseña"
               required
+              disabled={isLoading}
             />
           </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
 
           <Button
             type="submit"
             className="w-full bg-[#033f63] hover:bg-[#28666e] text-white py-2 rounded-lg transition-colors"
+            disabled={isLoading}
           >
-            Iniciar Sesión
+            {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
           </Button>
         </form>
 
@@ -92,8 +92,8 @@ export function Login({ onLogin }: LoginProps) {
           <p className="mb-1">
             <strong>Credenciales de prueba:</strong>
           </p>
-          <p>Usuario: <strong>admin</strong></p>
-          <p>Contraseña: <strong>1234</strong></p>
+          <p>Email: <strong>admin@apl-dental.com</strong></p>
+          <p>Contraseña: <strong>AdminAnto17$</strong></p>
         </div>
       </Card>
     </div>

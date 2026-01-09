@@ -6,26 +6,27 @@ import { Clients } from "./components/Clients";
 import { Balance } from "./components/Balance";
 import { Login } from "./components/Login";
 import { Toaster } from "./components/ui/sonner";
+import { useAuth } from "../hooks/useAuth";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isAuthenticated, isLoading, logout } = useAuth();
   const [currentView, setCurrentView] = useState<View>("dashboard");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [navigationHistory, setNavigationHistory] = useState<View[]>(["dashboard"]);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentView("dashboard");
-    setSelectedClientId(null);
-    setOrderFilter("all");
-    setNavigationHistory(["dashboard"]);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setCurrentView("dashboard");
+      setSelectedClientId(null);
+      setOrderFilter("all");
+      setNavigationHistory(["dashboard"]);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const navigateTo = (view: View, clientId?: string, filter?: string) => {
@@ -80,8 +81,20 @@ export default function App() {
 
   const canGoBack = navigationHistory.length > 1 && currentView !== "dashboard";
 
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#033f63] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return <Login />;
   }
 
   return (

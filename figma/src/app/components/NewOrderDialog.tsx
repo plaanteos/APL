@@ -18,60 +18,108 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { mockClients } from "../data/mockData";
 import { toast } from "sonner";
+import { clientService, Client } from "../../services/client.service";
+import { orderService } from "../../services/order.service";
 
 interface NewOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preselectedClientId?: string;
   preselectedDate?: string;
+  onOrderCreated?: () => void;
 }
 
-export function NewOrderDialog({ open, onOpenChange, preselectedClientId, preselectedDate }: NewOrderDialogProps) {
+export function NewOrderDialog({ open, onOpenChange, preselectedClientId, preselectedDate, onOrderCreated }: NewOrderDialogProps) {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    clientId: preselectedClientId || "",
-    patientName: "",
-    description: "",
-    type: "",
-    quantity: "1",
-    unitPrice: "",
-    status: "pending",
-    dueDate: preselectedDate || "",
+    clienteId: preselectedClientId || "",
+    nombrePaciente: "",
+    descripcion: "",
+    tipo: "",
+    cantidad: "1",
+    precioUnitario: "",
+    fechaEntrega: preselectedDate || "",
   });
+
+  useEffect(() => {
+    if (open) {
+      const fetchClients = async () => {
+        setIsLoadingClients(true);
+        try {
+          const fetchedClients = await clientService.getAllClients();
+          setClients(fetchedClients);
+        } catch (error) {
+          console.error("Error fetching clients:", error);
+          toast.error("Error al cargar clientes");
+        } finally {
+          setIsLoadingClients(false);
+        }
+      };
+      fetchClients();
+    }
+  }, [open]);
 
   // Update clientId when preselectedClientId changes
   useEffect(() => {
     if (preselectedClientId) {
-      setFormData(prev => ({ ...prev, clientId: preselectedClientId }));
+      setFormData(prev => ({ ...prev, clienteId: preselectedClientId }));
     }
   }, [preselectedClientId]);
 
   // Update dueDate when preselectedDate changes
   useEffect(() => {
     if (preselectedDate) {
-      setFormData(prev => ({ ...prev, dueDate: preselectedDate }));
+      setFormData(prev => ({ ...prev, fechaEntrega: preselectedDate }));
     }
   }, [preselectedDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Pedido creado exitosamente");
-    onOpenChange(false);
-    setFormData({
-      clientId: "",
-      patientName: "",
-      description: "",
-      type: "",
-      quantity: "1",
-      unitPrice: "",
-      status: "pending",
-      dueDate: "",
-    });
+    
+    if (!formData.clienteId) {
+      toast.error("Debes seleccionar un cliente");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await orderService.createOrder({
+        clienteId: formData.clienteId,
+        nombrePaciente: formData.nombrePaciente,
+        descripcion: formData.descripcion,
+        tipo: formData.tipo,
+        cantidad: Number(formData.cantidad),
+        precioUnitario: Number(formData.precioUnitario),
+        fechaEntrega: formData.fechaEntrega || undefined,
+      });
+      
+      toast.success("Pedido creado exitosamente");
+      onOpenChange(false);
+      setFormData({
+        clienteId: "",
+        nombrePaciente: "",
+        descripcion: "",
+        tipo: "",
+        cantidad: "1",
+        precioUnitario: "",
+        fechaEntrega: "",
+      });
+      if (onOrderCreated) {
+        onOrderCreated();
+      }
+    } catch (error: any) {
+      console.error("Error creating order:", error);
+      toast.error(error.response?.data?.error || "Error al crear pedido");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const total =
-    Number(formData.quantity) * Number(formData.unitPrice) || 0;
+    Number(formData.cantidad) * Number(formData.precioUnitario) || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -87,18 +135,19 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
           <div>
             <Label htmlFor="client">Cliente</Label>
             <Select
-              value={formData.clientId}
+              value={formData.clienteId}
               onValueChange={(value) =>
-                setFormData({ ...formData, clientId: value })
+                setFormData({ ...formData, clienteId: value })
               }
+              disabled={isSubmitting || isLoadingClients}
             >
               <SelectTrigger id="client">
-                <SelectValue placeholder="Seleccionar cliente" />
+                <SelectValue placeholder={isLoadingClients ? "Cargando..." : "Seleccionar cliente"} />
               </SelectTrigger>
               <SelectContent>
-                {mockClients.map((client) => (
+                {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
-                    {client.name}
+                    {client.nombre}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -110,22 +159,24 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Input
               id="patientName"
               type="text"
-              value={formData.patientName}
+              value={formData.nombrePaciente}
               onChange={(e) =>
-                setFormData({ ...formData, patientName: e.target.value })
+                setFormData({ ...formData, nombrePaciente: e.target.value })
               }
               placeholder="Ej: María Rodríguez"
               required
+              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <Label htmlFor="type">Tipo de Trabajo</Label>
             <Select
-              value={formData.type}
+              value={formData.tipo}
               onValueChange={(value) =>
-                setFormData({ ...formData, type: value })
+                setFormData({ ...formData, tipo: value })
               }
+              disabled={isSubmitting}
             >
               <SelectTrigger id="type">
                 <SelectValue placeholder="Seleccionar tipo" />
@@ -146,12 +197,13 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Label htmlFor="description">Descripción</Label>
             <Textarea
               id="description"
-              value={formData.description}
+              value={formData.descripcion}
               onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
+                setFormData({ ...formData, descripcion: e.target.value })
               }
               placeholder="Ej: Corona de porcelana sobre metal"
               rows={3}
+              disabled={isSubmitting}
             />
           </div>
 
@@ -162,10 +214,11 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
                 id="quantity"
                 type="number"
                 min="1"
-                value={formData.quantity}
+                value={formData.cantidad}
                 onChange={(e) =>
-                  setFormData({ ...formData, quantity: e.target.value })
+                  setFormData({ ...formData, cantidad: e.target.value })
                 }
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -175,11 +228,12 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
                 type="number"
                 min="0"
                 step="0.01"
-                value={formData.unitPrice}
+                value={formData.precioUnitario}
                 onChange={(e) =>
-                  setFormData({ ...formData, unitPrice: e.target.value })
+                  setFormData({ ...formData, precioUnitario: e.target.value })
                 }
                 placeholder="$"
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -189,10 +243,11 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
             <Input
               id="dueDate"
               type="date"
-              value={formData.dueDate}
+              value={formData.fechaEntrega}
               onChange={(e) =>
-                setFormData({ ...formData, dueDate: e.target.value })
+                setFormData({ ...formData, fechaEntrega: e.target.value })
               }
+              disabled={isSubmitting}
             />
           </div>
 
@@ -210,14 +265,16 @@ export function NewOrderDialog({ open, onOpenChange, preselectedClientId, presel
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={isSubmitting}
             >
-              Crear Pedido
+              {isSubmitting ? "Creando..." : "Crear Pedido"}
             </Button>
           </DialogFooter>
         </form>
