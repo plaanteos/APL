@@ -47,15 +47,18 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
+      console.log(`CORS permitido para: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`Blocked by CORS: ${origin}`);
+      console.warn(`Bloqueado por CORS: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Logging middleware
