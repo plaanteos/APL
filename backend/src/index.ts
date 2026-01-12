@@ -41,21 +41,39 @@ const allowedOrigins = [
 
 console.log('🔧 Origins permitidos:', allowedOrigins);
 
-// CORS DEBE IR PRIMERO para que los preflight funcionen
+// Middleware manual de CORS para asegurar que los headers siempre se envíen
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Si el origin está en la lista permitida, agregarlo al header
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    
+    console.log(`✅ CORS headers enviados para: ${origin || 'sin origin'}`);
+  } else {
+    console.warn(`⚠️ Origin bloqueado: ${origin}`);
+  }
+  
+  // Manejar preflight
+  if (req.method === 'OPTIONS') {
+    console.log('📨 Preflight request respondido');
+    return res.status(204).end();
+  }
+  
+  next();
+});
+
+// CORS middleware adicional con cors package
 app.use(cors({
   origin: (origin, callback) => {
-    // Permitir requests sin origin (como mobile apps, curl, Postman)
-    if (!origin) {
-      console.log('✅ Request sin origin permitido');
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin)) {
-      console.log(`✅ CORS permitido para: ${origin}`);
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`⚠️ Origin bloqueado por CORS: ${origin}`);
-      console.warn(`Origins esperados:`, allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -64,8 +82,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   preflightContinue: false,
-  optionsSuccessStatus: 204,
-  maxAge: 86400 // 24 horas de cache para preflight
+  optionsSuccessStatus: 204
 }));
 
 // Security middleware - CON CONFIGURACIÓN AJUSTADA PARA CORS
