@@ -36,29 +36,37 @@ app.use(helmet());
 
 // CORS configuration
 const allowedOrigins = [
-  process.env.CORS_ORIGIN || 'http://localhost:5173',
   'https://administracionapl.netlify.app',
-  'http://localhost:5173'
-];
+  'http://localhost:5173',
+  'http://localhost:5174',
+  process.env.CORS_ORIGIN
+].filter(Boolean);
 
+// Configuración más permisiva de CORS
 app.use(cors({
   origin: (origin, callback) => {
-    // Permitir requests sin origin (como mobile apps o curl)
-    if (!origin) return callback(null, true);
+    // Permitir requests sin origin (como mobile apps, curl, Postman)
+    if (!origin) {
+      console.log('Request sin origin permitido');
+      return callback(null, true);
+    }
     
     if (allowedOrigins.includes(origin)) {
-      console.log(`CORS permitido para: ${origin}`);
+      console.log(`✅ CORS permitido para: ${origin}`);
       callback(null, true);
     } else {
-      console.warn(`Bloqueado por CORS: ${origin}`);
+      console.warn(`⚠️ Origin bloqueado por CORS: ${origin}`);
+      console.warn(`Origins permitidos:`, allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 horas de cache para preflight
 }));
 
 // Logging middleware

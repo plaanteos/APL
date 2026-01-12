@@ -9,6 +9,8 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Importante para CORS con credenciales
+  timeout: 30000, // 30 segundos timeout
 });
 
 // Request interceptor to add token
