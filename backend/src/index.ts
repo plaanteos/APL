@@ -45,6 +45,8 @@ console.log('🔧 Origins permitidos:', allowedOrigins);
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
+  console.log(`📨 ${req.method} ${req.path} - Origin: ${origin || 'sin origin'}`);
+  
   // Si el origin está en la lista permitida, agregarlo al header
   if (!origin || allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
@@ -54,14 +56,15 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
     res.setHeader('Access-Control-Max-Age', '86400');
     
-    console.log(`✅ CORS headers enviados para: ${origin || 'sin origin'}`);
+    console.log(`✅ CORS headers agregados para: ${origin || '*'}`);
   } else {
-    console.warn(`⚠️ Origin bloqueado: ${origin}`);
+    console.warn(`❌ Origin NO permitido: ${origin}`);
+    console.warn(`   Origins válidos:`, allowedOrigins);
   }
   
-  // Manejar preflight
+  // Manejar preflight OPTIONS
   if (req.method === 'OPTIONS') {
-    console.log('📨 Preflight request respondido');
+    console.log(`✅ Preflight OPTIONS respondido con 204`);
     return res.status(204).end();
   }
   
