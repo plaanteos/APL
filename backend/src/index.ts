@@ -31,10 +31,7 @@ export const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Security middleware
-app.use(helmet());
-
-// CORS configuration
+// CORS configuration - DEBE IR ANTES QUE TODO
 const allowedOrigins = [
   'https://administracionapl.netlify.app',
   'http://localhost:5173',
@@ -42,12 +39,14 @@ const allowedOrigins = [
   process.env.CORS_ORIGIN
 ].filter(Boolean);
 
-// Configuración más permisiva de CORS
+console.log('🔧 Origins permitidos:', allowedOrigins);
+
+// CORS DEBE IR PRIMERO para que los preflight funcionen
 app.use(cors({
   origin: (origin, callback) => {
     // Permitir requests sin origin (como mobile apps, curl, Postman)
     if (!origin) {
-      console.log('Request sin origin permitido');
+      console.log('✅ Request sin origin permitido');
       return callback(null, true);
     }
     
@@ -56,7 +55,7 @@ app.use(cors({
       callback(null, true);
     } else {
       console.warn(`⚠️ Origin bloqueado por CORS: ${origin}`);
-      console.warn(`Origins permitidos:`, allowedOrigins);
+      console.warn(`Origins esperados:`, allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -69,9 +68,28 @@ app.use(cors({
   maxAge: 86400 // 24 horas de cache para preflight
 }));
 
+// Security middleware - CON CONFIGURACIÓN AJUSTADA PARA CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  crossOriginEmbedderPolicy: false
+}));
+
+// Middleware para manejar explícitamente OPTIONS (preflight)
+app.options('*', (req, res) => {
+  console.log(`✅ Preflight request para: ${req.path} desde ${req.headers.origin}`);
+  res.status(204).end();
+});
+
 // Logging middleware
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
+} else {
+  // En producción, loguear las peticiones para debug de CORS
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'sin origin'}`);
+    next();
+  });
 }
 
 // Body parsing middleware
