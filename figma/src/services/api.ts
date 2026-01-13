@@ -10,7 +10,7 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true, // Importante para CORS con credenciales
-  timeout: 30000, // 30 segundos timeout
+  timeout: 90000, // 90 segundos - Render free tier puede tardar en despertar
 });
 
 // Request interceptor to add token
