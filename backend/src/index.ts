@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
@@ -130,7 +131,27 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
+// Rate limiting para protección contra ataques de fuerza bruta
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // 5 intentos por ventana
+  message: {
+    success: false,
+    error: 'Demasiados intentos de login. Por favor intenta en 15 minutos.'
+  },
+  standardHeaders: true, // Retorna info en headers `RateLimit-*`
+  legacyHeaders: false, // Desactiva headers `X-RateLimit-*`
+  handler: (req, res) => {
+    console.warn(`⚠️ Rate limit excedido desde IP: ${req.ip}`);
+    res.status(429).json({
+      success: false,
+      error: 'Demasiados intentos de login. Por favor intenta en 15 minutos.'
+    });
+  }
+});
+
 // API routes
+app.use('/api/auth/login', loginLimiter); // Aplicar rate limit solo a login
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/orders', orderRoutes);

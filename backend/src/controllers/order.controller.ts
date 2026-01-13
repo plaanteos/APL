@@ -9,10 +9,13 @@ const prisma = new PrismaClient();
 const createOrderSchema = z.object({
   clienteId: z.string().cuid('ID de cliente inválido'),
   nombrePaciente: z.string().min(2, 'Nombre del paciente requerido'),
-  fechaVencimiento: z.string().transform((str) => new Date(str)),
+  fechaVencimiento: z.string().transform((str) => new Date(str)).refine(
+    (date) => date > new Date(),
+    { message: 'La fecha de vencimiento debe ser futura' }
+  ),
   descripcion: z.string().min(10, 'Descripción debe tener al menos 10 caracteres'),
   tipoPedido: z.string().min(2, 'Tipo de pedido requerido'),
-  cantidad: z.number().int().min(1, 'Cantidad debe ser mayor a 0'),
+  cantidad: z.number().int().positive('Cantidad debe ser mayor a 0'),
   precioUnitario: z.number().positive('Precio debe ser mayor a 0'),
   prioridad: z.enum(['BAJA', 'NORMAL', 'ALTA', 'URGENTE']).default('NORMAL'),
   observaciones: z.string().optional(),
@@ -20,7 +23,7 @@ const createOrderSchema = z.object({
     descripcion: z.string().min(2, 'Descripción del detalle requerida'),
     tipoTrabajo: z.string().min(2, 'Tipo de trabajo requerido'),
     material: z.string().optional(),
-    cantidad: z.number().int().min(1, 'Cantidad debe ser mayor a 0'),
+    cantidad: z.number().int().positive('Cantidad debe ser mayor a 0'),
     precioUnitario: z.number().positive('Precio debe ser mayor a 0'),
     observaciones: z.string().optional(),
   })).default([]),
@@ -515,6 +518,77 @@ export class OrderController {
       });
     } catch (error) {
       console.error('Get orders stats error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // PATCH /api/orders/:id/deliver - Marcar pedido como entregado
+  static async markAsDelivered(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.id;
+
+      // Verificar que el pedido existe
+      const existingOrder = await prisma.pedido.findUnique({
+        where: { id },
+        include: { cliente: true },
+      });
+
+      if (!existingOrder) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pedido no encontrado',
+        });
+      }
+
+      // Verificar que el pedido no esté ya entregado
+      if (existingOrder.estado === 'ENTREGADO') {
+        return res.status(400).json({
+          success: false,
+          error: 'El pedido ya fue marcado como entregado',
+        });
+      }
+
+      // Verificar que el pedido esté pagado o en proceso
+      if (existingOrder.estado === 'PENDIENTE') {
+        return res.status(400).json({
+          success: false,
+          error: 'El pedido debe estar en proceso o pagado antes de marcarlo como entregado',
+        });
+      }
+
+      // Actualizar estado a ENTREGADO
+      const updatedOrder = await prisma.pedido.update({
+        where: { id },
+        data: {
+          estado: 'ENTREGADO',
+        },
+        include: {
+          cliente: true,
+          detallesPedido: true,
+        },
+      });
+
+      // Registrar auditoría
+      await AuditService.logStatusChange(
+        req,
+        'pedido',
+        id,
+        existingOrder.estado,
+        'ENTREGADO',
+        `Pedido ${existingOrder.numeroPedido} marcado como entregado`
+      );
+
+      res.json({
+        success: true,
+        data: updatedOrder,
+        message: 'Pedido marcado como entregado exitosamente',
+      });
+    } catch (error) {
+      console.error('Mark order as delivered error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',

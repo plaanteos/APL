@@ -25,6 +25,9 @@ router.put('/:id', OrderController.updateOrder);
 // PATCH /api/orders/:id/status
 router.patch('/:id/status', OrderController.updateOrderStatus);
 
+// PATCH /api/orders/:id/deliver - Marcar pedido como entregado
+router.patch('/:id/deliver', OrderController.markAsDelivered);
+
 // DELETE /api/orders/:id
 router.delete('/:id', OrderController.deleteOrder);
 
