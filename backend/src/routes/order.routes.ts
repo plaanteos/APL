@@ -19,6 +19,9 @@ router.post('/', OrderController.createOrder);
 // GET /api/orders/:id
 router.get('/:id', OrderController.getOrderById);
 
+// GET /api/orders/:id/balance - Balance del pedido
+router.get('/:id/balance', OrderController.getOrderBalance);
+
 // PUT /api/orders/:id
 router.put('/:id', OrderController.updateOrder);
 

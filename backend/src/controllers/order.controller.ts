@@ -595,4 +595,89 @@ export class OrderController {
       });
     }
   }
+
+  // GET /api/orders/:id/balance - Obtener balance de un pedido específico
+  static async getOrderBalance(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const pedido = await prisma.pedido.findUnique({
+        where: { id },
+        include: {
+          cliente: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+              telefono: true,
+              whatsapp: true,
+            },
+          },
+          pagos: {
+            select: {
+              id: true,
+              numeroPago: true,
+              monto: true,
+              metodoPago: true,
+              fechaPago: true,
+              numeroRecibo: true,
+              observaciones: true,
+            },
+            orderBy: {
+              fechaPago: 'desc',
+            },
+          },
+          detallesPedido: true,
+        },
+      });
+
+      if (!pedido) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pedido no encontrado',
+        });
+      }
+
+      // Calcular balance
+      const montoTotal = Number(pedido.montoTotal);
+      const montoPagado = Number(pedido.montoPagado);
+      const montoPendiente = Number(pedido.montoPendiente);
+      const porcentajePagado = (montoPagado / montoTotal) * 100;
+
+      const balance = {
+        pedido: {
+          id: pedido.id,
+          numeroPedido: pedido.numeroPedido,
+          nombrePaciente: pedido.nombrePaciente,
+          descripcion: pedido.descripcion,
+          tipoPedido: pedido.tipoPedido,
+          fechaPedido: pedido.fechaPedido,
+          fechaVencimiento: pedido.fechaVencimiento,
+          estado: pedido.estado,
+          prioridad: pedido.prioridad,
+        },
+        cliente: pedido.cliente,
+        montos: {
+          total: montoTotal,
+          pagado: montoPagado,
+          pendiente: montoPendiente,
+          porcentajePagado: Math.round(porcentajePagado * 100) / 100,
+        },
+        pagos: pedido.pagos,
+        detalles: pedido.detallesPedido,
+        estadoPago: montoPendiente === 0 ? 'PAGADO_COMPLETO' : montoPagado > 0 ? 'PAGO_PARCIAL' : 'SIN_PAGOS',
+      };
+
+      res.json({
+        success: true,
+        data: balance,
+      });
+    } catch (error) {
+      console.error('Get order balance error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
 }

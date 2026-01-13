@@ -16,17 +16,18 @@ datasource db {
 
 // Tabla: administradores
 model Administrador {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  username   String   @unique
-  password   String   // Será hasheada con bcryptjs
-  nombres    String
-  apellidos  String
-  telefono   String?
-  rol        Rol      @default(ADMIN)
-  activo     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  username      String   @unique
+  password      String   // Será hasheada con bcryptjs
+  nombres       String
+  apellidos     String
+  telefono      String?
+  rol           Rol      @default(ADMIN)
+  activo        Boolean  @default(true)
+  refreshToken  String?  @db.Text // Token de refresco para RF-10
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
   // Relaciones para auditoría
   auditLogs  Auditoria[]

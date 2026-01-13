@@ -383,4 +383,108 @@ export class ClientController {
       });
     }
   }
+
+  // GET /api/clients/:id/balance - Obtener balance completo del cliente
+  static async getClientBalance(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const cliente = await prisma.cliente.findUnique({
+        where: { id },
+        include: {
+          pedidos: {
+            include: {
+              pagos: {
+                select: {
+                  id: true,
+                  numeroPago: true,
+                  monto: true,
+                  metodoPago: true,
+                  fechaPago: true,
+                },
+              },
+            },
+            orderBy: {
+              fechaPedido: 'desc',
+            },
+          },
+        },
+      });
+
+      if (!cliente) {
+        return res.status(404).json({
+          success: false,
+          error: 'Cliente no encontrado',
+        });
+      }
+
+      // Calcular estadísticas globales
+      const pedidosActivos = cliente.pedidos.filter(p => p.estado !== 'CANCELADO');
+      const pedidosPendientes = pedidosActivos.filter(p => p.estado === 'PENDIENTE');
+      const pedidosEnProceso = pedidosActivos.filter(p => p.estado === 'EN_PROCESO');
+      const pedidosEntregados = pedidosActivos.filter(p => p.estado === 'ENTREGADO');
+      const pedidosPagados = pedidosActivos.filter(p => p.estado === 'PAGADO');
+
+      const montoTotal = pedidosActivos.reduce((sum, p) => sum + Number(p.montoTotal), 0);
+      const montoPagado = pedidosActivos.reduce((sum, p) => sum + Number(p.montoPagado), 0);
+      const montoPendiente = pedidosActivos.reduce((sum, p) => sum + Number(p.montoPendiente), 0);
+
+      // Desglose por pedido
+      const pedidosConBalance = pedidosActivos.map(pedido => ({
+        id: pedido.id,
+        numeroPedido: pedido.numeroPedido,
+        nombrePaciente: pedido.nombrePaciente,
+        tipoPedido: pedido.tipoPedido,
+        fechaPedido: pedido.fechaPedido,
+        fechaVencimiento: pedido.fechaVencimiento,
+        estado: pedido.estado,
+        montoTotal: Number(pedido.montoTotal),
+        montoPagado: Number(pedido.montoPagado),
+        montoPendiente: Number(pedido.montoPendiente),
+        cantidadPagos: pedido.pagos.length,
+        ultimoPago: pedido.pagos.length > 0 
+          ? {
+              fecha: pedido.pagos[0].fechaPago,
+              monto: Number(pedido.pagos[0].monto),
+              metodo: pedido.pagos[0].metodoPago,
+            }
+          : null,
+      }));
+
+      const balance = {
+        cliente: {
+          id: cliente.id,
+          nombre: cliente.nombre,
+          email: cliente.email,
+          telefono: cliente.telefono,
+          whatsapp: cliente.whatsapp,
+          tipo: cliente.tipo,
+          direccion: cliente.direccion,
+        },
+        resumen: {
+          totalPedidos: pedidosActivos.length,
+          pedidosPendientes: pedidosPendientes.length,
+          pedidosEnProceso: pedidosEnProceso.length,
+          pedidosEntregados: pedidosEntregados.length,
+          pedidosPagados: pedidosPagados.length,
+          montoTotal,
+          montoPagado,
+          montoPendiente,
+          porcentajePagado: montoTotal > 0 ? Math.round((montoPagado / montoTotal) * 100 * 100) / 100 : 0,
+        },
+        pedidos: pedidosConBalance,
+      };
+
+      res.json({
+        success: true,
+        data: balance,
+      });
+    } catch (error) {
+      console.error('Get client balance error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
 }

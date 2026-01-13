@@ -10,6 +10,9 @@ router.post('/login', AuthController.login);
 // POST /api/auth/register
 router.post('/register', AuthController.register);
 
+// POST /api/auth/refresh - Renovar access token
+router.post('/refresh', AuthController.refresh);
+
 // POST /api/auth/logout (requiere autenticación)
 router.post('/logout', authenticate, AuthController.logout);
 

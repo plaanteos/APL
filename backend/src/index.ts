@@ -18,12 +18,18 @@ import searchRoutes from './routes/search.routes';
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { requestLogger } from './middleware/logger';
 
 // Import services
 import { ReminderService } from './services/reminder.service';
+import logger from './utils/logger';
+import { validateEnv } from './utils/validateEnv';
 
 // Load environment variables
 dotenv.config();
+
+// Validar variables de entorno antes de iniciar
+validateEnv();
 
 // Initialize Prisma client
 export const prisma = new PrismaClient();
@@ -103,12 +109,14 @@ app.options('*', (req, res) => {
 });
 
 // Logging middleware
+app.use(requestLogger);
+
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 } else {
   // En producción, loguear las peticiones para debug de CORS
   app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'sin origin'}`);
+    logger.info(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'sin origin'}`);
     next();
   });
 }
@@ -168,9 +176,9 @@ app.use(errorHandler);
 async function connectDatabase() {
   try {
     await prisma.$connect();
-    console.log('✅ Connected to MySQL database');
+    logger.info('✅ Connected to MySQL database');
   } catch (error) {
-    console.error('❌ Failed to connect to database:', error);
+    logger.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 }
@@ -179,9 +187,9 @@ async function connectDatabase() {
 async function initializeReminderSystem() {
   try {
     await ReminderService.initialize();
-    console.log('✅ Sistema de recordatorios inicializado');
+    logger.info('✅ Sistema de recordatorios inicializado');
   } catch (error) {
-    console.error('❌ Error inicializando sistema de recordatorios:', error);
+    logger.error('❌ Error inicializando sistema de recordatorios:', error);
   }
 }
 
@@ -191,25 +199,40 @@ async function startServer() {
   await initializeReminderSystem();
   
   app.listen(PORT, () => {
-    console.log(`🚀 APL Backend API server running on port ${PORT}`);
-    console.log(`📋 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    logger.info(`🚀 APL Backend API server running on port ${PORT}`);
+    logger.info(`📋 Environment: ${process.env.NODE_ENV}`);
+    logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
   });
 }
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
+  logger.info('SIGTERM received, shutting down gracefully');
   ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
+  logger.info('SIGINT received, shutting down gracefully');
   ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+  logger.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
+  logger.error(error.name, error.message);
+  logger.error(error.stack);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('❌ UNHANDLED REJECTION! Shutting down...');
+  logger.error(reason);
+  process.exit(1);
 });
 
 startServer().catch((error) => {

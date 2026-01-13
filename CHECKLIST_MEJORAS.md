@@ -11,19 +11,19 @@
   - Configurar: 5 intentos cada 15 minutos
   - Archivo: `backend/src/index.ts`
 
-- [ ] **Agregar endpoint de cambio de contraseña**
+- [x] **Agregar endpoint de cambio de contraseña** ✅ (Ya estaba implementado)
   - Crear: `POST /api/auth/change-password`
   - Validar contraseña antigua
   - Hash nueva contraseña con bcryptjs
   - Registrar en auditoría
   - Archivo: `backend/src/controllers/auth.controller.ts`
 
-- [ ] **Implementar refresh tokens**
+- [x] **Implementar refresh tokens** ✅
   - Crear tabla `RefreshToken` en schema
   - Endpoint: `POST /api/auth/refresh`
   - Expiración: Access token 1h, Refresh token 7d
 
-- [ ] **Registrar intentos de login fallidos en auditoría**
+- [x] **Registrar intentos de login fallidos en auditoría** ✅
   - Modificar `auth.controller.ts` línea ~70
   - Llamar a `AuditService.log()` en catch del login
 
@@ -70,39 +70,39 @@
   - Archivo: `backend/src/controllers/order.controller.ts`
   - Route: `backend/src/routes/order.routes.ts`
 
-- [ ] **Crear endpoint GET /api/orders/:id/balance**
+- [x] **Crear endpoint GET /api/orders/:id/balance** ✅
   - Devolver balance de un pedido específico
   - Incluir pagos relacionados
 
-- [ ] **Crear endpoint GET /api/clients/:id/balance**
+- [x] **Crear endpoint GET /api/clients/:id/balance** ✅
   - Balance completo del cliente
   - Total pedidos, pagado, pendiente
   - Archivo: `backend/src/controllers/client.controller.ts`
 
 ### Logging y Monitoreo
-- [ ] **Implementar logging estructurado con Winston**
+- [x] **Implementar logging estructurado con Winston** ✅
   - Instalar: `npm install winston`
   - Configurar: `backend/src/utils/logger.ts`
   - Niveles: error, warn, info, debug
   - Archivos: `error.log`, `combined.log`
 
-- [ ] **Agregar middleware de logging de requests**
+- [x] **Agregar middleware de logging de requests** ✅
   - Log de todas las peticiones HTTP
   - Incluir: método, ruta, status, tiempo de respuesta
   - Archivo: `backend/src/middleware/logger.ts`
 
-- [ ] **Logging de errores no controlados**
+- [x] **Logging de errores no controlados** ✅
   - Process handlers para uncaughtException y unhandledRejection
   - Archivo: `backend/src/index.ts`
 
 ### Manejo de Errores
-- [ ] **Crear middleware global de manejo de errores mejorado**
+- [x] **Crear middleware global de manejo de errores mejorado** ✅
   - Distinguir errores operacionales vs programáticos
   - Response estructurado con códigos de error
   - No exponer stack traces en producción
   - Archivo: `backend/src/middleware/errorHandler.ts`
 
-- [ ] **Agregar validación de variables de entorno**
+- [x] **Agregar validación de variables de entorno** ✅
   - Archivo: `backend/src/utils/validateEnv.ts`
   - Validar: DATABASE_URL, JWT_SECRET, PORT, etc.
   - Ejecutar al iniciar: `backend/src/index.ts`
@@ -365,8 +365,8 @@
 
 ### Fase 1: Backend
 - **Total tareas:** 21
-- **Completadas:** 10
-- **Progreso:** 48%
+- **Completadas:** 21 ✅
+- **Progreso:** 100% 🎉
 
 ### Fase 2: Frontend-Backend
 - **Total tareas:** 17
@@ -390,7 +390,7 @@
 
 ---
 
-## 🎯 PROGRESO TOTAL: 10/67 (15%)
+## 🎯 PROGRESO TOTAL: 21/67 (31%)
 
 ---
 

@@ -32,7 +32,20 @@ const generateToken = (userId: string, email: string, role: string): string => {
   return jwt.sign(
     { id: userId, email, role },
     secret,
-    { expiresIn: '7d' }
+    { expiresIn: '15m' } // Access token: 15 minutos
+  );
+};
+
+// Generar Refresh Token
+const generateRefreshToken = (userId: string, email: string, role: string): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not defined');
+  }
+  return jwt.sign(
+    { id: userId, email, role, type: 'refresh' },
+    secret,
+    { expiresIn: '7d' } // Refresh token: 7 días
   );
 };
 
@@ -60,6 +73,17 @@ export class AuthController {
       });
 
       if (!user || !user.activo) {
+        // Registrar intento fallido en auditoría
+        await AuditService.log({
+          administradorId: 'system',
+          accion: 'LOGIN',
+          tipoEntidad: 'auth',
+          entidadId: email,
+          descripcion: `Intento de login fallido: usuario no existe o inactivo - ${email}`,
+          direccionIP: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent'),
+        });
+        
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -69,6 +93,17 @@ export class AuthController {
       // Verificar contraseña
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
+        // Registrar intento fallido en auditoría
+        await AuditService.log({
+          administradorId: user.id,
+          accion: 'LOGIN',
+          tipoEntidad: 'auth',
+          entidadId: user.id,
+          descripcion: `Intento de login fallido: contraseña incorrecta - ${email}`,
+          direccionIP: req.ip || req.connection.remoteAddress,
+          userAgent: req.get('User-Agent'),
+        });
+        
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -77,6 +112,13 @@ export class AuthController {
 
       // Generar token
       const token = generateToken(user.id, user.email, user.rol);
+      const refreshToken = generateRefreshToken(user.id, user.email, user.rol);
+
+      // Guardar refresh token en BD
+      await prisma.administrador.update({
+        where: { id: user.id },
+        data: { refreshToken: await bcrypt.hash(refreshToken, 10) }
+      });
 
       // Registrar login en auditoría
       await AuditService.logLogin(req, user.id, user.email);
@@ -89,6 +131,7 @@ export class AuthController {
         message: 'Login exitoso',
         data: {
           token,
+          refreshToken,
           user: userWithoutPassword,
         }
       });
@@ -314,6 +357,142 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Change password error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // POST /api/auth/refresh - Refrescar access token con refresh token
+  static async refresh(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          error: 'Refresh token requerido',
+        });
+      }
+
+      // Verificar refresh token
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error('JWT_SECRET is not defined');
+      }
+
+      let decoded: any;
+      try {
+        decoded = jwt.verify(refreshToken, secret);
+      } catch (jwtError) {
+        return res.status(401).json({
+          success: false,
+          error: 'Refresh token inválido o expirado',
+        });
+      }
+
+      // Verificar que sea un refresh token
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({
+          success: false,
+          error: 'Token inválido',
+        });
+      }
+
+      // Buscar usuario y verificar refresh token almacenado
+      const user = await prisma.administrador.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          email: true,
+          rol: true,
+          activo: true,
+          refreshToken: true,
+        },
+      });
+
+      if (!user || !user.activo || !user.refreshToken) {
+        return res.status(401).json({
+          success: false,
+          error: 'Usuario no autorizado',
+        });
+      }
+
+      // Verificar que el refresh token coincida con el almacenado
+      const isRefreshTokenValid = await bcrypt.compare(refreshToken, user.refreshToken);
+      if (!isRefreshTokenValid) {
+        return res.status(401).json({
+          success: false,
+          error: 'Refresh token inválido',
+        });
+      }
+
+      // Generar nuevo access token
+      const newAccessToken = generateToken(user.id, user.email, user.rol);
+
+      // Registrar renovación en auditoría
+      await AuditService.log({
+        administradorId: user.id,
+        accion: 'REFRESH_TOKEN',
+        tipoEntidad: 'auth',
+        entidadId: user.id,
+        descripcion: `Token de acceso renovado - ${user.email}`,
+        direccionIP: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.json({
+        success: true,
+        message: 'Token renovado exitosamente',
+        data: {
+          token: newAccessToken,
+        },
+      });
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // POST /api/auth/logout - Invalidar refresh token
+  static async logout(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'No autenticado',
+        });
+      }
+
+      // Invalidar refresh token en BD
+      await prisma.administrador.update({
+        where: { id: userId },
+        data: { refreshToken: null },
+      });
+
+      // Registrar logout en auditoría
+      await AuditService.log({
+        administradorId: userId,
+        accion: 'LOGOUT',
+        tipoEntidad: 'auth',
+        entidadId: userId,
+        descripcion: 'Cierre de sesión',
+        direccionIP: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.json({
+        success: true,
+        message: 'Sesión cerrada exitosamente',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',

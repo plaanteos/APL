@@ -19,6 +19,9 @@ router.post('/', ClientController.createClient);
 // GET /api/clients/:id
 router.get('/:id', ClientController.getClientById);
 
+// GET /api/clients/:id/balance - Balance del cliente
+router.get('/:id/balance', ClientController.getClientBalance);
+
 // PUT /api/clients/:id
 router.put('/:id', ClientController.updateClient);
 
