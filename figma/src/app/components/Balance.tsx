@@ -410,10 +410,8 @@ export function Balance({ selectedClientId }: BalanceProps) {
         clientId={currentClientId}
         onPaymentCreated={handlePaymentCreated}
       />
-    </div>
-  );
-}
-    return (
+
+    {error && (
       <div className="p-4">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 flex items-start gap-2">
           <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
@@ -423,8 +421,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
           </div>
         </div>
       </div>
-    );
-  }
+    )}
 
   const selectedClient = clients.find(c => c.id === currentClientId);
   const totalAmount = balanceData?.totalPedidos || 0;
