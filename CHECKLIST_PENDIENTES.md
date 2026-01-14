@@ -49,7 +49,7 @@
   - [x] getAll, getById, create, update, softDelete
   - [x] getEstadoStats
 
-### 3. Frontend - Actualización de Componentes (8-10 horas)
+### 3. Frontend - Actualización de Componentes (8-10 horas) ✅ COMPLETADO
 
 #### Componentes Críticos:
 - [x] `figma/src/app/components/Balance.tsx` ✅ **(OVERHAUL COMPLETO)**
@@ -73,14 +73,14 @@
   - [x] Implementar búsqueda mejorada
 
 #### Diálogos:
-- [ ] `figma/src/app/components/NewOrderDialog.tsx`
+- [ ] `figma/src/app/components/NewOrderDialog.tsx` 🟡 PENDIENTE
   - [ ] Soportar múltiples detalles de pedido
   - [ ] Agregar selector de productos
   - [ ] Agregar selector de estados
   - [ ] Campos por detalle: cantidad, paciente, precio_unitario
   - [ ] Cálculo de total en tiempo real
 
-- [ ] `figma/src/app/components/PaymentDialog.tsx`
+- [ ] `figma/src/app/components/PaymentDialog.tsx` 🟡 PENDIENTE
   - [ ] Soportar múltiples pedidos en un solo pago
   - [ ] Distribución de valor entre pedidos
   - [ ] Validar que suma de detalles = valor del pago
