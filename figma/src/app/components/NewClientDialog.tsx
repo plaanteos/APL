@@ -11,14 +11,8 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { clientService } from "../../services/client.service";
+import clientService from "../../services/client.service";
+import { IClientFormData } from "../types";
 import { toast } from "sonner";
 
 // Schema de validación con Zod
@@ -33,11 +27,7 @@ const clientSchema = z.object({
     .min(7, "Teléfono debe tener al menos 7 dígitos")
     .max(20, "Teléfono demasiado largo")
     .regex(/^[0-9+\-\s()]+$/, "Teléfono debe contener solo números y caracteres válidos"),
-  whatsapp: z.string().optional(),
-  tipo: z.enum(["CLINICA", "DENTISTA", "PARTICULAR"]),
 });
-
-type ClientFormData = z.infer<typeof clientSchema>;
 
 interface NewClientDialogProps {
   open: boolean;
@@ -46,17 +36,15 @@ interface NewClientDialogProps {
 }
 
 export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClientDialogProps) {
-  const [formData, setFormData] = useState<ClientFormData>({
+  const [formData, setFormData] = useState<IClientFormData>({
     nombre: "",
     email: "",
     telefono: "",
-    whatsapp: "",
-    tipo: "CLINICA",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const validateField = (field: keyof ClientFormData, value: any) => {
+  const validateField = (field: keyof IClientFormData, value: any) => {
     try {
       clientSchema.shape[field].parse(value);
       setErrors(prev => ({ ...prev, [field]: "" }));
@@ -93,7 +81,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
     setIsSubmitting(true);
     
     try {
-      const newClient = await clientService.createClient(formData);
+      const newClient = await clientService.create(formData);
       toast.success(`Cliente ${newClient.nombre} creado exitosamente`);
       onOpenChange(false);
       onClientCreated?.();
@@ -102,8 +90,6 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
         nombre: "",
         email: "",
         telefono: "",
-        whatsapp: "",
-        tipo: "CLINICA",
       });
       setErrors({});
     } catch (error: any) {
@@ -117,7 +103,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Nuevo Cliente</DialogTitle>
           <DialogDescription className="sr-only">
@@ -135,34 +121,11 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
                 setFormData({ ...formData, nombre: e.target.value });
                 validateField("nombre", e.target.value);
               }}
-              placeholder="Nombre del cliente o clínica"
+              placeholder="Nombre del cliente"
               className={errors.nombre ? "border-red-500" : ""}
             />
             {errors.nombre && (
               <p className="text-sm text-red-500 mt-1">{errors.nombre}</p>
-            )}
-          </div>
-
-          <div>
-            <Label htmlFor="type">Tipo *</Label>
-            <Select
-              value={formData.tipo}
-              onValueChange={(value: any) => {
-                setFormData({ ...formData, tipo: value });
-                validateField("tipo", value);
-              }}
-            >
-              <SelectTrigger id="type" className={errors.tipo ? "border-red-500" : ""}>
-                <SelectValue placeholder="Seleccionar tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CLINICA">Clínica</SelectItem>
-                <SelectItem value="DENTISTA">Dentista</SelectItem>
-                <SelectItem value="PARTICULAR">Particular</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.tipo && (
-              <p className="text-sm text-red-500 mt-1">{errors.tipo}</p>
             )}
           </div>
 
@@ -200,19 +163,6 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
             {errors.telefono && (
               <p className="text-sm text-red-500 mt-1">{errors.telefono}</p>
             )}
-          </div>
-
-          <div>
-            <Label htmlFor="whatsapp">WhatsApp</Label>
-            <Input
-              id="whatsapp"
-              type="tel"
-              value={formData.whatsapp}
-              onChange={(e) =>
-                setFormData({ ...formData, whatsapp: e.target.value })
-              }
-              placeholder="+598991234567 (opcional)"
-            />
           </div>
 
           <DialogFooter>

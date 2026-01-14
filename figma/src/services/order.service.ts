@@ -1,176 +1,161 @@
-import apiClient from './api';
+import api from './api';
+import {
+  IOrder,
+  IOrderWithCalculations,
+  IOrderFormData,
+  IDetallePedidoFormData,
+  IOrderFilters,
+  IOrderStats,
+  ID
+} from '../app/types';
 
-export interface Order {
-  id: string;
-  clienteId: string;
-  nombrePaciente: string;
-  fechaPedido: string;
-  fechaVencimiento: string;
-  descripcion: string;
-  tipoPedido: string;
-  cantidad: number;
-  precioUnitario: number;
-  montoTotal: number;
-  montoPagado: number;
-  montoPendiente: number;
-  estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO' | 'CANCELADO';
-  prioridad?: 'BAJA' | 'NORMAL' | 'ALTA' | 'URGENTE';
-  observaciones?: string;
-  numeroPedido?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  cliente?: {
-    id: string;
-    nombre: string;
-    email?: string;
-    tipo?: string;
-  };
-  detallesPedido?: any[];
-  pagos?: any[];
-  totalPagado?: number;
-}
-
-export interface CreateOrderData {
-  clienteId: number;
-  paciente: string;
-  descripcion: string;
-  tipoPedido: string;
-  cantidad: number;
-  precioUnitario: number;
-  estado?: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO' | 'CANCELADO';
-  fechaVencimiento?: string;
-  observaciones?: string;
-}
-
-export interface UpdateOrderData extends Partial<CreateOrderData> {
-  estado?: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO';
-  montoPagado?: number;
-}
-
-export interface OrderFilters {
-  clienteId?: string;
-  estado?: string;
-  fechaDesde?: string;
-  fechaHasta?: string;
-  page?: number;
-  limit?: number;
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
-export interface OrderBalance {
-  pedido: Order;
-  pagos: Array<{
-    id: string;
-    monto: number;
-    fecha: string;
-    metodoPago: string;
-  }>;
-  totalPagado: number;
-  saldoPendiente: number;
-  porcentajePagado: number;
-}
-
-export const orderService = {
-  // Get all orders with pagination
-  getAllOrders: async (filters?: OrderFilters): Promise<PaginatedResponse<Order> | Order[]> => {
-    const response = await apiClient.get('/orders', {
-      params: filters,
+class OrderService {
+  /**
+   * Obtener todos los pedidos con filtros opcionales
+   */
+  async getAll(filters?: IOrderFilters): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos', {
+      params: filters
     });
-    
-    // Si el backend devuelve paginación, usarla
-    if (response.data.data.items) {
-      return {
-        items: response.data.data.items,
-        pagination: response.data.data.pagination
-      };
-    }
-    
-    // Fallback: devolver array directo (compatibilidad)
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Get order by ID
-  getOrderById: async (id: string): Promise<Order> => {
-    const response = await apiClient.get(`/orders/${id}`);
-    return response.data.data;
-  },
+  /**
+   * Obtener pedido por ID con cálculos
+   */
+  async getById(id: ID): Promise<IOrderWithCalculations> {
+    const response = await api.get<IOrderWithCalculations>(`/pedidos/${id}`);
+    return response.data;
+  }
 
-  // Create order
-  createOrder: async (orderData: CreateOrderData): Promise<Order> => {
-    const response = await apiClient.post('/orders', orderData);
-    return response.data.data;
-  },
+  /**
+   * Crear nuevo pedido con detalles
+   */
+  async create(data: IOrderFormData): Promise<IOrder> {
+    const response = await api.post<IOrder>('/pedidos', data);
+    return response.data;
+  }
 
-  // Update order
-  updateOrder: async (id: string, orderData: UpdateOrderData): Promise<Order> => {
-    const response = await apiClient.put(`/orders/${id}`, orderData);
-    return response.data.data;
-  },
+  /**
+   * Actualizar pedido (solo fechas)
+   */
+  async update(id: ID, data: { fecha_pedido?: string; fecha_entrega?: string }): Promise<IOrder> {
+    const response = await api.put<IOrder>(`/pedidos/${id}`, data);
+    return response.data;
+  }
 
-  // Delete order
-  deleteOrder: async (id: string): Promise<void> => {
-    await apiClient.delete(`/orders/${id}`);
-  },
+  /**
+   * Soft delete de pedido
+   */
+  async softDelete(id: ID): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/pedidos/${id}`);
+    return response.data;
+  }
 
-  // Update order status
-  updateOrderStatus: async (
-    id: string,
-    estado: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'ENTREGADO' | 'PAGADO'
-  ): Promise<Order> => {
-    const response = await apiClient.patch(`/orders/${id}/status`, { estado });
-    return response.data.data;
-  },
+  /**
+   * Marcar pedido como entregado
+   */
+  async markAsDelivered(id: ID): Promise<IOrder> {
+    const response = await api.put<IOrder>(`/pedidos/${id}/entregar`);
+    return response.data;
+  }
 
-  // Get orders by client
-  getOrdersByClient: async (clienteId: string): Promise<Order[]> => {
-    const response = await apiClient.get('/orders', {
-      params: { clienteId },
+  /**
+   * Agregar detalle a un pedido
+   */
+  async addDetalle(pedidoId: ID, detalle: IDetallePedidoFormData): Promise<IOrder> {
+    const response = await api.post<IOrder>(`/pedidos/${pedidoId}/detalles`, detalle);
+    return response.data;
+  }
+
+  /**
+   * Actualizar detalle de pedido
+   */
+  async updateDetalle(
+    pedidoId: ID,
+    detalleId: ID,
+    data: Partial<IDetallePedidoFormData>
+  ): Promise<IOrder> {
+    const response = await api.put<IOrder>(
+      `/pedidos/${pedidoId}/detalles/${detalleId}`,
+      data
+    );
+    return response.data;
+  }
+
+  /**
+   * Eliminar detalle de pedido
+   */
+  async deleteDetalle(pedidoId: ID, detalleId: ID): Promise<IOrder> {
+    const response = await api.delete<IOrder>(`/pedidos/${pedidoId}/detalles/${detalleId}`);
+    return response.data;
+  }
+
+  /**
+   * Obtener pedidos por cliente
+   */
+  async getByClient(clienteId: ID): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos', {
+      params: { clienteId }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Get pending orders
-  getPendingOrders: async (): Promise<Order[]> => {
-    const response = await apiClient.get('/orders', {
-      params: { estado: 'PENDIENTE' },
+  /**
+   * Obtener pedidos pendientes (no entregados)
+   */
+  async getPending(): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos', {
+      params: { entregado: false }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Get in-process orders
-  getInProcessOrders: async (): Promise<Order[]> => {
-    const response = await apiClient.get('/orders', {
-      params: { estado: 'EN_PROCESO' },
+  /**
+   * Obtener pedidos entregados
+   */
+  async getDelivered(): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos', {
+      params: { entregado: true }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Get completed orders
-  getCompletedOrders: async (): Promise<Order[]> => {
-    const response = await apiClient.get('/orders', {
-      params: { estado: 'COMPLETADO,ENTREGADO,PAGADO' },
+  /**
+   * Obtener pedidos con deuda
+   */
+  async getWithDebt(): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos', {
+      params: { conDeuda: true }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Mark order as delivered
-  markAsDelivered: async (orderId: string): Promise<Order> => {
-    const response = await apiClient.patch(`/orders/${orderId}/deliver`);
-    return response.data.data;
-  },
+  /**
+   * Obtener estadísticas de pedidos
+   */
+  async getStats(): Promise<IOrderStats> {
+    const response = await api.get<IOrderStats>('/pedidos/stats');
+    return response.data;
+  }
 
-  // Get order balance (total, paid, pending)
-  getOrderBalance: async (orderId: string): Promise<OrderBalance> => {
-    const response = await apiClient.get(`/orders/${orderId}/balance`);
-    return response.data.data;
-  },
-};
+  /**
+   * Obtener pedidos próximos a vencer (recordatorios)
+   */
+  async getUpcoming(dias: number = 7): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos/proximos', {
+      params: { dias }
+    });
+    return response.data;
+  }
+
+  /**
+   * Obtener pedidos vencidos
+   */
+  async getOverdue(): Promise<IOrderWithCalculations[]> {
+    const response = await api.get<IOrderWithCalculations[]>('/pedidos/vencidos');
+    return response.data;
+  }
+}
+
+export default new OrderService();

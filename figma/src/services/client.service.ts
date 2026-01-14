@@ -1,125 +1,72 @@
-import apiClient from './api';
+import api from './api';
+import { IClient, IClientFormData, IClientStats, IClientBalance } from '../app/types';
 
-export interface Client {
-  id: string;
-  nombre: string;
-  email: string;
-  telefono: string;
-  whatsapp?: string;
-  tipo: 'CLINICA' | 'DENTISTA' | 'PARTICULAR';
-  activo: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
+class ClientService {
+  /**
+   * Obtener todos los clientes
+   */
+  async getAll(): Promise<IClient[]> {
+    const response = await api.get<IClient[]>('/clientes');
+    return response.data;
+  }
 
-export interface CreateClientData {
-  nombre: string;
-  email: string;
-  telefono: string;
-  whatsapp?: string;
-  tipo: 'CLINICA' | 'DENTISTA' | 'PARTICULAR';
-}
+  /**
+   * Obtener cliente por ID
+   */
+  async getById(id: number): Promise<IClient> {
+    const response = await api.get<IClient>(`/clientes/${id}`);
+    return response.data;
+  }
 
-export interface UpdateClientData extends Partial<CreateClientData> {
-  activo?: boolean;
-}
+  /**
+   * Crear nuevo cliente
+   */
+  async create(data: IClientFormData): Promise<IClient> {
+    const response = await api.post<IClient>('/clientes', data);
+    return response.data;
+  }
 
-export interface ClientStats {
-  totalOrders: number;
-  totalAmount: number;
-  pendingAmount: number;
-}
+  /**
+   * Actualizar cliente
+   */
+  async update(id: number, data: Partial<IClientFormData>): Promise<IClient> {
+    const response = await api.put<IClient>(`/clientes/${id}`, data);
+    return response.data;
+  }
 
-export interface ClientBalance {
-  cliente: {
-    id: string;
-    nombre: string;
-    email: string;
-  };
-  pedidos: Array<{
-    id: string;
-    fecha: string;
-    total: number;
-    estado: string;
-    pagado: number;
-  }>;
-  totalPedidos: number;
-  totalPagado: number;
-  saldoPendiente: number;
-  porcentajePagado: number;
-}
+  /**
+   * Eliminar cliente
+   */
+  async delete(id: number): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/clientes/${id}`);
+    return response.data;
+  }
 
-export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
+  /**
+   * Obtener estadísticas del cliente
+   */
+  async getStats(id: number): Promise<IClientStats> {
+    const response = await api.get<IClientStats>(`/clientes/${id}/stats`);
+    return response.data;
+  }
 
-export const clientService = {
-  // Get all clients with optional pagination
-  getAllClients: async (page?: number, limit?: number): Promise<PaginatedResponse<Client> | Client[]> => {
-    const params: any = {};
-    if (page) params.page = page;
-    if (limit) params.limit = limit;
+  /**
+   * Obtener balance del cliente (pedidos con detalles de pagos)
+   */
+  async getBalance(id: number): Promise<IClientBalance> {
+    const response = await api.get<IClientBalance>(`/clientes/${id}/balance`);
+    return response.data;
+  }
 
-    const response = await apiClient.get('/clients', { params });
-    
-    // Si el backend devuelve paginación, usarla
-    if (response.data.data.items) {
-      return {
-        items: response.data.data.items,
-        pagination: response.data.data.pagination
-      };
-    }
-    
-    // Fallback: devolver array directo (compatibilidad)
-    return response.data.data;
-  },
-
-  // Get client by ID
-  getClientById: async (id: string): Promise<Client> => {
-    const response = await apiClient.get(`/clients/${id}`);
-    return response.data.data;
-  },
-
-  // Create client
-  createClient: async (clientData: CreateClientData): Promise<Client> => {
-    const response = await apiClient.post('/clients', clientData);
-    return response.data.data;
-  },
-
-  // Update client
-  updateClient: async (id: string, clientData: UpdateClientData): Promise<Client> => {
-    const response = await apiClient.put(`/clients/${id}`, clientData);
-    return response.data.data;
-  },
-
-  // Delete client
-  deleteClient: async (id: string): Promise<void> => {
-    await apiClient.delete(`/clients/${id}`);
-  },
-
-  // Get client statistics
-  getClientStats: async (id: string): Promise<ClientStats> => {
-    const response = await apiClient.get(`/clients/${id}/stats`);
-    return response.data.data;
-  },
-
-  // Search clients
-  searchClients: async (query: string): Promise<Client[]> => {
-    const response = await apiClient.get('/clients/search', {
-      params: { q: query },
+  /**
+   * Buscar clientes
+   */
+  async search(query: string): Promise<IClient[]> {
+    const response = await api.get<IClient[]>('/clientes/search', {
+      params: { q: query }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
+}
 
-  // Get client balance (total orders, paid, pending)
-  getClientBalance: async (clientId: string): Promise<ClientBalance> => {
-    const response = await apiClient.get(`/clients/${clientId}/balance`);
-    return response.data.data;
-  },
-};
+export default new ClientService();

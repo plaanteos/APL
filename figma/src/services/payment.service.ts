@@ -1,117 +1,94 @@
-import apiClient from './api';
+import api from './api';
+import {
+  IPago,
+  IPagoWithDetails,
+  IPagoFormData,
+  IDetallePagoFormData,
+  IPaymentStats,
+  ID
+} from '../app/types';
 
-export interface Payment {
-  id: string;
-  pedidoId: string;
-  monto: number;
-  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA' | 'TARJETA_CREDITO' | 'TARJETA_DEBITO';
-  fechaPago: string;
-  numeroRecibo?: string;
-  numeroTransf?: string;
-  observaciones?: string;
-  createdAt?: string;
-  pedido?: {
-    id: string;
-    nombrePaciente: string;
-    cliente: {
-      nombre: string;
-    };
-  };
-}
+class PaymentService {
+  /**
+   * Obtener todos los pagos
+   */
+  async getAll(): Promise<IPagoWithDetails[]> {
+    const response = await api.get<IPagoWithDetails[]>('/pagos');
+    return response.data;
+  }
 
-export interface CreatePaymentData {
-  pedidoId: string;
-  monto: number;
-  metodoPago: 'EFECTIVO' | 'TRANSFERENCIA' | 'CHEQUE' | 'TARJETA_CREDITO' | 'TARJETA_DEBITO';
-  fechaPago?: string;
-  numeroRecibo?: string;
-  numeroTransf?: string;
-  observaciones?: string;
-}
+  /**
+   * Obtener pago por ID con detalles
+   */
+  async getById(id: ID): Promise<IPagoWithDetails> {
+    const response = await api.get<IPagoWithDetails>(`/pagos/${id}`);
+    return response.data;
+  }
 
-export interface PaymentSummary {
-  totalPagos: number;
-  montoTotal: number;
-  porMetodoPago: {
-    metodoPago: string;
-    cantidad: number;
-    monto: number;
-  }[];
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
-export const paymentService = {
-  // Get all payments with optional pagination
-  getAllPayments: async (page?: number, limit?: number): Promise<PaginatedResponse<Payment> | Payment[]> => {
-    const params: any = {};
-    if (page) params.page = page;
-    if (limit) params.limit = limit;
-
-    const response = await apiClient.get('/payments', { params });
-    
-    // Si el backend devuelve paginación, usarla
-    if (response.data.data.items) {
-      return {
-        items: response.data.data.items,
-        pagination: response.data.data.pagination
-      };
+  /**
+   * Crear nuevo pago con detalles (N:M con pedidos)
+   * El valor total del pago debe ser igual a la suma de los detalles
+   */
+  async create(data: IPagoFormData): Promise<IPago> {
+    // Validación client-side: suma de detalles debe igualar valor total
+    const sumaDetalles = data.detalles.reduce((sum, d) => sum + d.valor, 0);
+    if (Math.abs(sumaDetalles - data.valor) > 0.01) {
+      throw new Error(
+        `La suma de los detalles (${sumaDetalles}) debe ser igual al valor del pago (${data.valor})`
+      );
     }
-    
-    // Fallback: devolver array directo (compatibilidad)
-    return response.data.data;
-  },
 
-  // Get payment by ID
-  getPaymentById: async (id: string): Promise<Payment> => {
-    const response = await apiClient.get(`/payments/${id}`);
-    return response.data.data;
-  },
+    const response = await api.post<IPago>('/pagos', data);
+    return response.data;
+  }
 
-  // Create payment
-  createPayment: async (paymentData: CreatePaymentData): Promise<Payment> => {
-    const response = await apiClient.post('/payments', paymentData);
-    return response.data.data;
-  },
+  /**
+   * Eliminar pago (elimina también sus detalles)
+   */
+  async delete(id: ID): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/pagos/${id}`);
+    return response.data;
+  }
 
-  // Delete payment
-  deletePayment: async (id: string): Promise<void> => {
-    await apiClient.delete(`/payments/${id}`);
-  },
-
-  // Get payments by order
-  getPaymentsByOrder: async (orderId: string): Promise<Payment[]> => {
-    const response = await apiClient.get(`/payments/order/${orderId}`);
-    return response.data.data;
-  },
-
-  // Get payments by client
-  getPaymentsByClient: async (clientId: string): Promise<Payment[]> => {
-    const response = await apiClient.get(`/payments/client/${clientId}`);
-    return response.data.data;
-  },
-
-  // Get payment summary
-  getPaymentSummary: async (fechaDesde?: string, fechaHasta?: string): Promise<PaymentSummary> => {
-    const response = await apiClient.get('/payments/summary', {
-      params: { fechaDesde, fechaHasta },
+  /**
+   * Obtener pagos por cliente
+   */
+  async getByClient(clienteId: ID): Promise<IPagoWithDetails[]> {
+    const response = await api.get<IPagoWithDetails[]>('/pagos/cliente', {
+      params: { clienteId }
     });
-    return response.data.data;
-  },
+    return response.data;
+  }
 
-  // Get payments by date range
-  getPaymentsByDateRange: async (fechaDesde: string, fechaHasta: string): Promise<Payment[]> => {
-    const response = await apiClient.get('/payments', {
-      params: { fechaDesde, fechaHasta },
+  /**
+   * Obtener pagos por pedido
+   */
+  async getByOrder(pedidoId: ID): Promise<IPagoWithDetails[]> {
+    const response = await api.get<IPagoWithDetails[]>('/pagos/pedido', {
+      params: { pedidoId }
     });
-    return response.data.data;
-  },
-};
+    return response.data;
+  }
+
+  /**
+   * Obtener estadísticas de pagos
+   */
+  async getStats(): Promise<IPaymentStats> {
+    const response = await api.get<IPaymentStats>('/pagos/stats');
+    return response.data;
+  }
+
+  /**
+   * Validar si se puede aplicar un pago a un pedido
+   * Retorna el monto máximo que se puede pagar
+   */
+  async validatePayment(pedidoId: ID, monto: number): Promise<{ valid: boolean; montoPendiente: number }> {
+    const response = await api.post<{ valid: boolean; montoPendiente: number }>(
+      '/pagos/validar',
+      { pedidoId, monto }
+    );
+    return response.data;
+  }
+}
+
+export default new PaymentService();

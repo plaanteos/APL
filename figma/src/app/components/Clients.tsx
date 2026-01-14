@@ -1,27 +1,21 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Mail, Phone, MessageCircle, Building, User, Loader2 } from "lucide-react";
-import { clientService, Client } from "../../services/client.service";
+import { Plus, Mail, Phone, MessageCircle, User, Loader2 } from "lucide-react";
+import clientService from "../../services/client.service";
+import { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
 
 interface ClientsProps {
-  onNavigateToBalance: (clientId: string) => void;
+  onNavigateToBalance: (clientId: number) => void;
 }
 
 export function Clients({ onNavigateToBalance }: ClientsProps) {
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<IClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1
-  });
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
     type: "email" | "whatsapp";
@@ -36,47 +30,24 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
 
   // Fetch clients
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const response = await clientService.getAllClients(page, 20);
-        
-        // Manejar respuesta con o sin paginación
-        if (Array.isArray(response)) {
-          setClients(response);
-        } else {
-          setClients(response.items);
-          setPagination(response.pagination);
-        }
-      } catch (err: any) {
-        console.error('Error fetching clients:', err);
-        setError(err.response?.data?.error || 'Error al cargar clientes');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchClients();
-  }, [page]);
+  }, []);
+
+  const fetchClients = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await clientService.getAll();
+      setClients(data);
+    } catch (err: any) {
+      console.error('Error fetching clients:', err);
+      setError(err.response?.data?.error || 'Error al cargar clientes');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleClientCreated = () => {
-    // Refrescar datos después de crear cliente
-    setPage(1);
-    const fetchClients = async () => {
-      try {
-        const response = await clientService.getAllClients(1, 20);
-        if (Array.isArray(response)) {
-          setClients(response);
-        } else {
-          setClients(response.items);
-          setPagination(response.pagination);
-        }
-      } catch (err) {
-        console.error('Error refreshing clients:', err);
-      }
-    };
     fetchClients();
   };
 
@@ -173,61 +144,29 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
                       className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors w-full text-left"
                     >
                       <Mail size={14} />
-                      <span className="truncate underline">{client.email}</span>
-                    </button>
-                    <button
-                      onClick={(e) =>
-                        handleOpenMessage("whatsapp", client.nombre, client.whatsapp || client.telefono, e)
-                      }
-                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors w-full text-left"
-                    >
-                      <MessageCircle size={14} />
-                      <span className="truncate underline">{client.whatsapp || client.telefono}</span>
-                    </button>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Phone size={14} />
-                      <span className="truncate">{client.telefono}</span>
+                  <User size={24} className="text-blue-600" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="truncate">{client.nombre}</h3>
+                      {client.totalOrders !== undefined && (
+                        <p className="text-sm text-gray-500">
+                          {client.totalOrders} {client.totalOrders === 1 ? 'pedido' : 'pedidos'}
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-gray-600">
-            Página {page} de {pagination.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-            disabled={page === pagination.totalPages}
-          >
-            Siguiente
-          </Button>
-        </div>
-      )}
-
-      <NewClientDialog
-        open={showNewClientDialog}
-        onOpenChange={setShowNewClientDialog}
-        onClientCreated={handleClientCreated}
-      />
-
-      <SendMessageDialog
+                  <div className="space-y-2">
+                    <button
+                      onClick={(e) =>
+                        handleOpenMessage("email", client.nombre, client.email, e)
+                      }
+                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors w-full text-left"
+                    >
+                      <Mail size={14} />
         open={messageDialog.open}
         onOpenChange={(open) =>
           setMessageDialog({ ...messageDialog, open })

@@ -1,30 +1,27 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { FileText, Users, DollarSign, Clock, Loader2 } from "lucide-react";
-import { orderService, Order } from "../../services/order.service";
-import { clientService, Client } from "../../services/client.service";
+import orderService from "../../services/order.service";
+import clientService from "../../services/client.service";
+import paymentService from "../../services/payment.service";
+import { IDashboardStats } from "../types";
 import { CalendarWidget } from "./CalendarWidget";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
 
 interface DashboardProps {
-  onNavigateToBalance: (clientId: string) => void;
-  onNavigateTo: (view: View, clientId?: string, filter?: string) => void;
-}
-
-interface DashboardStats {
-  totalOrders: number;
-  totalClients: number;
-  totalRevenue: number;
-  pendingOrders: number;
+  onNavigateToBalance: (clientId: number) => void;
+  onNavigateTo: (view: View, clientId?: number, filter?: string) => void;
 }
 
 export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps) {
-  const [stats, setStats] = useState<DashboardStats>({
+  const [stats, setStats] = useState<IDashboardStats>({
     totalOrders: 0,
     totalClients: 0,
     totalRevenue: 0,
     pendingOrders: 0,
+    pendingAmount: 0,
+    deliveredOrders: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,33 +32,28 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
         setIsLoading(true);
         setError(null);
 
-        // Cargar pedidos y clientes en paralelo
-        const [ordersResponse, clientsResponse] = await Promise.all([
-          orderService.getAllOrders(),
-          clientService.getAllClients()
+        // Cargar datos en paralelo
+        const [orders, clients, payments] = await Promise.all([
+          orderService.getAll(),
+          clientService.getAll(),
+          paymentService.getAll()
         ]);
 
-        // Procesar pedidos
-        const orders: Order[] = Array.isArray(ordersResponse) 
-          ? ordersResponse 
-          : ordersResponse.items;
-        
-        // Procesar clientes
-        const clients: Client[] = Array.isArray(clientsResponse) 
-          ? clientsResponse 
-          : clientsResponse.items;
-
         // Calcular estadísticas
-        const totalRevenue = orders.reduce((sum, order) => sum + order.montoTotal, 0);
-        const pendingCount = orders.filter(o => 
-          o.estado === "PENDIENTE" || o.estado === "EN_PROCESO"
-        ).length;
+        const totalRevenue = payments.reduce((sum, pago) => sum + pago.valor, 0);
+        const pendingOrders = orders.filter(o => !o.fecha_entrega && !o.fecha_delete);
+        const deliveredOrders = orders.filter(o => o.fecha_entrega && !o.fecha_delete);
+        const totalPendingAmount = orders
+          .filter(o => !o.fecha_delete)
+          .reduce((sum, o) => sum + (o.montoPendiente || 0), 0);
 
         setStats({
-          totalOrders: orders.length,
+          totalOrders: orders.filter(o => !o.fecha_delete).length,
           totalClients: clients.length,
           totalRevenue: totalRevenue,
-          pendingOrders: pendingCount,
+          pendingOrders: pendingOrders.length,
+          pendingAmount: totalPendingAmount,
+          deliveredOrders: deliveredOrders.length,
         });
       } catch (err: any) {
         console.error('Error loading dashboard data:', err);
