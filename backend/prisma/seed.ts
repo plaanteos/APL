@@ -6,22 +6,32 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database con modelo oficial...');
 
-  // 1. Crear administrador inicial
-  const hashedPassword = await bcrypt.hash('AdminAnto17$', 10);
-  
-  const admin = await prisma.administrador.create({
-    data: {
-      nombre: 'Administrador Principal',
-      telefono: '+598 99 123 456',
-      email: 'admin@apl-dental.com',
-      usuario: 'admin',
-      super_usuario: true,
-      password: hashedPassword,
-      activo: true,
-    },
+  // 1. Crear administrador inicial (solo si no existe)
+  const existingAdmin = await prisma.administrador.findUnique({
+    where: { email: 'admin@apl-dental.com' }
   });
-  
-  console.log('✅ Administrador creado:', admin.email);
+
+  let admin;
+  if (!existingAdmin) {
+    const hashedPassword = await bcrypt.hash('AdminAnto17$', 10);
+    
+    admin = await prisma.administrador.create({
+      data: {
+        nombre: 'Administrador Principal',
+        telefono: '+598 99 123 456',
+        email: 'admin@apl-dental.com',
+        usuario: 'admin',
+        super_usuario: true,
+        password: hashedPassword,
+        activo: true,
+      },
+    });
+    
+    console.log('✅ Administrador creado:', admin.email);
+  } else {
+    admin = existingAdmin;
+    console.log('ℹ️  Administrador ya existe:', admin.email);
+  }
 
   // 2. Crear estados iniciales (catálogo)
   const estados = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
