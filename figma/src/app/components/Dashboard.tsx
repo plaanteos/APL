@@ -1,6 +1,8 @@
+import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
-import { FileText, Users, DollarSign, Clock } from "lucide-react";
-import { mockOrders, mockClients } from "../data/mockData";
+import { FileText, Users, DollarSign, Clock, Loader2 } from "lucide-react";
+import { orderService, Order } from "../../services/order.service";
+import { clientService, Client } from "../../services/client.service";
 import { CalendarWidget } from "./CalendarWidget";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
@@ -10,13 +12,85 @@ interface DashboardProps {
   onNavigateTo: (view: View, clientId?: string, filter?: string) => void;
 }
 
+interface DashboardStats {
+  totalOrders: number;
+  totalClients: number;
+  totalRevenue: number;
+  pendingOrders: number;
+}
+
 export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps) {
-  const totalOrders = mockOrders.length;
-  const totalClients = mockClients.length;
-  const totalRevenue = mockOrders.reduce((sum, order) => sum + order.total, 0);
-  const pendingOrders = mockOrders.filter(
-    (o) => o.status === "pending"
-  ).length;
+  const [stats, setStats] = useState<DashboardStats>({
+    totalOrders: 0,
+    totalClients: 0,
+    totalRevenue: 0,
+    pendingOrders: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Cargar pedidos y clientes en paralelo
+        const [ordersResponse, clientsResponse] = await Promise.all([
+          orderService.getAllOrders(),
+          clientService.getAllClients()
+        ]);
+
+        // Procesar pedidos
+        const orders: Order[] = Array.isArray(ordersResponse) 
+          ? ordersResponse 
+          : ordersResponse.items;
+        
+        // Procesar clientes
+        const clients: Client[] = Array.isArray(clientsResponse) 
+          ? clientsResponse 
+          : clientsResponse.items;
+
+        // Calcular estadísticas
+        const totalRevenue = orders.reduce((sum, order) => sum + order.montoTotal, 0);
+        const pendingCount = orders.filter(o => 
+          o.estado === "PENDIENTE" || o.estado === "EN_PROCESO"
+        ).length;
+
+        setStats({
+          totalOrders: orders.length,
+          totalClients: clients.length,
+          totalRevenue: totalRevenue,
+          pendingOrders: pendingCount,
+        });
+      } catch (err: any) {
+        console.error('Error loading dashboard data:', err);
+        setError(err.response?.data?.error || 'Error al cargar datos del dashboard');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center h-96">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-4">
@@ -32,7 +106,7 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Pedidos</p>
-              <p className="text-2xl">{totalOrders}</p>
+              <p className="text-2xl">{stats.totalOrders}</p>
             </div>
           </div>
         </Card>
@@ -47,7 +121,7 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
             </div>
             <div>
               <p className="text-sm text-gray-500">Clientes</p>
-              <p className="text-2xl">{totalClients}</p>
+              <p className="text-2xl">{stats.totalClients}</p>
             </div>
           </div>
         </Card>
@@ -62,7 +136,7 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
             </div>
             <div>
               <p className="text-sm text-gray-500">Ingresos Total</p>
-              <p className="text-2xl">${(totalRevenue / 1000).toFixed(0)}k</p>
+              <p className="text-2xl">${(stats.totalRevenue / 1000).toFixed(0)}k</p>
             </div>
           </div>
         </Card>
@@ -77,7 +151,7 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
             </div>
             <div>
               <p className="text-sm text-gray-500">Pendientes</p>
-              <p className="text-2xl">{pendingOrders}</p>
+              <p className="text-2xl">{stats.pendingOrders}</p>
             </div>
           </div>
         </Card>

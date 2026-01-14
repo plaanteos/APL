@@ -1,25 +1,70 @@
 import { useState } from "react";
+import { z } from "zod";
 import { LogIn } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { useAuth } from "../../hooks/useAuth";
 import { toast } from "sonner";
 
+// Schema de validación con Zod
+const loginSchema = z.object({
+  email: z.string()
+    .min(1, "El email es requerido")
+    .email("Email inválido"),
+  password: z.string()
+    .min(6, "La contraseña debe tener al menos 6 caracteres"),
+});
+
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@apl-dental.com");
-  const [password, setPassword] = useState("AdminAnto17$");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateField = (field: "email" | "password", value: string) => {
+    try {
+      loginSchema.shape[field].parse(value);
+      setErrors(prev => ({ ...prev, [field]: "" }));
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+      }
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar todo el formulario
+    try {
+      loginSchema.parse({ email, password });
+      setErrors({});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+        toast.error("Por favor corrige los errores");
+        return;
+      }
+    }
+
     setIsLoading(true);
     
     try {
       await login(email, password);
       toast.success("Sesión iniciada correctamente");
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Error al iniciar sesión");
+      console.error("Login error:", error);
+      const errorMessage = error.response?.data?.error || "Error al iniciar sesión";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -44,17 +89,24 @@ export function Login() {
               htmlFor="email"
               className="block text-sm mb-2 text-[#033f63]"
             >
-              Email
+              Email *
             </label>
             <input
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
-              placeholder="admin@apl-dental.com"
-              required
+              onChange={(e) => {
+                setEmail(e.target.value);
+                validateField("email", e.target.value);
+              }}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${
+                errors.email ? "border-red-500" : "border-gray-300"
+              }`}
+              placeholder="tu@email.com"
             />
+            {errors.email && (
+              <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+            )}
           </div>
 
           <div>
@@ -62,17 +114,24 @@ export function Login() {
               htmlFor="password"
               className="block text-sm mb-2 text-[#033f63]"
             >
-              Contraseña
+              Contraseña *
             </label>
             <input
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e]"
+              onChange={(e) => {
+                setPassword(e.target.value);
+                validateField("password", e.target.value);
+              }}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${
+                errors.password ? "border-red-500" : "border-gray-300"
+              }`}
               placeholder="••••••••"
-              required
             />
+            {errors.password && (
+              <p className="text-sm text-red-500 mt-1">{errors.password}</p>
+            )}
           </div>
 
           <Button
@@ -83,14 +142,6 @@ export function Login() {
             {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
           </Button>
         </form>
-
-        <div className="bg-[#fedc97]/30 border border-[#b5b682]/30 rounded-lg p-4 text-sm text-[#033f63]">
-          <p className="mb-1">
-            <strong>Credenciales de prueba:</strong>
-          </p>
-          <p>Email: <strong>admin@apl-dental.com</strong></p>
-          <p>Contraseña: <strong>AdminAnto17$</strong></p>
-        </div>
       </Card>
     </div>
   );

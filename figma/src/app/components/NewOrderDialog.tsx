@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,32 @@ import { orderService } from "../../services/order.service";
 import type { Client } from "../types";
 import { Plus } from "lucide-react";
 
+// Schema de validación con Zod
+const orderSchema = z.object({
+  clientId: z.string().min(1, "Debe seleccionar un cliente"),
+  patientName: z.string().min(2, "El nombre del paciente debe tener al menos 2 caracteres"),
+  description: z.string().optional(),
+  type: z.string().min(1, "Debe seleccionar un tipo de trabajo"),
+  quantity: z.string().refine((val) => {
+    const num = Number(val);
+    return !isNaN(num) && num > 0;
+  }, "La cantidad debe ser mayor a 0"),
+  unitPrice: z.string().refine((val) => {
+    const num = Number(val);
+    return !isNaN(num) && num > 0;
+  }, "El precio debe ser mayor a 0"),
+  status: z.string(),
+  dueDate: z.string().refine((val) => {
+    if (!val) return false;
+    const selectedDate = new Date(val);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return selectedDate >= today;
+  }, "La fecha de entrega debe ser hoy o posterior"),
+});
+
+type OrderFormData = z.infer<typeof orderSchema>;
+
 interface NewOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +69,7 @@ export function NewOrderDialog({
   const [clients, setClients] = useState<Client[]>([]);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     clientId: preselectedClientId || "",
     patientName: "",
@@ -115,17 +143,43 @@ export function NewOrderDialog({
     }
   }, [preselectedDate]);
 
+  const validateField = (field: keyof OrderFormData, value: any) => {
+    try {
+      orderSchema.shape[field].parse(value);
+      setErrors(prev => ({ ...prev, [field]: "" }));
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+      }
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.clientId) {
-      toast.error("Por favor seleccione un cliente");
-      return;
+    // Validar todo el formulario
+    try {
+      orderSchema.parse(formData);
+      setErrors({});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(fieldErrors);
+        toast.error("Por favor corrige los errores en el formulario");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
-      await orderService.createOrder({
+      const newOrder = await orderService.createOrder({
         clienteId: Number(formData.clientId),
         paciente: formData.patientName,
         descripcion: formData.description,
@@ -136,7 +190,7 @@ export function NewOrderDialog({
         fechaVencimiento: formData.dueDate,
       });
       
-      toast.success("Pedido creado exitosamente");
+      toast.success(`Pedido para ${newOrder.paciente} creado exitosamente`);
       onOpenChange(false);
       onOrderCreated?.();
       setFormData({
@@ -149,8 +203,11 @@ export function NewOrderDialog({
         status: "PENDIENTE",
         dueDate: "",
       });
+      setErrors({});
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Error al crear pedido");
+      console.error("Error creating order:", error);
+      const errorMessage = error.response?.data?.error || "Error al crear pedido";
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -260,17 +317,21 @@ export function NewOrderDialog({
           </div>
 
           <div>
-            <Label htmlFor="patientName">Nombre del Paciente</Label>
+            <Label htmlFor="patientName">Nombre del Paciente *</Label>
             <Input
               id="patientName"
               type="text"
               value={formData.patientName}
-              onChange={(e) =>
-                setFormData({ ...formData, patientName: e.target.value })
-              }
+              onChange={(e) => {
+                setFormData({ ...formData, patientName: e.target.value });
+                validateField("patientName", e.target.value);
+              }}
               placeholder="Ej: María Rodríguez"
-              required
+              className={errors.patientName ? "border-red-500" : ""}
             />
+            {errors.patientName && (
+              <p className="text-sm text-red-500 mt-1">{errors.patientName}</p>
+            )}
           </div>
 
           <div>
@@ -311,43 +372,58 @@ export function NewOrderDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="quantity">Cantidad</Label>
+              <Label htmlFor="quantity">Cantidad *</Label>
               <Input
                 id="quantity"
                 type="number"
                 min="1"
                 value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: e.target.value })
-                }
+                onChange={(e) => {
+                  setFormData({ ...formData, quantity: e.target.value });
+                  validateField("quantity", e.target.value);
+                }}
+                className={errors.quantity ? "border-red-500" : ""}
               />
+              {errors.quantity && (
+                <p className="text-sm text-red-500 mt-1">{errors.quantity}</p>
+              )}
             </div>
             <div>
-              <Label htmlFor="unitPrice">Precio Unitario</Label>
+              <Label htmlFor="unitPrice">Precio Unitario *</Label>
               <Input
                 id="unitPrice"
                 type="number"
                 min="0"
                 step="0.01"
                 value={formData.unitPrice}
-                onChange={(e) =>
-                  setFormData({ ...formData, unitPrice: e.target.value })
-                }
+                onChange={(e) => {
+                  setFormData({ ...formData, unitPrice: e.target.value });
+                  validateField("unitPrice", e.target.value);
+                }}
                 placeholder="$"
+                className={errors.unitPrice ? "border-red-500" : ""}
               />
+              {errors.unitPrice && (
+                <p className="text-sm text-red-500 mt-1">{errors.unitPrice}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <Label htmlFor="dueDate">Fecha de Entrega</Label>
+            <Label htmlFor="dueDate">Fecha de Entrega *</Label>
             <Input
               id="dueDate"
               type="date"
               value={formData.dueDate}
-              onChange={(e) =>
-                setFormData({ ...formData, dueDate: e.target.value })
-              }
+              onChange={(e) => {
+                setFormData({ ...formData, dueDate: e.target.value });
+                validateField("dueDate", e.target.value);
+              }}
+              className={errors.dueDate ? "border-red-500" : ""}
             />
+            {errors.dueDate && (
+              <p className="text-sm text-red-500 mt-1">{errors.dueDate}</p>
+            )}
           </div>
 
           {total > 0 && (

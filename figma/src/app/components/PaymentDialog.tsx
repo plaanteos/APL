@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { toast } from "sonner";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -32,15 +34,46 @@ export function PaymentDialog({
 }: PaymentDialogProps) {
   const remaining = total - amountPaid;
   const [paymentAmount, setPaymentAmount] = useState(remaining.toString());
+  const [error, setError] = useState("");
+
+  const paymentSchema = z.object({
+    amount: z.string()
+      .refine((val) => {
+        const num = Number(val);
+        return !isNaN(num) && num > 0;
+      }, "El monto debe ser mayor a 0")
+      .refine((val) => {
+        const num = Number(val);
+        return num <= remaining;
+      }, `El monto no puede ser mayor a $${remaining.toLocaleString()}`),
+  });
+
+  const validateAmount = (value: string) => {
+    try {
+      paymentSchema.parse({ amount: value });
+      setError("");
+      return true;
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        setError(err.errors[0].message);
+      }
+      return false;
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = Number(paymentAmount);
-    if (amount > 0 && amount <= remaining) {
-      onPayment(orderId, amount);
-      onOpenChange(false);
-      setPaymentAmount("");
+    
+    if (!validateAmount(paymentAmount)) {
+      toast.error(error || "Por favor ingresa un monto válido");
+      return;
     }
+
+    const amount = Number(paymentAmount);
+    onPayment(orderId, amount);
+    onOpenChange(false);
+    setPaymentAmount("");
+    setError("");
   };
 
   return (
@@ -80,7 +113,7 @@ export function PaymentDialog({
           </div>
 
           <div>
-            <Label htmlFor="paymentAmount">Monto a registrar</Label>
+            <Label htmlFor="paymentAmount">Monto a registrar *</Label>
             <Input
               id="paymentAmount"
               type="number"
@@ -88,14 +121,20 @@ export function PaymentDialog({
               max={remaining}
               step="0.01"
               value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
+              onChange={(e) => {
+                setPaymentAmount(e.target.value);
+                validateAmount(e.target.value);
+              }}
               placeholder="Ingrese el monto"
-              className="text-lg"
-              required
+              className={`text-lg ${error ? "border-red-500" : ""}`}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Máximo: ${remaining.toLocaleString()}
-            </p>
+            {error ? (
+              <p className="text-sm text-red-500 mt-1">{error}</p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">
+                Máximo: ${remaining.toLocaleString()}
+              </p>
+            )}
           </div>
 
           <DialogFooter>

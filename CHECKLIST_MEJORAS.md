@@ -112,27 +112,27 @@
 ## 🟡 FASE 2: INTEGRACIÓN FRONTEND-BACKEND (2 semanas)
 
 ### Eliminación de Mock Data
-- [ ] **Eliminar imports de mockData en Balance.tsx**
+- [x] **Eliminar imports de mockData en Balance.tsx** ✅
   - Línea 11: `import { mockClients, mockOrders } from "../data/mockData"`
   - Reemplazar con llamadas a API
   - Archivo: `figma/src/app/components/Balance.tsx`
 
-- [ ] **Eliminar imports de mockData en Clients.tsx**
+- [x] **Eliminar imports de mockData en Clients.tsx** ✅
   - Línea 5: `import { mockClients } from "../data/mockData"`
   - Usar `clientService.getAllClients()`
   - Archivo: `figma/src/app/components/Clients.tsx`
 
-- [ ] **Eliminar imports de mockData en Orders.tsx**
+- [x] **Eliminar imports de mockData en Orders.tsx** ✅
   - Línea 5: `import { mockOrders } from "../data/mockData"`
   - Usar `orderService.getAllOrders()`
   - Archivo: `figma/src/app/components/Orders.tsx`
 
-- [ ] **Actualizar Dashboard.tsx para usar datos reales**
+- [x] **Actualizar Dashboard.tsx para usar datos reales** ✅
   - Calcular totales desde API, no mock
   - Archivo: `figma/src/app/components/Dashboard.tsx`
 
 ### Servicios Frontend (Paginación)
-- [ ] **Actualizar orderService para soportar paginación**
+- [x] **Actualizar orderService para soportar paginación** ✅
   ```typescript
   getAllOrders(page = 1, limit = 20) {
     return apiClient.get(`/orders?page=${page}&limit=${limit}`);
@@ -140,40 +140,40 @@
   ```
   - Archivo: `figma/src/services/order.service.ts`
 
-- [ ] **Actualizar clientService para soportar paginación**
+- [x] **Actualizar clientService para soportar paginación** ✅
   - Archivo: `figma/src/services/client.service.ts`
 
-- [ ] **Actualizar paymentService para soportar paginación**
+- [x] **Actualizar paymentService para soportar paginación** ✅
   - Archivo: `figma/src/services/payment.service.ts`
 
 ### Componentes Frontend (Paginación UI)
-- [ ] **Agregar paginación a Orders.tsx**
+- [x] **Agregar paginación a Orders.tsx** ✅
   - Botones Previous/Next
   - Indicador de página actual
   - Total de páginas
 
-- [ ] **Agregar paginación a Clients.tsx**
+- [x] **Agregar paginación a Clients.tsx** ✅
   - Misma UI que Orders
 
-- [ ] **Agregar paginación a Balance.tsx**
+- [x] **Agregar paginación a Balance.tsx** ✅
   - Para lista de pedidos del cliente
 
 ### Estado de Carga
-- [ ] **Agregar spinners en Balance.tsx**
+- [x] **Agregar spinners en Balance.tsx** ✅
   - Usar `<Loader2 className="animate-spin" />` de lucide-react
   - Mostrar mientras `isLoading === true`
 
-- [ ] **Agregar spinners en Orders.tsx**
+- [x] **Agregar spinners en Orders.tsx** ✅
   - Durante fetch inicial y paginación
 
-- [ ] **Agregar spinners en Clients.tsx**
+- [x] **Agregar spinners en Clients.tsx** ✅
   - Durante fetch inicial
 
-- [ ] **Agregar spinners en Dashboard.tsx**
+- [x] **Agregar spinners en Dashboard.tsx** ✅
   - Mientras cargan métricas
 
 ### Nuevos Endpoints Frontend
-- [ ] **Implementar orderService.markAsDelivered()**
+- [x] **Implementar orderService.markAsDelivered()** ✅
   ```typescript
   markAsDelivered(orderId: string) {
     return apiClient.patch(`/orders/${orderId}/deliver`);
@@ -181,7 +181,7 @@
   ```
   - Archivo: `figma/src/services/order.service.ts`
 
-- [ ] **Implementar clientService.getBalance()**
+- [x] **Implementar clientService.getBalance()** ✅
   ```typescript
   getBalance(clientId: string) {
     return apiClient.get(`/clients/${clientId}/balance`);
@@ -190,7 +190,7 @@
   - Archivo: `figma/src/services/client.service.ts`
 
 ### Botón "Marcar como Entregado"
-- [ ] **Agregar botón en Balance.tsx**
+- [x] **Agregar botón en Balance.tsx** ✅
   - Solo visible si pedido no está entregado
   - Confirmar con AlertDialog antes de marcar
   - Refrescar datos después de marcar
@@ -198,62 +198,62 @@
 
 ---
 
-## 🟢 FASE 3: VALIDACIONES FRONTEND (1 semana)
+## 🟢 FASE 3: VALIDACIONES FRONTEND (1 semana) ✅ COMPLETADA
 
 ### Validación de Formularios
-- [ ] **Instalar Zod en frontend**
+- [x] **Instalar Zod en frontend**
   ```bash
   cd figma && npm install zod
   ```
 
-- [ ] **Validar formulario NewClientDialog**
+- [x] **Validar formulario NewClientDialog**
   - Email válido
   - Teléfono formato correcto
   - Campos requeridos
   - Archivo: `figma/src/app/components/NewClientDialog.tsx`
 
-- [ ] **Validar formulario NewOrderDialog**
+- [x] **Validar formulario NewOrderDialog**
   - Fecha vencimiento > hoy
   - Cantidad > 0
   - Precio > 0
   - Archivo: `figma/src/app/components/NewOrderDialog.tsx`
 
-- [ ] **Validar formulario PaymentDialog**
+- [x] **Validar formulario PaymentDialog**
   - Monto > 0
   - Monto <= deuda pendiente (validar en frontend también)
   - Archivo: `figma/src/app/components/PaymentDialog.tsx`
 
-- [ ] **Validar formulario Login**
+- [x] **Validar formulario Login**
   - Email formato válido
   - Contraseña mínimo 6 caracteres
   - Archivo: `figma/src/app/components/Login.tsx`
 
 ### Feedback de Errores
-- [ ] **Mostrar errores específicos de validación backend**
+- [x] **Mostrar errores específicos de validación backend**
   - En lugar de genérico "Error al crear"
   - Parsear `error.response.data.error` del backend
   - Mostrar con toast.error() detallado
 
-- [ ] **Agregar mensajes de confirmación**
+- [x] **Agregar mensajes de confirmación**
   - Al crear cliente: "Cliente [nombre] creado exitosamente"
   - Al crear pedido: "Pedido [numero] creado"
   - Al marcar entregado: "Pedido marcado como entregado"
 
 ### UX Improvements
-- [ ] **Deshabilitar botones durante operaciones async**
+- [x] **Deshabilitar botones durante operaciones async**
   - Prevenir doble click
   - Botones de envío en formularios
 
-- [ ] **Agregar indicadores de campos requeridos**
+- [x] **Agregar indicadores de campos requeridos**
   - Asterisco (*) en labels
   - Mensaje "Campo requerido" si está vacío
 
-- [ ] **Implementar debounce en búsquedas**
+- [x] **Implementar debounce en búsquedas**
   - Si se agrega funcionalidad de búsqueda
   - Esperar 300ms antes de hacer request
 
 ### Credenciales de Prueba
-- [ ] **Eliminar credenciales hardcodeadas del código**
+- [x] **Eliminar credenciales hardcodeadas del código**
   - Login.tsx líneas 12-13
   - Remover valores default de useState
   - Mantener solo en sección "Credenciales de prueba" visual
@@ -370,13 +370,13 @@
 
 ### Fase 2: Frontend-Backend
 - **Total tareas:** 17
-- **Completadas:** 0
-- **Progreso:** 0%
+- **Completadas:** 17 ✅
+- **Progreso:** 100% 🎉
 
 ### Fase 3: Validaciones
 - **Total tareas:** 13
-- **Completadas:** 0
-- **Progreso:** 0%
+- **Completadas:** 13 ✅
+- **Progreso:** 100% 🎉
 
 ### Fase 4: Base de Datos
 - **Total tareas:** 8
@@ -390,7 +390,7 @@
 
 ---
 
-## 🎯 PROGRESO TOTAL: 21/67 (31%)
+## 🎯 PROGRESO TOTAL: 51/67 (76%)
 
 ---
 

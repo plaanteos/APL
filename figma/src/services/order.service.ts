@@ -52,14 +52,49 @@ export interface OrderFilters {
   estado?: string;
   fechaDesde?: string;
   fechaHasta?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface OrderBalance {
+  pedido: Order;
+  pagos: Array<{
+    id: string;
+    monto: number;
+    fecha: string;
+    metodoPago: string;
+  }>;
+  totalPagado: number;
+  saldoPendiente: number;
+  porcentajePagado: number;
 }
 
 export const orderService = {
-  // Get all orders
-  getAllOrders: async (filters?: OrderFilters): Promise<Order[]> => {
+  // Get all orders with pagination
+  getAllOrders: async (filters?: OrderFilters): Promise<PaginatedResponse<Order> | Order[]> => {
     const response = await apiClient.get('/orders', {
       params: filters,
     });
+    
+    // Si el backend devuelve paginación, usarla
+    if (response.data.data.items) {
+      return {
+        items: response.data.data.items,
+        pagination: response.data.data.pagination
+      };
+    }
+    
+    // Fallback: devolver array directo (compatibilidad)
     return response.data.data;
   },
 
@@ -124,6 +159,18 @@ export const orderService = {
     const response = await apiClient.get('/orders', {
       params: { estado: 'COMPLETADO,ENTREGADO,PAGADO' },
     });
+    return response.data.data;
+  },
+
+  // Mark order as delivered
+  markAsDelivered: async (orderId: string): Promise<Order> => {
+    const response = await apiClient.patch(`/orders/${orderId}/deliver`);
+    return response.data.data;
+  },
+
+  // Get order balance (total, paid, pending)
+  getOrderBalance: async (orderId: string): Promise<OrderBalance> => {
+    const response = await apiClient.get(`/orders/${orderId}/balance`);
     return response.data.data;
   },
 };

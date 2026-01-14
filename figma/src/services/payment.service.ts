@@ -39,10 +39,34 @@ export interface PaymentSummary {
   }[];
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export const paymentService = {
-  // Get all payments
-  getAllPayments: async (): Promise<Payment[]> => {
-    const response = await apiClient.get('/payments');
+  // Get all payments with optional pagination
+  getAllPayments: async (page?: number, limit?: number): Promise<PaginatedResponse<Payment> | Payment[]> => {
+    const params: any = {};
+    if (page) params.page = page;
+    if (limit) params.limit = limit;
+
+    const response = await apiClient.get('/payments', { params });
+    
+    // Si el backend devuelve paginación, usarla
+    if (response.data.data.items) {
+      return {
+        items: response.data.data.items,
+        pagination: response.data.data.pagination
+      };
+    }
+    
+    // Fallback: devolver array directo (compatibilidad)
     return response.data.data;
   },
 

@@ -30,10 +30,53 @@ export interface ClientStats {
   pendingAmount: number;
 }
 
+export interface ClientBalance {
+  cliente: {
+    id: string;
+    nombre: string;
+    email: string;
+  };
+  pedidos: Array<{
+    id: string;
+    fecha: string;
+    total: number;
+    estado: string;
+    pagado: number;
+  }>;
+  totalPedidos: number;
+  totalPagado: number;
+  saldoPendiente: number;
+  porcentajePagado: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export const clientService = {
-  // Get all clients
-  getAllClients: async (): Promise<Client[]> => {
-    const response = await apiClient.get('/clients');
+  // Get all clients with optional pagination
+  getAllClients: async (page?: number, limit?: number): Promise<PaginatedResponse<Client> | Client[]> => {
+    const params: any = {};
+    if (page) params.page = page;
+    if (limit) params.limit = limit;
+
+    const response = await apiClient.get('/clients', { params });
+    
+    // Si el backend devuelve paginación, usarla
+    if (response.data.data.items) {
+      return {
+        items: response.data.data.items,
+        pagination: response.data.data.pagination
+      };
+    }
+    
+    // Fallback: devolver array directo (compatibilidad)
     return response.data.data;
   },
 
@@ -71,6 +114,12 @@ export const clientService = {
     const response = await apiClient.get('/clients/search', {
       params: { q: query },
     });
+    return response.data.data;
+  },
+
+  // Get client balance (total orders, paid, pending)
+  getClientBalance: async (clientId: string): Promise<ClientBalance> => {
+    const response = await apiClient.get(`/clients/${clientId}/balance`);
     return response.data.data;
   },
 };

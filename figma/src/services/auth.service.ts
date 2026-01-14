@@ -28,6 +28,7 @@ export interface User {
 
 export interface AuthResponse {
   token: string;
+  refreshToken?: string;
   user: User;
 }
 
@@ -35,20 +36,26 @@ export const authService = {
   // Login
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', credentials);
-    const { token, user } = response.data.data; // Backend devuelve data.data
-    // Save token to localStorage
+    const { token, refreshToken, user } = response.data.data; // Backend devuelve data.data
+    // Save tokens to localStorage
     localStorage.setItem('authToken', token);
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
     localStorage.setItem('user', JSON.stringify(user));
-    return { token, user };
+    return { token, refreshToken, user };
   },
 
   // Register
   register: async (userData: RegisterData): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/register', userData);
-    const { token, user } = response.data.data; // Backend devuelve data.data
+    const { token, refreshToken, user } = response.data.data; // Backend devuelve data.data
     localStorage.setItem('authToken', token);
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
     localStorage.setItem('user', JSON.stringify(user));
-    return { token, user };
+    return { token, refreshToken, user };
   },
 
   // Get current user
@@ -63,6 +70,7 @@ export const authService = {
   logout: async (): Promise<void> => {
     await apiClient.post('/auth/logout');
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   },
 
