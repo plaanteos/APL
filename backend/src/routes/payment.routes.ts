@@ -1,34 +1,28 @@
 import express from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
 import { PaymentController } from '../controllers/payment.controller';
 
 const router = express.Router();
 
 // Apply authentication to all routes
-router.use(authenticate);
+router.use(authMiddleware);
 
-// GET /api/payments/stats
-router.get('/stats', PaymentController.getPaymentStats);
+// GET /api/payments/stats - Estadísticas de pagos
+router.get('/stats', PaymentController.getPaymentsStats);
 
-// GET /api/payments/balance
-router.get('/balance', PaymentController.getBalance);
-
-// GET /api/payments/order/:orderId
-router.get('/order/:orderId', PaymentController.getPaymentsByOrder);
-
-// GET /api/payments
+// GET /api/payments - Listar pagos
 router.get('/', PaymentController.getPayments);
 
-// POST /api/payments
+// POST /api/payments - Crear pago y aplicar a pedidos
 router.post('/', PaymentController.createPayment);
 
-// GET /api/payments/:id
+// GET /api/payments/:id - Obtener pago por ID
 router.get('/:id', PaymentController.getPaymentById);
 
-// PUT /api/payments/:id
+// PUT /api/payments/:id - Actualizar pago
 router.put('/:id', PaymentController.updatePayment);
 
-// DELETE /api/payments/:id (only admins)
-router.delete('/:id', authorize('ADMIN'), PaymentController.deletePayment);
+// DELETE /api/payments/:id - Eliminar pago
+router.delete('/:id', PaymentController.deletePayment);
 
 export default router;

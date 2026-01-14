@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================================================
+// TABLAS NORMALIZACIÓN 1 (1NF)
+// ================================================================
+
+// Tabla: administradores
+model Administrador {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  username      String   @unique
+  password      String   // Será hasheada con bcryptjs
+  nombres       String
+  apellidos     String
+  telefono      String?
+  rol           Rol      @default(ADMIN)
+  activo        Boolean  @default(true)
+  refreshToken  String?  @db.Text // Token de refresco para RF-10
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relaciones para auditoría
+  auditLogs  Auditoria[]
+
+  @@map("administradores")
+}
+
+// Tabla: clientes
+model Cliente {
+  id               String        @id @default(cuid())
+  nombre           String
+  email            String        @unique
+  telefono         String
+  whatsapp         String?
+  tipo             TipoCliente   @default(CLINICA)
+  direccion        String?
+  ciudad           String?
+  codigoPostal     String?
+  observaciones    String?       @db.Text
+  activo           Boolean       @default(true)
+  fechaRegistro    DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
+  // Relaciones
+  pedidos          Pedido[]
+  
+  // Campos calculados (se calculan en el backend)
+  // totalPedidos, montoTotal, montoPendiente
+
+  @@map("clientes")
+}
+
+// Tabla: pedidos
+model Pedido {
+  id                String          @id @default(cuid())
+  clienteId         String
+  numeroPedido      String          @unique
+  nombrePaciente    String
+  fechaPedido       DateTime        @default(now())
+  fechaVencimiento  DateTime
+  descripcion       String          @db.Text
+  tipoPedido        String
+  cantidad          Int
+  precioUnitario    Decimal         @db.Decimal(10,2)
+  montoTotal        Decimal         @db.Decimal(10,2)
+  montoPagado       Decimal         @db.Decimal(10,2) @default(0.00)
+  montoPendiente    Decimal         @db.Decimal(10,2)
+  estado            EstadoPedido    @default(PENDIENTE)
+  prioridad         Prioridad       @default(NORMAL)
+  observaciones     String?         @db.Text
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relaciones
+  cliente           Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  detallesPedido    DetallePedido[]
+  pagos             Pago[]
+
+  @@map("pedidos")
+}
+
+// ================================================================
+// TABLAS NORMALIZACIÓN 2 (2NF)
+// ================================================================
+
+// Tabla: detalle_pedido
+model DetallePedido {
+  id             String   @id @default(cuid())
+  pedidoId       String
+  descripcion    String
+  tipoTrabajo    String
+  material       String?
+  cantidad       Int
+  precioUnitario Decimal  @db.Decimal(10,2)
+  subtotal       Decimal  @db.Decimal(10,2)
+  observaciones  String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relaciones
+  pedido         Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@map("detalle_pedido")
+}
+
+// Tabla: pagos
+model Pago {
+  id              String        @id @default(cuid())
+  pedidoId        String
+  numeroPago      String        @unique
+  monto           Decimal       @db.Decimal(10,2)
+  metodoPago      MetodoPago
+  fechaPago       DateTime      @default(now())
+  numeroRecibo    String?
+  numeroTransf    String?
+  observaciones   String?       @db.Text
+  procesadoPor    String?       // ID del administrador que procesó
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relaciones
+  pedido          Pedido        @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@map("pagos")
+}
+
+// ================================================================
+// TABLAS NORMALIZACIÓN 3 (3NF) - AUDITORÍA Y RECORDATORIOS
+// ================================================================
+
+// Tabla: auditoria
+model Auditoria {
+  id             String    @id @default(cuid())
+  administradorId String
+  accion         AccionAudit
+  tipoEntidad    String    // "cliente", "pedido", "pago"
+  entidadId      String    // ID de la entidad afectada
+  valoresAnteriores Json?  // Valores antes del cambio
+  valoresNuevos     Json?  // Valores después del cambio
+  direccionIP       String?
+  userAgent         String?
+  descripcion       String? @db.Text
+  timestamp         DateTime @default(now())
+  
+  // Relaciones
+  administrador     Administrador @relation(fields: [administradorId], references: [id])
+
+  @@map("auditoria")
+}
+
+// Tabla: recordatorios
+model Recordatorio {
+  id                String              @id @default(cuid())
+  titulo            String
+  descripcion       String?             @db.Text
+  tipo              TipoRecordatorio
+  tipoEntidad       String              // "pedido", "cliente", "pago"
+  entidadId         String              // ID de la entidad relacionada
+  fechaRecordatorio DateTime
+  fechaCreacion     DateTime            @default(now())
+  estado            EstadoRecordatorio  @default(PENDIENTE)
+  prioridad         Prioridad           @default(NORMAL)
+  notificado        Boolean             @default(false)
+  fechaNotificacion DateTime?
+  administradorId   String?             // Usuario asignado (opcional)
+  repetir           Boolean             @default(false)
+  frecuencia        String?             // "diario", "semanal", "mensual"
+  observaciones     String?             @db.Text
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([fechaRecordatorio])
+  @@index([estado])
+  @@index([tipoEntidad, entidadId])
+  @@map("recordatorios")
+}
+
+// ================================================================
+// ENUMS
+// ================================================================
+
+enum Rol {
+  ADMIN
+  USUARIO
+}
+
+enum TipoCliente {
+  CLINICA
+  ODONTOLOGO
+}
+
+enum EstadoPedido {
+  PENDIENTE
+  EN_PROCESO
+  ENTREGADO
+  PAGADO
+  CANCELADO
+}
+
+enum Prioridad {
+  BAJA
+  NORMAL
+  ALTA
+  URGENTE
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA_CREDITO
+  TARJETA_DEBITO
+  CHEQUE
+}
+
+enum AccionAudit {
+  CREAR
+  ACTUALIZAR
+  ELIMINAR
+  LOGIN
+  LOGOUT
+  CAMBIO_ESTADO
+}
+
+enum TipoRecordatorio {
+  VENCIMIENTO_PEDIDO
+  SEGUIMIENTO_CLIENTE
+  PAGO_PENDIENTE
+  REUNION
+  LLAMADA
+  OTRO
+}
+
+enum EstadoRecordatorio {
+  PENDIENTE
+  COMPLETADO
+  CANCELADO
+  VENCIDO
+}

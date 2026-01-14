@@ -5,72 +5,106 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
-// Schemas de validación
-const createOrderSchema = z.object({
-  clienteId: z.string().cuid('ID de cliente inválido'),
-  nombrePaciente: z.string().min(2, 'Nombre del paciente requerido'),
-  fechaVencimiento: z.string().transform((str) => new Date(str)).refine(
-    (date) => date > new Date(),
-    { message: 'La fecha de vencimiento debe ser futura' }
-  ),
-  descripcion: z.string().min(10, 'Descripción debe tener al menos 10 caracteres'),
-  tipoPedido: z.string().min(2, 'Tipo de pedido requerido'),
+// ============================================
+// SCHEMAS DE VALIDACIÓN - MODELO OFICIAL APL
+// ============================================
+
+const detalleSchema = z.object({
+  id_producto: z.number().int().positive('ID de producto inválido'),
   cantidad: z.number().int().positive('Cantidad debe ser mayor a 0'),
-  precioUnitario: z.number().positive('Precio debe ser mayor a 0'),
-  prioridad: z.enum(['BAJA', 'NORMAL', 'ALTA', 'URGENTE']).default('NORMAL'),
-  observaciones: z.string().optional(),
-  detalles: z.array(z.object({
-    descripcion: z.string().min(2, 'Descripción del detalle requerida'),
-    tipoTrabajo: z.string().min(2, 'Tipo de trabajo requerido'),
-    material: z.string().optional(),
-    cantidad: z.number().int().positive('Cantidad debe ser mayor a 0'),
-    precioUnitario: z.number().positive('Precio debe ser mayor a 0'),
-    observaciones: z.string().optional(),
-  })).default([]),
+  precio_unitario: z.number().positive('Precio debe ser mayor a 0'),
+  paciente: z.string().min(2, 'Nombre del paciente requerido'),
+  id_estado: z.number().int().positive('ID de estado inválido'),
+});
+
+const createOrderSchema = z.object({
+  id_cliente: z.number().int().positive('ID de cliente inválido'),
+  fecha_entrega: z.string().transform((str) => new Date(str)),
+  id_administrador: z.number().int().positive('ID de administrador inválido'),
+  detalles: z.array(detalleSchema).min(1, 'Debe incluir al menos un detalle de pedido'),
 });
 
 const updateOrderSchema = z.object({
-  nombrePaciente: z.string().min(2).optional(),
-  fechaVencimiento: z.string().transform((str) => new Date(str)).optional(),
-  descripcion: z.string().min(10).optional(),
-  tipoPedido: z.string().min(2).optional(),
-  cantidad: z.number().int().min(1).optional(),
-  precioUnitario: z.number().positive().optional(),
-  prioridad: z.enum(['BAJA', 'NORMAL', 'ALTA', 'URGENTE']).optional(),
-  observaciones: z.string().optional(),
+  fecha_entrega: z.string().transform((str) => new Date(str)).optional(),
+  id_administrador: z.number().int().positive().optional(),
 });
 
-const updateStatusSchema = z.object({
-  estado: z.enum(['PENDIENTE', 'EN_PROCESO', 'ENTREGADO', 'PAGADO', 'CANCELADO']),
+const updateDetalleSchema = z.object({
+  cantidad: z.number().int().positive().optional(),
+  precio_unitario: z.number().positive().optional(),
+  paciente: z.string().min(2).optional(),
+  id_estado: z.number().int().positive().optional(),
 });
 
-// Función para generar número de pedido
-const generateOrderNumber = async (): Promise<string> => {
-  const year = new Date().getFullYear();
-  const count = await prisma.pedido.count({
-    where: {
-      createdAt: {
-        gte: new Date(year, 0, 1),
-        lt: new Date(year + 1, 0, 1),
-      },
-    },
-  });
-  return `PED-${String(count + 1).padStart(3, '0')}-${year}`;
+// ============================================
+// FUNCIONES AUXILIARES
+// ============================================
+
+/**
+ * Calcula el monto total de un pedido desde sus detalles
+ */
+const calculateOrderTotal = (detalles: any[]): number => {
+  return detalles.reduce((sum, det) => sum + (det.cantidad * Number(det.precio_unitario)), 0);
 };
 
+/**
+ * Calcula el monto pagado de un pedido desde sus detalles de pago
+ */
+const calculateOrderPaid = (detallesPago: any[]): number => {
+  return detallesPago.reduce((sum, det) => sum + Number(det.valor), 0);
+};
+
+/**
+ * Formatea un pedido con cálculos dinámicos
+ */
+const formatOrderWithCalculations = (pedido: any) => {
+  const montoTotal = calculateOrderTotal(pedido.detalles || []);
+  const montoPagado = calculateOrderPaid(pedido.detallesPago || []);
+  const montoPendiente = montoTotal - montoPagado;
+
+  return {
+    id: pedido.id,
+    id_cliente: pedido.id_cliente,
+    nombreCliente: pedido.cliente?.nombre || '',
+    fecha_pedido: pedido.fecha_pedido,
+    fecha_entrega: pedido.fecha_entrega,
+    id_administrador: pedido.id_administrador,
+    detalles: (pedido.detalles || []).map((det: any) => ({
+      id: det.id,
+      id_producto: det.id_producto,
+      tipoProducto: det.producto?.tipo || '',
+      cantidad: det.cantidad,
+      precio_unitario: Number(det.precio_unitario),
+      paciente: det.paciente,
+      id_estado: det.id_estado,
+      estadoDescripcion: det.estado?.descripcion || '',
+      subtotal: det.cantidad * Number(det.precio_unitario),
+    })),
+    montoTotal,
+    montoPagado,
+    montoPendiente,
+    cantidadDetalles: pedido.detalles?.length || 0,
+    cantidadPagos: pedido.detallesPago?.length || 0,
+  };
+};
+
+// ============================================
+// ORDER CONTROLLER
+// ============================================
+
 export class OrderController {
-  // GET /api/orders
+  // GET /api/orders - Listar pedidos con cálculos dinámicos
   static async getOrders(req: Request, res: Response) {
     try {
       const {
         page = 1,
         limit = 10,
         search,
-        clienteId,
-        estado,
-        prioridad,
+        id_cliente,
+        id_estado,
         dateFrom,
         dateTo,
+        activos = 'true',
       } = req.query;
 
       const offset = (Number(page) - 1) * Number(limit);
@@ -78,31 +112,34 @@ export class OrderController {
       // Construir filtros
       const where: any = {};
 
+      // Solo pedidos activos por defecto
+      if (activos === 'true') {
+        where.fecha_delete = null;
+      }
+
       if (search) {
         where.OR = [
-          { numeroPedido: { contains: search as string, mode: 'insensitive' } },
-          { nombrePaciente: { contains: search as string, mode: 'insensitive' } },
-          { descripcion: { contains: search as string, mode: 'insensitive' } },
           { cliente: { nombre: { contains: search as string, mode: 'insensitive' } } },
+          { detalles: { some: { paciente: { contains: search as string, mode: 'insensitive' } } } },
         ];
       }
 
-      if (clienteId) {
-        where.clienteId = clienteId;
+      if (id_cliente) {
+        where.id_cliente = Number(id_cliente);
       }
 
-      if (estado) {
-        where.estado = estado;
-      }
-
-      if (prioridad) {
-        where.prioridad = prioridad;
+      if (id_estado) {
+        where.detalles = {
+          some: {
+            id_estado: Number(id_estado),
+          },
+        };
       }
 
       if (dateFrom || dateTo) {
-        where.fechaPedido = {};
-        if (dateFrom) where.fechaPedido.gte = new Date(dateFrom as string);
-        if (dateTo) where.fechaPedido.lte = new Date(dateTo as string);
+        where.fecha_pedido = {};
+        if (dateFrom) where.fecha_pedido.gte = new Date(dateFrom as string);
+        if (dateTo) where.fecha_pedido.lte = new Date(dateTo as string);
       }
 
       const [pedidos, total] = await Promise.all([
@@ -114,25 +151,33 @@ export class OrderController {
                 id: true,
                 nombre: true,
                 email: true,
-                tipo: true,
+                telefono: true,
               },
             },
-            detallesPedido: true,
-            pagos: true,
+            administrador: {
+              select: {
+                id: true,
+                nombre: true,
+                email: true,
+              },
+            },
+            detalles: {
+              include: {
+                producto: true,
+                estado: true,
+              },
+            },
+            detallesPago: true,
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { fecha_pedido: 'desc' },
           skip: offset,
           take: Number(limit),
         }),
         prisma.pedido.count({ where }),
       ]);
 
-      // Formatear respuesta
-      const pedidosFormatted = pedidos.map(pedido => ({
-        ...pedido,
-        clientName: pedido.cliente.nombre,
-        totalPagado: pedido.pagos.reduce((sum, pago) => sum + Number(pago.monto), 0),
-      }));
+      // Formatear con cálculos
+      const pedidosFormatted = pedidos.map(formatOrderWithCalculations);
 
       res.json({
         success: true,
@@ -153,37 +198,56 @@ export class OrderController {
     }
   }
 
-  // GET /api/orders/:id
+  // GET /api/orders/:id - Obtener pedido por ID con detalles completos
   static async getOrderById(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
       const pedido = await prisma.pedido.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
           cliente: true,
-          detallesPedido: true,
-          pagos: {
-            orderBy: { fechaPago: 'desc' },
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+          detalles: {
+            include: {
+              producto: true,
+              estado: true,
+            },
+          },
+          detallesPago: {
+            include: {
+              pago: true,
+            },
           },
         },
       });
 
-      if (!pedido) {
+      if (!pedido || pedido.fecha_delete) {
         return res.status(404).json({
           success: false,
           error: 'Pedido no encontrado',
         });
       }
 
-      // Calcular total pagado
-      const totalPagado = pedido.pagos.reduce((sum, pago) => sum + Number(pago.monto), 0);
+      const formatted = formatOrderWithCalculations(pedido);
 
       res.json({
         success: true,
         data: {
-          ...pedido,
-          totalPagado,
+          ...formatted,
+          cliente: pedido.cliente,
+          administrador: pedido.administrador,
+          pagos: pedido.detallesPago.map(dp => ({
+            id_pago: dp.id_pago,
+            valor: Number(dp.valor),
+            fecha_pago: dp.fecha_pago,
+          })),
         },
       });
     } catch (error) {
@@ -195,15 +259,14 @@ export class OrderController {
     }
   }
 
-  // POST /api/orders
+  // POST /api/orders - Crear nuevo pedido con detalles
   static async createOrder(req: Request, res: Response) {
     try {
       const orderData = createOrderSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
       // Verificar que el cliente existe
       const cliente = await prisma.cliente.findUnique({
-        where: { id: orderData.clienteId },
+        where: { id: orderData.id_cliente },
       });
 
       if (!cliente) {
@@ -213,58 +276,106 @@ export class OrderController {
         });
       }
 
-      // Generar número de pedido
-      const numeroPedido = await generateOrderNumber();
+      // Verificar que el administrador existe
+      const admin = await prisma.administrador.findUnique({
+        where: { id: orderData.id_administrador },
+      });
 
-      // Calcular montos
-      const montoTotal = orderData.cantidad * orderData.precioUnitario;
-      const montoPendiente = montoTotal;
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          error: 'Administrador no encontrado',
+        });
+      }
 
-      // Crear transacción para pedido y detalles
-      const result = await prisma.$transaction(async (tx) => {
-        // Separar detalles del resto de datos
-        const { detalles, ...pedidoData } = orderData;
-        
+      // Verificar que todos los productos existen
+      const productIds = orderData.detalles.map(d => d.id_producto);
+      const productos = await prisma.producto.findMany({
+        where: { id: { in: productIds } },
+      });
+
+      if (productos.length !== productIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Uno o más productos no existen',
+        });
+      }
+
+      // Verificar que todos los estados existen
+      const estadoIds = orderData.detalles.map(d => d.id_estado);
+      const estados = await prisma.estado.findMany({
+        where: { 
+          id: { in: estadoIds },
+          fecha_delete: null,
+        },
+      });
+
+      if (estados.length !== estadoIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Uno o más estados no existen o están inactivos',
+        });
+      }
+
+      // Crear pedido con detalles en una transacción
+      const newPedido = await prisma.$transaction(async (tx) => {
         // Crear el pedido
-        const nuevoPedido = await tx.pedido.create({
+        const pedido = await tx.pedido.create({
           data: {
-            ...pedidoData,
-            numeroPedido,
-            montoTotal,
-            montoPendiente,
-            montoPagado: 0,
-          },
-          include: {
-            cliente: true,
+            id_cliente: orderData.id_cliente,
+            fecha_entrega: orderData.fecha_entrega,
+            id_administrador: orderData.id_administrador,
           },
         });
 
-        // Crear detalles si existen
-        if (detalles && detalles.length > 0) {
-          const detallesData = detalles.map(detalle => ({
-            ...detalle,
-            pedidoId: nuevoPedido.id,
-            subtotal: detalle.cantidad * detalle.precioUnitario,
-          }));
+        // Crear los detalles
+        await tx.detallePedido.createMany({
+          data: orderData.detalles.map(detalle => ({
+            id_pedido: pedido.id,
+            id_producto: detalle.id_producto,
+            cantidad: detalle.cantidad,
+            precio_unitario: detalle.precio_unitario,
+            paciente: detalle.paciente,
+            id_estado: detalle.id_estado,
+          })),
+        });
 
-          await tx.detallePedido.createMany({
-            data: detallesData,
-          });
-        }
-
-        return nuevoPedido;
+        // Obtener el pedido completo con detalles
+        return await tx.pedido.findUnique({
+          where: { id: pedido.id },
+          include: {
+            cliente: true,
+            administrador: {
+              select: {
+                id: true,
+                nombre: true,
+                email: true,
+              },
+            },
+            detalles: {
+              include: {
+                producto: true,
+                estado: true,
+              },
+            },
+            detallesPago: true,
+          },
+        });
       });
 
-      // Registrar auditoría
-      await AuditService.logCreate(req, 'pedido', result.id, { numeroPedido, nombrePaciente: orderData.nombrePaciente });
+      if (!newPedido) {
+        throw new Error('Error creando pedido');
+      }
+
+      const formatted = formatOrderWithCalculations(newPedido);
 
       res.status(201).json({
         success: true,
         message: 'Pedido creado exitosamente',
-        data: result,
+        data: formatted,
       });
     } catch (error) {
-      console.error('Create order error:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Create order error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -281,67 +392,51 @@ export class OrderController {
     }
   }
 
-  // PUT /api/orders/:id
+  // PUT /api/orders/:id - Actualizar pedido
   static async updateOrder(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const updateData = updateOrderSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
-      // Verificar que el pedido existe
       const existingOrder = await prisma.pedido.findUnique({
-        where: { id },
+        where: { id: Number(id) },
       });
 
-      if (!existingOrder) {
+      if (!existingOrder || existingOrder.fecha_delete) {
         return res.status(404).json({
           success: false,
           error: 'Pedido no encontrado',
         });
       }
 
-      // No permitir editar pedidos pagados
-      if (existingOrder.estado === 'PAGADO') {
-        return res.status(400).json({
-          success: false,
-          error: 'No se puede editar un pedido que ya está pagado',
-        });
-      }
-
-      // Recalcular montos si cambia cantidad o precio
-      let prismaUpdateData: any = { ...updateData };
-      if (updateData.cantidad || updateData.precioUnitario) {
-        const cantidad = updateData.cantidad || existingOrder.cantidad;
-        const precioUnitario = updateData.precioUnitario || Number(existingOrder.precioUnitario);
-        const montoTotal = cantidad * precioUnitario;
-        const montoPagado = Number(existingOrder.montoPagado);
-        const montoPendiente = montoTotal - montoPagado;
-
-        prismaUpdateData = {
-          ...updateData,
-          montoTotal,
-          montoPendiente,
-        };
-      }
-
-      // Actualizar pedido
       const updatedOrder = await prisma.pedido.update({
-        where: { id },
-        data: prismaUpdateData,
+        where: { id: Number(id) },
+        data: updateData,
         include: {
           cliente: true,
-          detallesPedido: true,
-          pagos: true,
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+          detalles: {
+            include: {
+              producto: true,
+              estado: true,
+            },
+          },
+          detallesPago: true,
         },
       });
 
-      // Registrar auditoría
-      await AuditService.logUpdate(req, 'pedido', id, existingOrder, updateData);
+      const formatted = formatOrderWithCalculations(updatedOrder);
 
       res.json({
         success: true,
         message: 'Pedido actualizado exitosamente',
-        data: updatedOrder,
+        data: formatted,
       });
     } catch (error) {
       console.error('Update order error:', error);
@@ -361,55 +456,117 @@ export class OrderController {
     }
   }
 
-  // PATCH /api/orders/:id/status
-  static async updateOrderStatus(req: Request, res: Response) {
+  // DELETE /api/orders/:id - Soft delete (marcar fecha_delete)
+  static async deleteOrder(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { estado } = updateStatusSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
-      // Verificar que el pedido existe
       const existingOrder = await prisma.pedido.findUnique({
-        where: { id },
-        include: { cliente: true },
+        where: { id: Number(id) },
+        include: {
+          detallesPago: true,
+        },
       });
 
-      if (!existingOrder) {
+      if (!existingOrder || existingOrder.fecha_delete) {
         return res.status(404).json({
           success: false,
           error: 'Pedido no encontrado',
         });
       }
 
-      // Validaciones de cambio de estado
-      if (estado === 'PAGADO' && Number(existingOrder.montoPendiente) > 0) {
+      // Verificar que no tenga pagos
+      if (existingOrder.detallesPago.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'No se puede marcar como pagado un pedido con monto pendiente',
+          error: 'No se puede eliminar un pedido que tiene pagos registrados',
         });
       }
 
-      // Actualizar estado
-      const updatedOrder = await prisma.pedido.update({
-        where: { id },
-        data: { estado },
-        include: {
-          cliente: true,
-          detallesPedido: true,
-          pagos: true,
-        },
+      // Soft delete
+      await prisma.pedido.update({
+        where: { id: Number(id) },
+        data: { fecha_delete: new Date() },
       });
-
-      // Registrar auditoría
-      await AuditService.logStatusChange(req, 'pedido', id, existingOrder.estado, estado);
 
       res.json({
         success: true,
-        message: `Estado del pedido actualizado a ${estado}`,
-        data: updatedOrder,
+        message: 'Pedido eliminado exitosamente',
       });
     } catch (error) {
-      console.error('Update order status error:', error);
+      console.error('Delete order error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // POST /api/orders/:id/detalles - Agregar detalle a pedido existente
+  static async addDetalle(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const detalleData = detalleSchema.parse(req.body);
+
+      const pedido = await prisma.pedido.findUnique({
+        where: { id: Number(id) },
+      });
+
+      if (!pedido || pedido.fecha_delete) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pedido no encontrado',
+        });
+      }
+
+      // Verificar producto y estado
+      const [producto, estado] = await Promise.all([
+        prisma.producto.findUnique({ where: { id: detalleData.id_producto } }),
+        prisma.estado.findUnique({ where: { id: detalleData.id_estado } }),
+      ]);
+
+      if (!producto) {
+        return res.status(404).json({
+          success: false,
+          error: 'Producto no encontrado',
+        });
+      }
+
+      if (!estado || estado.fecha_delete) {
+        return res.status(404).json({
+          success: false,
+          error: 'Estado no encontrado o inactivo',
+        });
+      }
+
+      const newDetalle = await prisma.detallePedido.create({
+        data: {
+          id_pedido: Number(id),
+          ...detalleData,
+        },
+        include: {
+          producto: true,
+          estado: true,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Detalle agregado exitosamente',
+        data: {
+          id: newDetalle.id,
+          id_producto: newDetalle.id_producto,
+          tipoProducto: newDetalle.producto.tipo,
+          cantidad: newDetalle.cantidad,
+          precio_unitario: Number(newDetalle.precio_unitario),
+          paciente: newDetalle.paciente,
+          id_estado: newDetalle.id_estado,
+          estadoDescripcion: newDetalle.estado.descripcion,
+          subtotal: newDetalle.cantidad * Number(newDetalle.precio_unitario),
+        },
+      });
+    } catch (error) {
+      console.error('Add detalle error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -426,47 +583,66 @@ export class OrderController {
     }
   }
 
-  // DELETE /api/orders/:id
-  static async deleteOrder(req: Request, res: Response) {
+  // PUT /api/orders/:id/detalles/:detalleId - Actualizar detalle
+  static async updateDetalle(req: Request, res: Response) {
     try {
-      const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const { id, detalleId } = req.params;
+      const updateData = updateDetalleSchema.parse(req.body);
 
-      // Verificar que el pedido existe
-      const existingOrder = await prisma.pedido.findUnique({
-        where: { id },
-        include: { pagos: true },
+      const detalle = await prisma.detallePedido.findUnique({
+        where: { id: Number(detalleId) },
+        include: { pedido: true },
       });
 
-      if (!existingOrder) {
+      if (!detalle || detalle.id_pedido !== Number(id)) {
         return res.status(404).json({
           success: false,
-          error: 'Pedido no encontrado',
+          error: 'Detalle no encontrado',
         });
       }
 
-      // No permitir eliminar pedidos con pagos
-      if (existingOrder.pagos.length > 0) {
+      if (detalle.pedido.fecha_delete) {
         return res.status(400).json({
           success: false,
-          error: 'No se puede eliminar un pedido que tiene pagos registrados',
+          error: 'No se puede modificar un detalle de un pedido eliminado',
         });
       }
 
-      // Eliminar pedido (cascade eliminará detalles)
-      await prisma.pedido.delete({
-        where: { id },
+      const updatedDetalle = await prisma.detallePedido.update({
+        where: { id: Number(detalleId) },
+        data: updateData,
+        include: {
+          producto: true,
+          estado: true,
+        },
       });
-
-      // Registrar auditoría
-      await AuditService.logDelete(req, 'pedido', id, existingOrder, 'Pedido eliminado');
 
       res.json({
         success: true,
-        message: 'Pedido eliminado exitosamente',
+        message: 'Detalle actualizado exitosamente',
+        data: {
+          id: updatedDetalle.id,
+          id_producto: updatedDetalle.id_producto,
+          tipoProducto: updatedDetalle.producto.tipo,
+          cantidad: updatedDetalle.cantidad,
+          precio_unitario: Number(updatedDetalle.precio_unitario),
+          paciente: updatedDetalle.paciente,
+          id_estado: updatedDetalle.id_estado,
+          estadoDescripcion: updatedDetalle.estado.descripcion,
+          subtotal: updatedDetalle.cantidad * Number(updatedDetalle.precio_unitario),
+        },
       });
     } catch (error) {
-      console.error('Delete order error:', error);
+      console.error('Update detalle error:', error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Datos de entrada inválidos',
+          details: error.errors,
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
@@ -474,46 +650,130 @@ export class OrderController {
     }
   }
 
-  // GET /api/orders/stats
-  static async getOrdersStats(req: Request, res: Response) {
+  // DELETE /api/orders/:id/detalles/:detalleId - Eliminar detalle
+  static async deleteDetalle(req: Request, res: Response) {
     try {
-      const [
-        totalOrders,
-        pendingOrders,
-        inProgressOrders,
-        deliveredOrders,
-        paidOrders,
-        canceledOrders
-      ] = await Promise.all([
-        prisma.pedido.count(),
-        prisma.pedido.count({ where: { estado: 'PENDIENTE' } }),
-        prisma.pedido.count({ where: { estado: 'EN_PROCESO' } }),
-        prisma.pedido.count({ where: { estado: 'ENTREGADO' } }),
-        prisma.pedido.count({ where: { estado: 'PAGADO' } }),
-        prisma.pedido.count({ where: { estado: 'CANCELADO' } }),
-      ]);
+      const { id, detalleId } = req.params;
 
-      // Estadísticas de montos
-      const montoStats = await prisma.pedido.aggregate({
-        _sum: {
-          montoTotal: true,
-          montoPagado: true,
-          montoPendiente: true,
-        },
+      const detalle = await prisma.detallePedido.findUnique({
+        where: { id: Number(detalleId) },
+        include: { pedido: true },
+      });
+
+      if (!detalle || detalle.id_pedido !== Number(id)) {
+        return res.status(404).json({
+          success: false,
+          error: 'Detalle no encontrado',
+        });
+      }
+
+      if (detalle.pedido.fecha_delete) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar un detalle de un pedido eliminado',
+        });
+      }
+
+      // Verificar que el pedido tenga al menos 2 detalles
+      const detallesCount = await prisma.detallePedido.count({
+        where: { id_pedido: Number(id) },
+      });
+
+      if (detallesCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar el único detalle del pedido. Elimine el pedido completo.',
+        });
+      }
+
+      await prisma.detallePedido.delete({
+        where: { id: Number(detalleId) },
       });
 
       res.json({
         success: true,
+        message: 'Detalle eliminado exitosamente',
+      });
+    } catch (error) {
+      console.error('Delete detalle error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  // GET /api/orders/stats - Estadísticas de pedidos
+  static async getOrdersStats(req: Request, res: Response) {
+    try {
+      const totalPedidos = await prisma.pedido.count({
+        where: { fecha_delete: null },
+      });
+
+      // Pedidos por estado (contando detalles)
+      const pedidosPorEstado = await prisma.estado.findMany({
+        where: { fecha_delete: null },
+        include: {
+          _count: {
+            select: {
+              detalles: {
+                where: {
+                  pedido: {
+                    fecha_delete: null,
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Productos más pedidos
+      const topProductos = await prisma.detallePedido.groupBy({
+        by: ['id_producto'],
+        where: {
+          pedido: {
+            fecha_delete: null,
+          },
+        },
+        _count: {
+          id: true,
+        },
+        _sum: {
+          cantidad: true,
+        },
+        orderBy: {
+          _count: {
+            id: 'desc',
+          },
+        },
+        take: 5,
+      });
+
+      const topProductosDetalle = await Promise.all(
+        topProductos.map(async (item: any) => {
+          const producto = await prisma.producto.findUnique({
+            where: { id: item.id_producto },
+          });
+          return {
+            id_producto: item.id_producto,
+            tipoProducto: producto?.tipo || 'Desconocido',
+            vecesOrdenado: item._count.id,
+            cantidadTotal: item._sum.cantidad,
+          };
+        })
+      );
+
+      res.json({
+        success: true,
         data: {
-          totalOrders,
-          pendingOrders,
-          inProgressOrders,
-          deliveredOrders,
-          paidOrders,
-          canceledOrders,
-          totalAmount: Number(montoStats._sum.montoTotal || 0),
-          totalPaid: Number(montoStats._sum.montoPagado || 0),
-          totalPending: Number(montoStats._sum.montoPendiente || 0),
+          totalPedidos,
+          pedidosPorEstado: pedidosPorEstado.map((est: any) => ({
+            id: est.id,
+            descripcion: est.descripcion,
+            cantidad: est._count.detalles,
+          })),
+          topProductos: topProductosDetalle,
         },
       });
     } catch (error) {
@@ -524,160 +784,5 @@ export class OrderController {
       });
     }
   }
-
-  // PATCH /api/orders/:id/deliver - Marcar pedido como entregado
-  static async markAsDelivered(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const userId = (req as any).user?.id;
-
-      // Verificar que el pedido existe
-      const existingOrder = await prisma.pedido.findUnique({
-        where: { id },
-        include: { cliente: true },
-      });
-
-      if (!existingOrder) {
-        return res.status(404).json({
-          success: false,
-          error: 'Pedido no encontrado',
-        });
-      }
-
-      // Verificar que el pedido no esté ya entregado
-      if (existingOrder.estado === 'ENTREGADO') {
-        return res.status(400).json({
-          success: false,
-          error: 'El pedido ya fue marcado como entregado',
-        });
-      }
-
-      // Verificar que el pedido esté pagado o en proceso
-      if (existingOrder.estado === 'PENDIENTE') {
-        return res.status(400).json({
-          success: false,
-          error: 'El pedido debe estar en proceso o pagado antes de marcarlo como entregado',
-        });
-      }
-
-      // Actualizar estado a ENTREGADO
-      const updatedOrder = await prisma.pedido.update({
-        where: { id },
-        data: {
-          estado: 'ENTREGADO',
-        },
-        include: {
-          cliente: true,
-          detallesPedido: true,
-        },
-      });
-
-      // Registrar auditoría
-      await AuditService.logStatusChange(
-        req,
-        'pedido',
-        id,
-        existingOrder.estado,
-        'ENTREGADO',
-        `Pedido ${existingOrder.numeroPedido} marcado como entregado`
-      );
-
-      res.json({
-        success: true,
-        data: updatedOrder,
-        message: 'Pedido marcado como entregado exitosamente',
-      });
-    } catch (error) {
-      console.error('Mark order as delivered error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor',
-      });
-    }
-  }
-
-  // GET /api/orders/:id/balance - Obtener balance de un pedido específico
-  static async getOrderBalance(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-
-      const pedido = await prisma.pedido.findUnique({
-        where: { id },
-        include: {
-          cliente: {
-            select: {
-              id: true,
-              nombre: true,
-              email: true,
-              telefono: true,
-              whatsapp: true,
-            },
-          },
-          pagos: {
-            select: {
-              id: true,
-              numeroPago: true,
-              monto: true,
-              metodoPago: true,
-              fechaPago: true,
-              numeroRecibo: true,
-              observaciones: true,
-            },
-            orderBy: {
-              fechaPago: 'desc',
-            },
-          },
-          detallesPedido: true,
-        },
-      });
-
-      if (!pedido) {
-        return res.status(404).json({
-          success: false,
-          error: 'Pedido no encontrado',
-        });
-      }
-
-      // Calcular balance
-      const montoTotal = Number(pedido.montoTotal);
-      const montoPagado = Number(pedido.montoPagado);
-      const montoPendiente = Number(pedido.montoPendiente);
-      const porcentajePagado = (montoPagado / montoTotal) * 100;
-
-      const balance = {
-        pedido: {
-          id: pedido.id,
-          numeroPedido: pedido.numeroPedido,
-          nombrePaciente: pedido.nombrePaciente,
-          descripcion: pedido.descripcion,
-          tipoPedido: pedido.tipoPedido,
-          fechaPedido: pedido.fechaPedido,
-          fechaVencimiento: pedido.fechaVencimiento,
-          estado: pedido.estado,
-          prioridad: pedido.prioridad,
-        },
-        cliente: pedido.cliente,
-        montos: {
-          total: montoTotal,
-          pagado: montoPagado,
-          pendiente: montoPendiente,
-          porcentajePagado: Math.round(porcentajePagado * 100) / 100,
-        },
-        pagos: pedido.pagos,
-        detalles: pedido.detallesPedido,
-        estadoPago: montoPendiente === 0 ? 'PAGADO_COMPLETO' : montoPagado > 0 ? 'PAGO_PARCIAL' : 'SIN_PAGOS',
-      };
-
-      res.json({
-        success: true,
-        data: balance,
-      });
-    } catch (error) {
-      console.error('Get order balance error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor',
-      });
-    }
-  }
 }
+

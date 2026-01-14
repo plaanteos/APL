@@ -5,20 +5,20 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
-// Schemas de validación
+// Schemas de validación - Modelo Oficial APL
 const createClientSchema = z.object({
   nombre: z.string().min(2, 'Nombre debe tener al menos 2 caracteres'),
   email: z.string().email('Email inválido'),
   telefono: z.string().min(8, 'Teléfono debe tener al menos 8 caracteres'),
-  whatsapp: z.string().optional(),
-  tipo: z.enum(['CLINICA', 'ODONTOLOGO']),
-  direccion: z.string().optional(),
-  ciudad: z.string().optional(),
-  codigoPostal: z.string().optional(),
-  observaciones: z.string().optional(),
+  id_administrador: z.number().int().positive('ID de administrador inválido'),
 });
 
-const updateClientSchema = createClientSchema.partial();
+const updateClientSchema = z.object({
+  nombre: z.string().min(2, 'Nombre debe tener al menos 2 caracteres').optional(),
+  email: z.string().email('Email inválido').optional(),
+  telefono: z.string().min(8, 'Teléfono debe tener al menos 8 caracteres').optional(),
+  id_administrador: z.number().int().positive().optional(),
+});
 
 export class ClientController {
   // GET /api/clients
@@ -27,18 +27,13 @@ export class ClientController {
       const { 
         page = 1, 
         limit = 10, 
-        search, 
-        tipo, 
-        activo = 'true' 
+        search,
       } = req.query;
 
       const offset = (Number(page) - 1) * Number(limit);
-      const isActive = activo === 'true';
 
       // Construir filtros
-      const where: any = {
-        activo: isActive,
-      };
+      const where: any = {};
 
       if (search) {
         where.OR = [
@@ -48,25 +43,30 @@ export class ClientController {
         ];
       }
 
-      if (tipo) {
-        where.tipo = tipo;
-      }
-
-      // Obtener clientes con conteos
+      // Obtener clientes con estadísticas calculadas dinámicamente
       const [clientes, total] = await Promise.all([
         prisma.cliente.findMany({
           where,
           include: {
-            pedidos: {
+            administrador: {
               select: {
                 id: true,
-                montoTotal: true,
-                montoPendiente: true,
-                estado: true,
+                nombre: true,
+                email: true,
+              },
+            },
+            pedidos: {
+              include: {
+                detalles: {
+                  include: {
+                    producto: true,
+                  },
+                },
+                detallesPago: true,
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { id: 'desc' },
           skip: offset,
           take: Number(limit),
         }),
@@ -75,16 +75,40 @@ export class ClientController {
 
       // Calcular estadísticas por cliente
       const clientesWithStats = clientes.map(cliente => {
-        const totalOrders = cliente.pedidos.length;
-        const totalAmount = cliente.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoTotal), 0);
-        const pendingAmount = cliente.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoPendiente), 0);
+        const totalPedidos = cliente.pedidos.filter(p => !p.fecha_delete).length;
+        
+        // Calcular montoTotal (suma de todos los detalles)
+        const montoTotal = cliente.pedidos
+          .filter(p => !p.fecha_delete)
+          .reduce((sum, pedido) => {
+            const montoPedido = pedido.detalles.reduce(
+              (detSum, det) => detSum + (det.cantidad * Number(det.precio_unitario)),
+              0
+            );
+            return sum + montoPedido;
+          }, 0);
+
+        // Calcular montoPagado (suma de todos los detalles de pago)
+        const montoPagado = cliente.pedidos
+          .filter(p => !p.fecha_delete)
+          .reduce((sum, pedido) => {
+            const pagadoPedido = pedido.detallesPago.reduce(
+              (pagSum, det) => pagSum + Number(det.valor),
+              0
+            );
+            return sum + pagadoPedido;
+          }, 0);
+
+        // Calcular montoPendiente
+        const montoPendiente = montoTotal - montoPagado;
 
         const { pedidos, ...clienteData } = cliente;
         return {
           ...clienteData,
-          totalOrders,
-          totalAmount,
-          pendingAmount,
+          totalPedidos,
+          montoTotal,
+          montoPagado,
+          montoPendiente,
         };
       });
 
@@ -113,13 +137,29 @@ export class ClientController {
       const { id } = req.params;
 
       const cliente = await prisma.cliente.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
-          pedidos: {
-            orderBy: { createdAt: 'desc' },
-            include: {
-              pagos: true,
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
             },
+          },
+          pedidos: {
+            where: {
+              fecha_delete: null,
+            },
+            include: {
+              detalles: {
+                include: {
+                  producto: true,
+                  estado: true,
+                },
+              },
+              detallesPago: true,
+            },
+            orderBy: { fecha_pedido: 'desc' },
           },
         },
       });
@@ -132,17 +172,34 @@ export class ClientController {
       }
 
       // Calcular estadísticas
-      const totalOrders = cliente.pedidos.length;
-      const totalAmount = cliente.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoTotal), 0);
-      const pendingAmount = cliente.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoPendiente), 0);
+      const totalPedidos = cliente.pedidos.length;
+      
+      const montoTotal = cliente.pedidos.reduce((sum, pedido) => {
+        const montoPedido = pedido.detalles.reduce(
+          (detSum, det) => detSum + (det.cantidad * Number(det.precio_unitario)),
+          0
+        );
+        return sum + montoPedido;
+      }, 0);
+
+      const montoPagado = cliente.pedidos.reduce((sum, pedido) => {
+        const pagadoPedido = pedido.detallesPago.reduce(
+          (pagSum, det) => pagSum + Number(det.valor),
+          0
+        );
+        return sum + pagadoPedido;
+      }, 0);
+
+      const montoPendiente = montoTotal - montoPagado;
 
       res.json({
         success: true,
         data: {
           ...cliente,
-          totalOrders,
-          totalAmount,
-          pendingAmount,
+          totalPedidos,
+          montoTotal,
+          montoPagado,
+          montoPendiente,
         },
       });
     } catch (error) {
@@ -158,7 +215,6 @@ export class ClientController {
   static async createClient(req: Request, res: Response) {
     try {
       const clientData = createClientSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
       // Verificar si el email ya existe
       const existingClient = await prisma.cliente.findUnique({
@@ -177,17 +233,15 @@ export class ClientController {
         data: clientData,
       });
 
-      // Registrar auditoría
-      await AuditService.logCreate(req, 'cliente', newClient.id, clientData);
-
       res.status(201).json({
         success: true,
         message: 'Cliente creado exitosamente',
         data: {
           ...newClient,
-          totalOrders: 0,
-          totalAmount: 0,
-          pendingAmount: 0,
+          totalPedidos: 0,
+          montoTotal: 0,
+          montoPagado: 0,
+          montoPendiente: 0,
         },
       });
     } catch (error) {
@@ -213,11 +267,10 @@ export class ClientController {
     try {
       const { id } = req.params;
       const updateData = updateClientSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
       // Verificar que el cliente existe
       const existingClient = await prisma.cliente.findUnique({
-        where: { id },
+        where: { id: Number(id) },
       });
 
       if (!existingClient) {
@@ -243,36 +296,48 @@ export class ClientController {
 
       // Actualizar cliente
       const updatedClient = await prisma.cliente.update({
-        where: { id },
+        where: { id: Number(id) },
         data: updateData,
         include: {
           pedidos: {
-            select: {
-              id: true,
-              montoTotal: true,
-              montoPendiente: true,
+            where: { fecha_delete: null },
+            include: {
+              detalles: true,
+              detallesPago: true,
             },
           },
         },
       });
 
       // Calcular estadísticas
-      const totalOrders = updatedClient.pedidos.length;
-      const totalAmount = updatedClient.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoTotal), 0);
-      const pendingAmount = updatedClient.pedidos.reduce((sum, pedido) => sum + Number(pedido.montoPendiente), 0);
+      const totalPedidos = updatedClient.pedidos.length;
+      const montoTotal = updatedClient.pedidos.reduce((sum, pedido) => {
+        const montoPedido = pedido.detalles.reduce(
+          (detSum, det) => detSum + (det.cantidad * Number(det.precio_unitario)),
+          0
+        );
+        return sum + montoPedido;
+      }, 0);
+      const montoPagado = updatedClient.pedidos.reduce((sum, pedido) => {
+        const pagadoPedido = pedido.detallesPago.reduce(
+          (pagSum, det) => pagSum + Number(det.valor),
+          0
+        );
+        return sum + pagadoPedido;
+      }, 0);
+      const montoPendiente = montoTotal - montoPagado;
 
       // Registrar auditoría
-      await AuditService.logUpdate(req, 'cliente', id, existingClient, updateData);
-
       const { pedidos, ...clienteData } = updatedClient;
       res.json({
         success: true,
         message: 'Cliente actualizado exitosamente',
         data: {
           ...clienteData,
-          totalOrders,
-          totalAmount,
-          pendingAmount,
+          totalPedidos,
+          montoTotal,
+          montoPagado,
+          montoPendiente,
         },
       });
     } catch (error) {
@@ -297,17 +362,14 @@ export class ClientController {
   static async deleteClient(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
 
       // Verificar que el cliente existe
       const existingClient = await prisma.cliente.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
           pedidos: {
             where: {
-              estado: {
-                not: 'PAGADO',
-              },
+              fecha_delete: null, // Solo pedidos activos
             },
           },
         },
@@ -320,23 +382,20 @@ export class ClientController {
         });
       }
 
-      // Verificar que no tenga pedidos pendientes
+      // Verificar que no tenga pedidos activos
       if (existingClient.pedidos.length > 0) {
         return res.status(400).json({
           success: false,
-          error: 'No se puede eliminar un cliente con pedidos pendientes',
+          error: 'No se puede eliminar un cliente con pedidos activos. Elimine o complete los pedidos primero.',
         });
       }
 
-      // Marcar como inactivo en lugar de eliminar
-      await prisma.cliente.update({
-        where: { id },
-        data: { activo: false },
+      // Eliminar permanentemente (en modelo oficial no hay campo activo)
+      await prisma.cliente.delete({
+        where: { id: Number(id) },
       });
 
       // Registrar auditoría
-      await AuditService.logDelete(req, 'cliente', id, existingClient, 'Cliente marcado como inactivo');
-
       res.json({
         success: true,
         message: 'Cliente eliminado exitosamente',
@@ -353,26 +412,27 @@ export class ClientController {
   // GET /api/clients/stats
   static async getClientsStats(req: Request, res: Response) {
     try {
-      const [
-        totalClients,
-        totalClinics,
-        totalDentists,
-        totalActiveClients
-      ] = await Promise.all([
-        prisma.cliente.count(),
-        prisma.cliente.count({ where: { tipo: 'CLINICA', activo: true } }),
-        prisma.cliente.count({ where: { tipo: 'ODONTOLOGO', activo: true } }),
-        prisma.cliente.count({ where: { activo: true } }),
-      ]);
+      const totalClientes = await prisma.cliente.count();
+
+      // Estadísticas por administrador (top 5)
+      const clientesPorAdmin = await prisma.cliente.groupBy({
+        by: ['id_administrador'],
+        _count: {
+          id: true,
+        },
+        orderBy: {
+          _count: {
+            id: 'desc',
+          },
+        },
+        take: 5,
+      });
 
       res.json({
         success: true,
         data: {
-          totalClients,
-          totalClinics,
-          totalDentists,
-          totalActiveClients,
-          totalInactiveClients: totalClients - totalActiveClients,
+          totalClientes,
+          clientesPorAdmin,
         },
       });
     } catch (error) {
@@ -390,22 +450,27 @@ export class ClientController {
       const { id } = req.params;
 
       const cliente = await prisma.cliente.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
           pedidos: {
+            where: {
+              fecha_delete: null,
+            },
             include: {
-              pagos: {
-                select: {
-                  id: true,
-                  numeroPago: true,
-                  monto: true,
-                  metodoPago: true,
-                  fechaPago: true,
+              detalles: {
+                include: {
+                  producto: true,
+                  estado: true,
+                },
+              },
+              detallesPago: {
+                include: {
+                  pago: true,
                 },
               },
             },
             orderBy: {
-              fechaPedido: 'desc',
+              fecha_pedido: 'desc',
             },
           },
         },
@@ -418,38 +483,41 @@ export class ClientController {
         });
       }
 
-      // Calcular estadísticas globales
-      const pedidosActivos = cliente.pedidos.filter(p => p.estado !== 'CANCELADO');
-      const pedidosPendientes = pedidosActivos.filter(p => p.estado === 'PENDIENTE');
-      const pedidosEnProceso = pedidosActivos.filter(p => p.estado === 'EN_PROCESO');
-      const pedidosEntregados = pedidosActivos.filter(p => p.estado === 'ENTREGADO');
-      const pedidosPagados = pedidosActivos.filter(p => p.estado === 'PAGADO');
+      // Calcular estadísticas por pedido
+      const pedidosConBalance = cliente.pedidos.map(pedido => {
+        const montoTotal = pedido.detalles.reduce(
+          (sum, det) => sum + (det.cantidad * Number(det.precio_unitario)),
+          0
+        );
+        const montoPagado = pedido.detallesPago.reduce(
+          (sum, det) => sum + Number(det.valor),
+          0
+        );
+        const montoPendiente = montoTotal - montoPagado;
 
-      const montoTotal = pedidosActivos.reduce((sum, p) => sum + Number(p.montoTotal), 0);
-      const montoPagado = pedidosActivos.reduce((sum, p) => sum + Number(p.montoPagado), 0);
-      const montoPendiente = pedidosActivos.reduce((sum, p) => sum + Number(p.montoPendiente), 0);
+        return {
+          id: pedido.id,
+          fecha_pedido: pedido.fecha_pedido,
+          fecha_entrega: pedido.fecha_entrega,
+          cantidadProductos: pedido.detalles.length,
+          montoTotal,
+          montoPagado,
+          montoPendiente,
+          cantidadPagos: pedido.detallesPago.length,
+          ultimoPago: pedido.detallesPago.length > 0 
+            ? {
+                fecha: pedido.detallesPago[0].fecha_pago,
+                monto: Number(pedido.detallesPago[0].valor),
+              }
+            : null,
+        };
+      });
 
-      // Desglose por pedido
-      const pedidosConBalance = pedidosActivos.map(pedido => ({
-        id: pedido.id,
-        numeroPedido: pedido.numeroPedido,
-        nombrePaciente: pedido.nombrePaciente,
-        tipoPedido: pedido.tipoPedido,
-        fechaPedido: pedido.fechaPedido,
-        fechaVencimiento: pedido.fechaVencimiento,
-        estado: pedido.estado,
-        montoTotal: Number(pedido.montoTotal),
-        montoPagado: Number(pedido.montoPagado),
-        montoPendiente: Number(pedido.montoPendiente),
-        cantidadPagos: pedido.pagos.length,
-        ultimoPago: pedido.pagos.length > 0 
-          ? {
-              fecha: pedido.pagos[0].fechaPago,
-              monto: Number(pedido.pagos[0].monto),
-              metodo: pedido.pagos[0].metodoPago,
-            }
-          : null,
-      }));
+      // Resumen global
+      const totalPedidos = pedidosConBalance.length;
+      const montoTotal = pedidosConBalance.reduce((sum, p) => sum + p.montoTotal, 0);
+      const montoPagado = pedidosConBalance.reduce((sum, p) => sum + p.montoPagado, 0);
+      const montoPendiente = pedidosConBalance.reduce((sum, p) => sum + p.montoPendiente, 0);
 
       const balance = {
         cliente: {
@@ -457,16 +525,9 @@ export class ClientController {
           nombre: cliente.nombre,
           email: cliente.email,
           telefono: cliente.telefono,
-          whatsapp: cliente.whatsapp,
-          tipo: cliente.tipo,
-          direccion: cliente.direccion,
         },
         resumen: {
-          totalPedidos: pedidosActivos.length,
-          pedidosPendientes: pedidosPendientes.length,
-          pedidosEnProceso: pedidosEnProceso.length,
-          pedidosEntregados: pedidosEntregados.length,
-          pedidosPagados: pedidosPagados.length,
+          totalPedidos,
           montoTotal,
           montoPagado,
           montoPendiente,

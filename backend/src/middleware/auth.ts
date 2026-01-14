@@ -1,15 +1,16 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 
+// Modelo Oficial APL - Tipos actualizados
 interface AuthRequest extends Request {
   user?: {
-    id: string;
+    id: number;
     email: string;
-    role: string;
+    super_usuario: boolean;
   };
 }
 
-export const authenticate = async (
+export const authMiddleware = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -20,7 +21,7 @@ export const authenticate = async (
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: 'Access denied. No token provided.'
+        error: 'Acceso denegado. No se proporcionó token.'
       });
     }
 
@@ -30,27 +31,30 @@ export const authenticate = async (
   } catch (error) {
     res.status(401).json({
       success: false,
-      error: 'Invalid token.'
+      error: 'Token inválido o expirado.'
     });
   }
 };
 
-export const authorize = (...roles: string[]) => {
+export const requireSuperUser = () => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        error: 'Access denied. User not authenticated.'
+        error: 'Acceso denegado. Usuario no autenticado.'
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!req.user.super_usuario) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied. Insufficient permissions.'
+        error: 'Acceso denegado. Se requieren permisos de super usuario.'
       });
     }
 
     next();
   };
 };
+
+// Exportación con nombres antiguos para compatibilidad temporal
+export const authenticate = authMiddleware;

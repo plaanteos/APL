@@ -3,78 +3,47 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
- * Servicio de búsqueda avanzada con filtros combinados
- * Permite realizar búsquedas complejas en múltiples entidades
+ * Servicio de Búsqueda - Modelo Oficial APL
+ * Búsqueda global simplificada en clientes y pedidos
  */
 
-export interface AdvancedSearchFilters {
-  // Búsqueda global
-  query?: string;
-  
-  // Filtros de fecha
-  fechaDesde?: Date;
-  fechaHasta?: Date;
-  
-  // Filtros específicos para clientes
-  tipoCliente?: 'CLINICA' | 'ODONTOLOGO';
-  clienteActivo?: boolean;
-  ciudad?: string;
-  
-  // Filtros específicos para pedidos
-  estadoPedido?: 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO' | 'PAGADO' | 'CANCELADO';
-  prioridad?: 'BAJA' | 'NORMAL' | 'ALTA' | 'URGENTE';
-  clienteId?: string;
-  montoPendienteMin?: number;
-  montoPendienteMax?: number;
-  montoTotalMin?: number;
-  montoTotalMax?: number;
-  
-  // Filtros específicos para pagos
-  metodoPago?: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA_CREDITO' | 'TARJETA_DEBITO' | 'CHEQUE';
-  pedidoId?: string;
-  
-  // Opciones de ordenamiento
-  orderBy?: string;
-  orderDirection?: 'asc' | 'desc';
-  
-  // Paginación
-  page?: number;
-  limit?: number;
-}
-
-export interface SearchResult<T> {
-  data: T[];
+interface SearchResult<T> {
+  items: T[];
   total: number;
   page: number;
-  totalPages: number;
-  hasMore: boolean;
+  limit: number;
 }
 
-export class AdvancedSearchService {
-  /**
-   * Búsqueda global en todas las entidades
-   */
-  static async globalSearch(filters: AdvancedSearchFilters): Promise<{
-    clientes: SearchResult<any>;
-    pedidos: SearchResult<any>;
-    pagos: SearchResult<any>;
-  }> {
-    const [clientes, pedidos, pagos] = await Promise.all([
-      this.searchClientes(filters),
-      this.searchPedidos(filters),
-      this.searchPagos(filters),
-    ]);
+interface ClientSearchFilters {
+  query?: string;
+  adminId?: number;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
 
-    return { clientes, pedidos, pagos };
-  }
+interface OrderSearchFilters {
+  query?: string;
+  clienteId?: number;
+  estadoId?: number;
+  adminId?: number;
+  fechaDesde?: Date;
+  fechaHasta?: Date;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
 
+export class SearchService {
   /**
-   * Búsqueda avanzada de clientes
+   * Búsqueda de clientes con filtros
    */
-  static async searchClientes(filters: AdvancedSearchFilters): Promise<SearchResult<any>> {
+  static async searchClients(filters: ClientSearchFilters): Promise<SearchResult<any>> {
     const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
+    const limit = filters.limit || 10;
+    const skip = (page - 1) * limit;
 
     const where: Prisma.ClienteWhereInput = {};
 
@@ -84,416 +53,251 @@ export class AdvancedSearchService {
         { nombre: { contains: filters.query } },
         { email: { contains: filters.query } },
         { telefono: { contains: filters.query } },
-        { whatsapp: { contains: filters.query } },
-        { direccion: { contains: filters.query } },
-        { ciudad: { contains: filters.query } },
       ];
     }
 
-    // Filtros específicos
-    if (filters.tipoCliente) {
-      where.tipo = filters.tipoCliente;
-    }
-
-    if (filters.clienteActivo !== undefined) {
-      where.activo = filters.clienteActivo;
-    }
-
-    if (filters.ciudad) {
-      where.ciudad = { contains: filters.ciudad };
-    }
-
-    if (filters.fechaDesde || filters.fechaHasta) {
-      where.fechaRegistro = {};
-      if (filters.fechaDesde) where.fechaRegistro.gte = filters.fechaDesde;
-      if (filters.fechaHasta) where.fechaRegistro.lte = filters.fechaHasta;
+    // Filtrar por administrador
+    if (filters.adminId) {
+      where.id_administrador = filters.adminId;
     }
 
     // Ordenamiento
-    let orderBy: Prisma.ClienteOrderByWithRelationInput = { createdAt: 'desc' };
-    if (filters.orderBy) {
-      orderBy = { [filters.orderBy]: filters.orderDirection || 'asc' };
+    let orderBy: Prisma.ClienteOrderByWithRelationInput = { id: 'desc' };
+    if (filters.sortBy === 'nombre') {
+      orderBy = { nombre: filters.sortOrder || 'asc' };
+    } else if (filters.sortBy === 'email') {
+      orderBy = { email: filters.sortOrder || 'asc' };
     }
 
-    const [data, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       prisma.cliente.findMany({
         where,
+        skip,
+        take: limit,
+        orderBy,
         include: {
-          _count: {
-            select: { pedidos: true },
+          administrador: {
+            select: {
+              id: true,
+              usuario: true,
+              email: true,
+            },
           },
           pedidos: {
             select: {
               id: true,
-              montoTotal: true,
-              montoPendiente: true,
             },
           },
         },
-        orderBy,
-        skip: offset,
-        take: limit,
       }),
       prisma.cliente.count({ where }),
     ]);
 
-    // Calcular métricas agregadas
-    const formattedData = data.map(cliente => ({
-      ...cliente,
-      totalPedidos: cliente._count.pedidos,
-      montoTotal: cliente.pedidos.reduce((sum, p) => sum + Number(p.montoTotal), 0),
-      montoPendiente: cliente.pedidos.reduce((sum, p) => sum + Number(p.montoPendiente), 0),
+    // Transformar resultados con conteo de pedidos
+    const results = items.map((cliente) => ({
+      id: cliente.id,
+      nombre: cliente.nombre,
+      email: cliente.email,
+      telefono: cliente.telefono,
+      id_administrador: cliente.id_administrador,
+      administrador: cliente.administrador,
+      totalPedidos: cliente.pedidos.length,
     }));
 
     return {
-      data: formattedData,
+      items: results,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
-      hasMore: offset + limit < total,
+      limit,
     };
   }
 
   /**
-   * Búsqueda avanzada de pedidos
+   * Búsqueda de pedidos con filtros
    */
-  static async searchPedidos(filters: AdvancedSearchFilters): Promise<SearchResult<any>> {
+  static async searchOrders(filters: OrderSearchFilters): Promise<SearchResult<any>> {
     const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
+    const limit = filters.limit || 10;
+    const skip = (page - 1) * limit;
 
     const where: Prisma.PedidoWhereInput = {};
 
-    // Búsqueda por texto
+    // Excluir pedidos eliminados
+    where.fecha_delete = null;
+
+    // Búsqueda por cliente (nombre)
     if (filters.query) {
-      where.OR = [
-        { numeroPedido: { contains: filters.query } },
-        { nombrePaciente: { contains: filters.query } },
-        { descripcion: { contains: filters.query } },
-        { tipoPedido: { contains: filters.query } },
-        { observaciones: { contains: filters.query } },
-        { cliente: { nombre: { contains: filters.query } } },
-      ];
+      where.cliente = {
+        nombre: { contains: filters.query },
+      };
     }
 
-    // Filtros específicos
-    if (filters.estadoPedido) {
-      where.estado = filters.estadoPedido;
-    }
-
-    if (filters.prioridad) {
-      where.prioridad = filters.prioridad;
-    }
-
+    // Filtrar por cliente ID
     if (filters.clienteId) {
-      where.clienteId = filters.clienteId;
+      where.id_cliente = filters.clienteId;
     }
 
-    // Filtros de monto
-    if (filters.montoPendienteMin !== undefined || filters.montoPendienteMax !== undefined) {
-      where.montoPendiente = {};
-      if (filters.montoPendienteMin !== undefined) {
-        where.montoPendiente.gte = filters.montoPendienteMin;
-      }
-      if (filters.montoPendienteMax !== undefined) {
-        where.montoPendiente.lte = filters.montoPendienteMax;
-      }
+    // Filtrar por estado (via detalles)
+    if (filters.estadoId) {
+      where.detalles = {
+        some: {
+          id_estado: filters.estadoId,
+        },
+      };
     }
 
-    if (filters.montoTotalMin !== undefined || filters.montoTotalMax !== undefined) {
-      where.montoTotal = {};
-      if (filters.montoTotalMin !== undefined) {
-        where.montoTotal.gte = filters.montoTotalMin;
-      }
-      if (filters.montoTotalMax !== undefined) {
-        where.montoTotal.lte = filters.montoTotalMax;
-      }
+    // Filtrar por administrador
+    if (filters.adminId) {
+      where.id_administrador = filters.adminId;
     }
 
-    // Filtros de fecha
+    // Filtrar por fechas
     if (filters.fechaDesde || filters.fechaHasta) {
-      where.fechaPedido = {};
-      if (filters.fechaDesde) where.fechaPedido.gte = filters.fechaDesde;
-      if (filters.fechaHasta) where.fechaPedido.lte = filters.fechaHasta;
+      where.fecha_pedido = {};
+      if (filters.fechaDesde) where.fecha_pedido.gte = filters.fechaDesde;
+      if (filters.fechaHasta) where.fecha_pedido.lte = filters.fechaHasta;
     }
 
     // Ordenamiento
-    let orderBy: Prisma.PedidoOrderByWithRelationInput = { fechaPedido: 'desc' };
-    if (filters.orderBy) {
-      orderBy = { [filters.orderBy]: filters.orderDirection || 'asc' };
+    let orderBy: Prisma.PedidoOrderByWithRelationInput = { fecha_pedido: 'desc' };
+    if (filters.sortBy === 'fecha_entrega') {
+      orderBy = { fecha_entrega: filters.sortOrder || 'asc' };
     }
 
-    const [data, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       prisma.pedido.findMany({
         where,
+        skip,
+        take: limit,
+        orderBy,
         include: {
           cliente: {
             select: {
               id: true,
               nombre: true,
-              email: true,
               telefono: true,
-              tipo: true,
             },
           },
-          detallesPedido: true,
-          _count: {
-            select: { pagos: true },
+          administrador: {
+            select: {
+              id: true,
+              usuario: true,
+              email: true,
+            },
           },
+          detalles: {
+            include: {
+              producto: true,
+              estado: true,
+            },
+          },
+          detallesPago: true,
         },
-        orderBy,
-        skip: offset,
-        take: limit,
       }),
       prisma.pedido.count({ where }),
     ]);
 
+    // Calcular montos dinámicamente para cada pedido
+    const results = items.map((pedido) => {
+      const montoTotal = pedido.detalles.reduce(
+        (sum: number, d) => sum + d.cantidad * Number(d.precio_unitario),
+        0
+      );
+      const montoPagado = pedido.detallesPago.reduce(
+        (sum: number, dp) => sum + Number(dp.valor),
+        0
+      );
+      const montoPendiente = montoTotal - montoPagado;
+
+      return {
+        id: pedido.id,
+        id_cliente: pedido.id_cliente,
+        id_administrador: pedido.id_administrador,
+        fecha_pedido: pedido.fecha_pedido,
+        fecha_entrega: pedido.fecha_entrega,
+        cliente: pedido.cliente,
+        administrador: pedido.administrador,
+        detalles: pedido.detalles,
+        montoTotal,
+        montoPagado,
+        montoPendiente,
+        totalDetalles: pedido.detalles.length,
+      };
+    });
+
     return {
-      data,
+      items: results,
       total,
       page,
-      totalPages: Math.ceil(total / limit),
-      hasMore: offset + limit < total,
+      limit,
     };
   }
 
   /**
-   * Búsqueda avanzada de pagos
+   * Búsqueda global en todas las entidades
    */
-  static async searchPagos(filters: AdvancedSearchFilters): Promise<SearchResult<any>> {
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
-    const offset = (page - 1) * limit;
+  static async globalSearch(query: string, limit: number = 5): Promise<{
+    clientes: any[];
+    pedidos: any[];
+  }> {
+    const [clientes, pedidos] = await Promise.all([
+      // Buscar clientes
+      prisma.cliente.findMany({
+        where: {
+          OR: [
+            { nombre: { contains: query } },
+            { email: { contains: query } },
+            { telefono: { contains: query } },
+          ],
+        },
+        take: limit,
+        select: {
+          id: true,
+          nombre: true,
+          email: true,
+          telefono: true,
+        },
+      }),
 
-    const where: Prisma.PagoWhereInput = {};
-
-    // Búsqueda por texto
-    if (filters.query) {
-      where.OR = [
-        { numeroPago: { contains: filters.query } },
-        { numeroRecibo: { contains: filters.query } },
-        { numeroTransf: { contains: filters.query } },
-        { observaciones: { contains: filters.query } },
-        { pedido: { numeroPedido: { contains: filters.query } } },
-        { pedido: { cliente: { nombre: { contains: filters.query } } } },
-      ];
-    }
-
-    // Filtros específicos
-    if (filters.metodoPago) {
-      where.metodoPago = filters.metodoPago;
-    }
-
-    if (filters.pedidoId) {
-      where.pedidoId = filters.pedidoId;
-    }
-
-    if (filters.clienteId) {
-      where.pedido = { clienteId: filters.clienteId };
-    }
-
-    // Filtros de fecha
-    if (filters.fechaDesde || filters.fechaHasta) {
-      where.fechaPago = {};
-      if (filters.fechaDesde) where.fechaPago.gte = filters.fechaDesde;
-      if (filters.fechaHasta) where.fechaPago.lte = filters.fechaHasta;
-    }
-
-    // Ordenamiento
-    let orderBy: Prisma.PagoOrderByWithRelationInput = { fechaPago: 'desc' };
-    if (filters.orderBy) {
-      orderBy = { [filters.orderBy]: filters.orderDirection || 'asc' };
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.pago.findMany({
-        where,
-        include: {
-          pedido: {
-            include: {
+      // Buscar pedidos (por nombre de cliente)
+      prisma.pedido.findMany({
+        where: {
+          AND: [
+            { fecha_delete: null },
+            {
               cliente: {
-                select: {
-                  id: true,
-                  nombre: true,
-                  email: true,
-                  tipo: true,
-                },
+                nombre: { contains: query },
               },
+            },
+          ],
+        },
+        take: limit,
+        include: {
+          cliente: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+          detalles: {
+            take: 3,
+            include: {
+              producto: true,
             },
           },
         },
-        orderBy,
-        skip: offset,
-        take: limit,
       }),
-      prisma.pago.count({ where }),
     ]);
 
     return {
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-      hasMore: offset + limit < total,
+      clientes,
+      pedidos: pedidos.map((p) => ({
+        id: p.id,
+        fecha_pedido: p.fecha_pedido,
+        fecha_entrega: p.fecha_entrega,
+        cliente: p.cliente,
+        totalDetalles: p.detalles.length,
+      })),
     };
-  }
-
-  /**
-   * Búsqueda con estadísticas agregadas
-   */
-  static async searchWithStats(filters: AdvancedSearchFilters): Promise<{
-    pedidos: SearchResult<any>;
-    stats: {
-      totalPedidos: number;
-      montoTotalGeneral: number;
-      montoPendienteTotal: number;
-      promedioMonto: number;
-      pedidosPorEstado: Record<string, number>;
-      pedidosPorPrioridad: Record<string, number>;
-    };
-  }> {
-    const pedidos = await this.searchPedidos(filters);
-
-    // Construir where para estadísticas (mismo que búsqueda pero sin paginación)
-    const where: Prisma.PedidoWhereInput = {};
-    
-    if (filters.query) {
-      where.OR = [
-        { numeroPedido: { contains: filters.query } },
-        { nombrePaciente: { contains: filters.query } },
-        { descripcion: { contains: filters.query } },
-      ];
-    }
-
-    if (filters.estadoPedido) where.estado = filters.estadoPedido;
-    if (filters.prioridad) where.prioridad = filters.prioridad;
-    if (filters.clienteId) where.clienteId = filters.clienteId;
-
-    const [aggregations, byEstado, byPrioridad] = await Promise.all([
-      prisma.pedido.aggregate({
-        where,
-        _sum: { montoTotal: true, montoPendiente: true },
-        _avg: { montoTotal: true },
-        _count: true,
-      }),
-      prisma.pedido.groupBy({
-        by: ['estado'],
-        where,
-        _count: true,
-      }),
-      prisma.pedido.groupBy({
-        by: ['prioridad'],
-        where,
-        _count: true,
-      }),
-    ]);
-
-    const stats = {
-      totalPedidos: aggregations._count,
-      montoTotalGeneral: Number(aggregations._sum.montoTotal || 0),
-      montoPendienteTotal: Number(aggregations._sum.montoPendiente || 0),
-      promedioMonto: Number(aggregations._avg.montoTotal || 0),
-      pedidosPorEstado: byEstado.reduce((acc, item) => {
-        acc[item.estado] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      pedidosPorPrioridad: byPrioridad.reduce((acc, item) => {
-        acc[item.prioridad] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-    };
-
-    return { pedidos, stats };
-  }
-
-  /**
-   * Búsqueda de pedidos por vencer
-   */
-  static async searchPedidosProximosVencer(dias: number = 7): Promise<any[]> {
-    const hoy = new Date();
-    const fechaLimite = new Date();
-    fechaLimite.setDate(fechaLimite.getDate() + dias);
-
-    const pedidos = await prisma.pedido.findMany({
-      where: {
-        fechaVencimiento: {
-          gte: hoy,
-          lte: fechaLimite,
-        },
-        estado: {
-          notIn: ['ENTREGADO', 'PAGADO', 'CANCELADO'],
-        },
-      },
-      include: {
-        cliente: {
-          select: {
-            id: true,
-            nombre: true,
-            email: true,
-            telefono: true,
-            whatsapp: true,
-          },
-        },
-        detallesPedido: true,
-      },
-      orderBy: { fechaVencimiento: 'asc' },
-    });
-
-    return pedidos.map(pedido => {
-      const diasRestantes = Math.ceil(
-        (pedido.fechaVencimiento.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      return {
-        ...pedido,
-        diasRestantes,
-        esUrgente: diasRestantes <= 2,
-      };
-    });
-  }
-
-  /**
-   * Búsqueda de clientes con deuda
-   */
-  static async searchClientesConDeuda(): Promise<any[]> {
-    const clientes = await prisma.cliente.findMany({
-      where: {
-        activo: true,
-        pedidos: {
-          some: {
-            montoPendiente: { gt: 0 },
-          },
-        },
-      },
-      include: {
-        pedidos: {
-          where: {
-            montoPendiente: { gt: 0 },
-          },
-          select: {
-            id: true,
-            numeroPedido: true,
-            montoTotal: true,
-            montoPendiente: true,
-            fechaPedido: true,
-            estado: true,
-          },
-        },
-      },
-    });
-
-    return clientes.map(cliente => {
-      const totalDeuda = cliente.pedidos.reduce(
-        (sum, p) => sum + Number(p.montoPendiente),
-        0
-      );
-      const pedidosConDeuda = cliente.pedidos.length;
-
-      return {
-        ...cliente,
-        totalDeuda,
-        pedidosConDeuda,
-      };
-    });
   }
 }

@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -65,9 +65,9 @@ model Cliente {
 model Pedido {
   id                Int           @id @default(autoincrement())
   id_cliente        Int
-  fecha_pedido      DateTime      @default(now())
-  fecha_entrega     DateTime
-  fecha_delete      DateTime?
+  fecha_pedido      DateTime      @default(now()) @db.Date
+  fecha_entrega     DateTime      @db.Date
+  fecha_delete      DateTime?     @db.Date
   id_administrador  Int
   
   // Relaciones
@@ -122,7 +122,7 @@ model Estado {
   id            Int           @id @default(autoincrement())
   descripcion   String        @db.VarChar(50) @unique
   fecha_insert  DateTime      @default(now())
-  fecha_delete  DateTime?
+  fecha_delete  DateTime?     @db.Date
   
   // Relaciones
   detalles      DetallePedido[]
@@ -153,7 +153,7 @@ model DetallePago {
   id_pago    Int
   id_pedido  Int
   valor      Decimal  @db.Decimal(10,2)
-  fecha_pago DateTime
+  fecha_pago DateTime @db.Date
   
   // Relaciones
   pago       Pago     @relation(fields: [id_pago], references: [id], onDelete: Cascade)

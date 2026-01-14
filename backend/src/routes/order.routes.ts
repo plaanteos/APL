@@ -1,37 +1,37 @@
 import express from 'express';
-import { authenticate } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
 import { OrderController } from '../controllers/order.controller';
 
 const router = express.Router();
 
 // Apply authentication to all routes
-router.use(authenticate);
+router.use(authMiddleware);
 
-// GET /api/orders/stats
+// GET /api/orders/stats - Estadísticas
 router.get('/stats', OrderController.getOrdersStats);
 
-// GET /api/orders
+// GET /api/orders - Listar pedidos
 router.get('/', OrderController.getOrders);
 
-// POST /api/orders
+// POST /api/orders - Crear pedido
 router.post('/', OrderController.createOrder);
 
-// GET /api/orders/:id
+// GET /api/orders/:id - Obtener pedido por ID
 router.get('/:id', OrderController.getOrderById);
 
-// GET /api/orders/:id/balance - Balance del pedido
-router.get('/:id/balance', OrderController.getOrderBalance);
-
-// PUT /api/orders/:id
+// PUT /api/orders/:id - Actualizar pedido
 router.put('/:id', OrderController.updateOrder);
 
-// PATCH /api/orders/:id/status
-router.patch('/:id/status', OrderController.updateOrderStatus);
-
-// PATCH /api/orders/:id/deliver - Marcar pedido como entregado
-router.patch('/:id/deliver', OrderController.markAsDelivered);
-
-// DELETE /api/orders/:id
+// DELETE /api/orders/:id - Eliminar pedido (soft delete)
 router.delete('/:id', OrderController.deleteOrder);
+
+// POST /api/orders/:id/detalles - Agregar detalle a pedido
+router.post('/:id/detalles', OrderController.addDetalle);
+
+// PUT /api/orders/:id/detalles/:detalleId - Actualizar detalle
+router.put('/:id/detalles/:detalleId', OrderController.updateDetalle);
+
+// DELETE /api/orders/:id/detalles/:detalleId - Eliminar detalle
+router.delete('/:id/detalles/:detalleId', OrderController.deleteDetalle);
 
 export default router;

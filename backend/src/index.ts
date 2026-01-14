@@ -12,16 +12,15 @@ import clientRoutes from './routes/client.routes';
 import orderRoutes from './routes/order.routes';
 import paymentRoutes from './routes/payment.routes';
 import auditRoutes from './routes/audit.routes';
-import reminderRoutes from './routes/reminder.routes';
-import searchRoutes from './routes/search.routes';
+import productoRoutes from './routes/producto.routes';
+import estadoRoutes from './routes/estado.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { requestLogger } from './middleware/logger';
 
-// Import services
-import { ReminderService } from './services/reminder.service';
+// Import utils
 import logger from './utils/logger';
 import { validateEnv } from './utils/validateEnv';
 
@@ -165,8 +164,8 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
-app.use('/api/reminders', reminderRoutes);
-app.use('/api/search', searchRoutes);
+app.use('/api/productos', productoRoutes);
+app.use('/api/estados', estadoRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -183,20 +182,9 @@ async function connectDatabase() {
   }
 }
 
-// Initialize reminder system
-async function initializeReminderSystem() {
-  try {
-    await ReminderService.initialize();
-    logger.info('✅ Sistema de recordatorios inicializado');
-  } catch (error) {
-    logger.error('❌ Error inicializando sistema de recordatorios:', error);
-  }
-}
-
 // Start server
 async function startServer() {
   await connectDatabase();
-  await initializeReminderSystem();
   
   app.listen(PORT, () => {
     logger.info(`🚀 APL Backend API server running on port ${PORT}`);
@@ -208,14 +196,12 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
-  ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
-  ReminderService.stopAllJobs();
   await prisma.$disconnect();
   process.exit(0);
 });

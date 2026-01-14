@@ -5,56 +5,45 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
-// Schemas de validación
+// ============================================
+// SCHEMAS DE VALIDACIÓN - MODELO OFICIAL APL
+// ============================================
+
+// Detalle de pago: relación N:M entre pago y pedido
+const detallePagoSchema = z.object({
+  id_pedido: z.number().int().positive('ID de pedido inválido'),
+  valor: z.number().positive('El valor debe ser mayor a 0'),
+});
+
 const createPaymentSchema = z.object({
-  pedidoId: z.string().cuid('ID de pedido inválido'),
-  monto: z.number().positive('El monto debe ser mayor a 0'),
-  metodoPago: z.enum(['EFECTIVO', 'TRANSFERENCIA', 'TARJETA_CREDITO', 'TARJETA_DEBITO', 'CHEQUE']),
-  fechaPago: z.string().transform((str) => new Date(str)).optional(),
-  numeroRecibo: z.string().optional(),
-  numeroTransf: z.string().optional(),
-  observaciones: z.string().optional(),
+  valor: z.number().positive('El valor total debe ser mayor a 0'),
+  id_administrador: z.number().int().positive('ID de administrador inválido'),
+  fecha_pago: z.string().transform((str) => new Date(str)),
+  detalles: z.array(detallePagoSchema).min(1, 'Debe incluir al menos un pedido para aplicar el pago'),
 });
 
-const updatePaymentSchema = createPaymentSchema.partial().extend({
-  procesadoPor: z.string().optional(),
+const updatePaymentSchema = z.object({
+  valor: z.number().positive().optional(),
+  id_administrador: z.number().int().positive().optional(),
+  fecha_pago: z.string().transform((str) => new Date(str)).optional(),
 });
 
-const balanceFiltersSchema = z.object({
-  fechaDesde: z.string().transform((str) => new Date(str)).optional(),
-  fechaHasta: z.string().transform((str) => new Date(str)).optional(),
-  clienteId: z.string().optional(),
-  metodoPago: z.enum(['EFECTIVO', 'TRANSFERENCIA', 'TARJETA_CREDITO', 'TARJETA_DEBITO', 'CHEQUE']).optional(),
-});
-
-// Función para generar número de pago
-const generatePaymentNumber = async (): Promise<string> => {
-  const year = new Date().getFullYear();
-  const count = await prisma.pago.count({
-    where: {
-      createdAt: {
-        gte: new Date(year, 0, 1),
-        lt: new Date(year + 1, 0, 1),
-      },
-    },
-  });
-  return `PAG-${String(count + 1).padStart(3, '0')}-${year}`;
-};
+// ============================================
+// PAYMENT CONTROLLER
+// ============================================
 
 export class PaymentController {
-  // GET /api/payments
+  // GET /api/payments - Listar pagos
   static async getPayments(req: Request, res: Response) {
     try {
       const {
         page = 1,
         limit = 10,
         search,
-        pedidoId,
-        clienteId,
-        metodoPago,
+        id_administrador,
+        id_pedido,
         fechaDesde,
         fechaHasta,
-        procesadoPor,
       } = req.query;
 
       const offset = (Number(page) - 1) * Number(limit);
@@ -64,64 +53,86 @@ export class PaymentController {
 
       if (search) {
         where.OR = [
-          { numeroPago: { contains: search as string, mode: 'insensitive' } },
-          { numeroRecibo: { contains: search as string, mode: 'insensitive' } },
-          { numeroTransf: { contains: search as string, mode: 'insensitive' } },
-          { observaciones: { contains: search as string, mode: 'insensitive' } },
-          { pedido: { nombrePaciente: { contains: search as string, mode: 'insensitive' } } },
-          { pedido: { cliente: { nombre: { contains: search as string, mode: 'insensitive' } } } },
+          { id: Number(search) || 0 },
+          { administrador: { nombre: { contains: search as string, mode: 'insensitive' } } },
         ];
       }
 
-      if (pedidoId) {
-        where.pedidoId = pedidoId;
+      if (id_administrador) {
+        where.id_administrador = Number(id_administrador);
       }
 
-      if (metodoPago) {
-        where.metodoPago = metodoPago;
-      }
-
-      if (procesadoPor) {
-        where.procesadoPor = procesadoPor;
-      }
-
-      if (clienteId) {
-        where.pedido = { clienteId };
+      if (id_pedido) {
+        where.detalles = {
+          some: {
+            id_pedido: Number(id_pedido),
+          },
+        };
       }
 
       if (fechaDesde || fechaHasta) {
-        where.fechaPago = {};
-        if (fechaDesde) where.fechaPago.gte = new Date(fechaDesde as string);
-        if (fechaHasta) where.fechaPago.lte = new Date(fechaHasta as string);
+        where.detalles = {
+          some: {
+            fecha_pago: {},
+          },
+        };
+        if (fechaDesde) (where.detalles.some.fecha_pago as any).gte = new Date(fechaDesde as string);
+        if (fechaHasta) (where.detalles.some.fecha_pago as any).lte = new Date(fechaHasta as string);
       }
 
       const [pagos, total] = await Promise.all([
         prisma.pago.findMany({
           where,
           include: {
-            pedido: {
+            administrador: {
+              select: {
+                id: true,
+                nombre: true,
+                email: true,
+              },
+            },
+            detalles: {
               include: {
-                cliente: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    email: true,
-                    tipo: true,
+                pedido: {
+                  include: {
+                    cliente: {
+                      select: {
+                        id: true,
+                        nombre: true,
+                        email: true,
+                      },
+                    },
                   },
                 },
               },
             },
           },
-          orderBy: { fechaPago: 'desc' },
+          orderBy: { id: 'desc' },
           skip: offset,
           take: Number(limit),
         }),
         prisma.pago.count({ where }),
       ]);
 
+      // Formatear respuesta
+      const pagosFormatted = pagos.map(pago => ({
+        id: pago.id,
+        valor: Number(pago.valor),
+        id_administrador: pago.id_administrador,
+        nombreAdministrador: pago.administrador.nombre,
+        pedidos: pago.detalles.map(det => ({
+          id_pedido: det.id_pedido,
+          nombreCliente: det.pedido.cliente.nombre,
+          valorAplicado: Number(det.valor),
+          fecha_pago: det.fecha_pago,
+        })),
+        cantidadPedidos: pago.detalles.length,
+        fechaPago: pago.detalles[0]?.fecha_pago || null,
+      }));
+
       res.json({
         success: true,
-        data: pagos,
+        data: pagosFormatted,
         pagination: {
           page: Number(page),
           limit: Number(limit),
@@ -138,18 +149,35 @@ export class PaymentController {
     }
   }
 
-  // GET /api/payments/:id
+  // GET /api/payments/:id - Obtener pago por ID
   static async getPaymentById(req: Request, res: Response) {
     try {
       const { id } = req.params;
 
       const pago = await prisma.pago.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
-          pedido: {
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+          detalles: {
             include: {
-              cliente: true,
-              detallesPedido: true,
+              pedido: {
+                include: {
+                  cliente: true,
+                  detalles: {
+                    include: {
+                      producto: true,
+                      estado: true,
+                    },
+                  },
+                  detallesPago: true,
+                },
+              },
             },
           },
         },
@@ -162,9 +190,38 @@ export class PaymentController {
         });
       }
 
+      // Calcular montos por pedido
+      const pedidosConMontos = pago.detalles.map(det => {
+        const montoTotal = det.pedido.detalles.reduce(
+          (sum, d) => sum + (d.cantidad * Number(d.precio_unitario)),
+          0
+        );
+        const montoPagado = det.pedido.detallesPago.reduce(
+          (sum, dp) => sum + Number(dp.valor),
+          0
+        );
+
+        return {
+          id_pedido: det.id_pedido,
+          cliente: det.pedido.cliente,
+          valorAplicado: Number(det.valor),
+          fecha_pago: det.fecha_pago,
+          montoTotal,
+          montoPagadoTotal: montoPagado,
+          montoPendiente: montoTotal - montoPagado,
+        };
+      });
+
       res.json({
         success: true,
-        data: pago,
+        data: {
+          id: pago.id,
+          valor: Number(pago.valor),
+          id_administrador: pago.id_administrador,
+          administrador: pago.administrador,
+          pedidos: pedidosConMontos,
+          cantidadPedidos: pago.detalles.length,
+        },
       });
     } catch (error) {
       console.error('Get payment by id error:', error);
@@ -175,109 +232,141 @@ export class PaymentController {
     }
   }
 
-  // POST /api/payments
+  // POST /api/payments - Crear pago y aplicarlo a pedidos
   static async createPayment(req: Request, res: Response) {
     try {
       const paymentData = createPaymentSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: 'Usuario no autenticado',
-        });
-      }
-
-      // Verificar que el pedido existe
-      const pedido = await prisma.pedido.findUnique({
-        where: { id: paymentData.pedidoId },
-        include: { cliente: true },
+      // Verificar que el administrador existe
+      const admin = await prisma.administrador.findUnique({
+        where: { id: paymentData.id_administrador },
       });
 
-      if (!pedido) {
+      if (!admin) {
         return res.status(404).json({
           success: false,
-          error: 'Pedido no encontrado',
+          error: 'Administrador no encontrado',
         });
       }
 
-      // Verificar que el monto no exceda el monto pendiente
-      const montoPendiente = Number(pedido.montoPendiente);
-      if (paymentData.monto > montoPendiente) {
+      // Verificar que todos los pedidos existen y no están eliminados
+      const pedidoIds = paymentData.detalles.map(d => d.id_pedido);
+      const pedidos = await prisma.pedido.findMany({
+        where: { 
+          id: { in: pedidoIds },
+          fecha_delete: null,
+        },
+        include: {
+          detalles: true,
+          detallesPago: true,
+        },
+      });
+
+      if (pedidos.length !== pedidoIds.length) {
         return res.status(400).json({
           success: false,
-          error: `El monto del pago (${paymentData.monto}) no puede ser mayor al monto pendiente (${montoPendiente})`,
+          error: 'Uno o más pedidos no existen o están eliminados',
         });
       }
 
-      // Generar número de pago
-      const numeroPago = await generatePaymentNumber();
+      // Verificar que el valor total del pago coincida con la suma de detalles
+      const sumaDetalles = paymentData.detalles.reduce((sum, det) => sum + det.valor, 0);
+      if (Math.abs(sumaDetalles - paymentData.valor) > 0.01) {
+        return res.status(400).json({
+          success: false,
+          error: `El valor total del pago (${paymentData.valor}) debe coincidir con la suma de los detalles (${sumaDetalles})`,
+        });
+      }
 
-      // Crear transacción para pago y actualización del pedido
-      const result = await prisma.$transaction(async (tx) => {
+      // Verificar que no se pague más de lo que debe cada pedido
+      for (const detalle of paymentData.detalles) {
+        const pedido = pedidos.find(p => p.id === detalle.id_pedido);
+        if (!pedido) continue;
+
+        const montoTotal = pedido.detalles.reduce(
+          (sum, d) => sum + (d.cantidad * Number(d.precio_unitario)),
+          0
+        );
+        const montoPagado = pedido.detallesPago.reduce(
+          (sum, dp) => sum + Number(dp.valor),
+          0
+        );
+        const montoPendiente = montoTotal - montoPagado;
+
+        if (detalle.valor > montoPendiente + 0.01) {
+          return res.status(400).json({
+            success: false,
+            error: `El monto a pagar para el pedido ${detalle.id_pedido} (${detalle.valor}) excede el monto pendiente (${montoPendiente})`,
+          });
+        }
+      }
+
+      // Crear pago con detalles en transacción
+      const newPago = await prisma.$transaction(async (tx) => {
         // Crear el pago
-        const nuevoPago = await tx.pago.create({
+        const pago = await tx.pago.create({
           data: {
-            ...paymentData,
-            numeroPago,
-            fechaPago: paymentData.fechaPago || new Date(),
-            procesadoPor: userId,
+            valor: paymentData.valor,
+            id_administrador: paymentData.id_administrador,
           },
+        });
+
+        // Crear los detalles de pago
+        await tx.detallePago.createMany({
+          data: paymentData.detalles.map(detalle => ({
+            id_pago: pago.id,
+            id_pedido: detalle.id_pedido,
+            valor: detalle.valor,
+            fecha_pago: paymentData.fecha_pago,
+          })),
+        });
+
+        // Obtener el pago completo con detalles
+        return await tx.pago.findUnique({
+          where: { id: pago.id },
           include: {
-            pedido: {
-              include: { cliente: true },
+            administrador: {
+              select: {
+                id: true,
+                nombre: true,
+                email: true,
+              },
+            },
+            detalles: {
+              include: {
+                pedido: {
+                  include: {
+                    cliente: true,
+                  },
+                },
+              },
             },
           },
         });
-
-        // Actualizar el pedido con el nuevo monto pagado y pendiente
-        const nuevoMontoPagado = Number(pedido.montoPagado) + paymentData.monto;
-        const nuevoMontoPendiente = Number(pedido.montoTotal) - nuevoMontoPagado;
-        const nuevoEstado = nuevoMontoPendiente <= 0 ? 'PAGADO' : pedido.estado;
-
-        await tx.pedido.update({
-          where: { id: paymentData.pedidoId },
-          data: {
-            montoPagado: nuevoMontoPagado,
-            montoPendiente: nuevoMontoPendiente,
-            estado: nuevoEstado,
-          },
-        });
-
-        return nuevoPago;
       });
 
-      // Registrar auditoría
-      await AuditService.logCreate(req, 'pago', result.id, {
-        numeroPago,
-        monto: paymentData.monto,
-        metodoPago: paymentData.metodoPago,
-        pedidoId: paymentData.pedidoId,
-      });
-
-      // Si el pedido se completó, registrar cambio de estado
-      const pedidoActualizado = await prisma.pedido.findUnique({
-        where: { id: paymentData.pedidoId },
-      });
-
-      if (pedidoActualizado?.estado === 'PAGADO' && pedido.estado !== 'PAGADO') {
-        await AuditService.logStatusChange(
-          req,
-          'pedido',
-          paymentData.pedidoId,
-          pedido.estado,
-          'PAGADO',
-          'Pedido marcado como pagado tras registrar pago'
-        );
+      if (!newPago) {
+        throw new Error('Error creando pago');
       }
 
       res.status(201).json({
         success: true,
         message: 'Pago registrado exitosamente',
-        data: result,
+        data: {
+          id: newPago.id,
+          valor: Number(newPago.valor),
+          id_administrador: newPago.id_administrador,
+          nombreAdministrador: newPago.administrador.nombre,
+          pedidos: newPago.detalles.map(det => ({
+            id_pedido: det.id_pedido,
+            nombreCliente: det.pedido.cliente.nombre,
+            valorAplicado: Number(det.valor),
+            fecha_pago: det.fecha_pago,
+          })),
+        },
       });
     } catch (error) {
-      console.error('Create payment error:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Create payment error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -294,19 +383,14 @@ export class PaymentController {
     }
   }
 
-  // PUT /api/payments/:id
+  // PUT /api/payments/:id - Actualizar pago
   static async updatePayment(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const updateData = updatePaymentSchema.parse(req.body);
-      const userId = (req as any).user?.id;
 
-      // Verificar que el pago existe
       const existingPayment = await prisma.pago.findUnique({
-        where: { id },
-        include: {
-          pedido: true,
-        },
+        where: { id: Number(id) },
       });
 
       if (!existingPayment) {
@@ -316,62 +400,44 @@ export class PaymentController {
         });
       }
 
-      // Si se cambia el monto, recalcular pedido
-      let transactionUpdate = null;
-      if (updateData.monto && updateData.monto !== Number(existingPayment.monto)) {
-        const diferenciaMonto = updateData.monto - Number(existingPayment.monto);
-        const nuevoMontoPagado = Number(existingPayment.pedido.montoPagado) + diferenciaMonto;
-        const nuevoMontoPendiente = Number(existingPayment.pedido.montoTotal) - nuevoMontoPagado;
-
-        // Verificar que el nuevo monto no cause problemas
-        if (nuevoMontoPagado > Number(existingPayment.pedido.montoTotal)) {
-          return res.status(400).json({
-            success: false,
-            error: 'El nuevo monto causaría que el total pagado exceda el monto total del pedido',
-          });
-        }
-
-        transactionUpdate = {
-          montoPagado: nuevoMontoPagado,
-          montoPendiente: nuevoMontoPendiente,
-          estado: nuevoMontoPendiente <= 0 ? 'PAGADO' as const : 'EN_PROCESO' as const,
-        };
-      }
-
-      // Ejecutar transacción
-      const result = await prisma.$transaction(async (tx) => {
-        // Actualizar pago
-        const pagoActualizado = await tx.pago.update({
-          where: { id },
-          data: {
-            ...updateData,
-            procesadoPor: userId, // Actualizar quien procesó la modificación
-          },
-          include: {
-            pedido: {
-              include: { cliente: true },
+      const updatedPayment = await prisma.pago.update({
+        where: { id: Number(id) },
+        data: updateData,
+        include: {
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
             },
           },
-        });
-
-        // Actualizar pedido si hay cambios de monto
-        if (transactionUpdate) {
-          await tx.pedido.update({
-            where: { id: existingPayment.pedidoId },
-            data: transactionUpdate,
-          });
-        }
-
-        return pagoActualizado;
+          detalles: {
+            include: {
+              pedido: {
+                include: {
+                  cliente: true,
+                },
+              },
+            },
+          },
+        },
       });
-
-      // Registrar auditoría
-      await AuditService.logUpdate(req, 'pago', id, existingPayment, updateData);
 
       res.json({
         success: true,
         message: 'Pago actualizado exitosamente',
-        data: result,
+        data: {
+          id: updatedPayment.id,
+          valor: Number(updatedPayment.valor),
+          id_administrador: updatedPayment.id_administrador,
+          nombreAdministrador: updatedPayment.administrador.nombre,
+          pedidos: updatedPayment.detalles.map(det => ({
+            id_pedido: det.id_pedido,
+            nombreCliente: det.pedido.cliente.nombre,
+            valorAplicado: Number(det.valor),
+            fecha_pago: det.fecha_pago,
+          })),
+        },
       });
     } catch (error) {
       console.error('Update payment error:', error);
@@ -391,25 +457,16 @@ export class PaymentController {
     }
   }
 
-  // DELETE /api/payments/:id
+  // DELETE /api/payments/:id - Eliminar pago
   static async deletePayment(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
-      const userRole = (req as any).user?.role;
 
-      // Solo admins pueden eliminar pagos
-      if (userRole !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          error: 'Solo los administradores pueden eliminar pagos',
-        });
-      }
-
-      // Verificar que el pago existe
       const existingPayment = await prisma.pago.findUnique({
-        where: { id },
-        include: { pedido: true },
+        where: { id: Number(id) },
+        include: {
+          detalles: true,
+        },
       });
 
       if (!existingPayment) {
@@ -419,29 +476,18 @@ export class PaymentController {
         });
       }
 
-      // Ejecutar transacción para eliminar pago y actualizar pedido
+      // Eliminar pago y sus detalles en transacción
       await prisma.$transaction(async (tx) => {
+        // Eliminar detalles de pago
+        await tx.detallePago.deleteMany({
+          where: { id_pago: Number(id) },
+        });
+
         // Eliminar pago
         await tx.pago.delete({
-          where: { id },
-        });
-
-        // Recalcular montos del pedido
-        const nuevoMontoPagado = Number(existingPayment.pedido.montoPagado) - Number(existingPayment.monto);
-        const nuevoMontoPendiente = Number(existingPayment.pedido.montoTotal) - nuevoMontoPagado;
-
-        await tx.pedido.update({
-          where: { id: existingPayment.pedidoId },
-          data: {
-            montoPagado: nuevoMontoPagado,
-            montoPendiente: nuevoMontoPendiente,
-            estado: nuevoMontoPendiente > 0 ? 'EN_PROCESO' : 'PAGADO',
-          },
+          where: { id: Number(id) },
         });
       });
-
-      // Registrar auditoría
-      await AuditService.logDelete(req, 'pago', id, existingPayment, 'Pago eliminado por administrador');
 
       res.json({
         success: true,
@@ -456,330 +502,89 @@ export class PaymentController {
     }
   }
 
-  // GET /api/payments/order/:orderId
-  static async getPaymentsByOrder(req: Request, res: Response) {
+  // GET /api/payments/stats - Estadísticas de pagos
+  static async getPaymentsStats(req: Request, res: Response) {
     try {
-      const { orderId } = req.params;
+      const totalPagos = await prisma.pago.count();
 
-      // Verificar que el pedido existe
-      const pedido = await prisma.pedido.findUnique({
-        where: { id: orderId },
-        include: { cliente: true },
-      });
-
-      if (!pedido) {
-        return res.status(404).json({
-          success: false,
-          error: 'Pedido no encontrado',
-        });
-      }
-
-      // Obtener pagos del pedido
+      // Total recaudado
       const pagos = await prisma.pago.findMany({
-        where: { pedidoId: orderId },
-        orderBy: { fechaPago: 'desc' },
+        select: {
+          valor: true,
+        },
       });
 
-      // Calcular resumen
-      const totalPagado = pagos.reduce((sum, pago) => sum + Number(pago.monto), 0);
-      const montoPendiente = Number(pedido.montoTotal) - totalPagado;
+      const totalRecaudado = pagos.reduce((sum, p) => sum + Number(p.valor), 0);
+
+      // Pagos por administrador
+      const pagosPorAdmin = await prisma.pago.groupBy({
+        by: ['id_administrador'],
+        _count: {
+          id: true,
+        },
+        _sum: {
+          valor: true,
+        },
+        orderBy: {
+          _count: {
+            id: 'desc',
+          },
+        },
+        take: 5,
+      });
+
+      const pagosPorAdminDetalle = await Promise.all(
+        pagosPorAdmin.map(async (item: any) => {
+          const admin = await prisma.administrador.findUnique({
+            where: { id: item.id_administrador },
+            select: { nombre: true },
+          });
+          return {
+            id_administrador: item.id_administrador,
+            nombreAdministrador: admin?.nombre || 'Desconocido',
+            cantidadPagos: item._count.id,
+            totalRecaudado: Number(item._sum.valor) || 0,
+          };
+        })
+      );
+
+      // Pagos por mes (últimos 6 meses)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const detallesPago = await prisma.detallePago.findMany({
+        where: {
+          fecha_pago: {
+            gte: sixMonthsAgo,
+          },
+        },
+        select: {
+          fecha_pago: true,
+          valor: true,
+        },
+      });
+
+      const pagosPorMes = detallesPago.reduce((acc: any, det) => {
+        const mes = det.fecha_pago.toISOString().substring(0, 7); // YYYY-MM
+        if (!acc[mes]) {
+          acc[mes] = { mes, cantidad: 0, total: 0 };
+        }
+        acc[mes].cantidad += 1;
+        acc[mes].total += Number(det.valor);
+        return acc;
+      }, {});
 
       res.json({
         success: true,
         data: {
-          pedido: {
-            id: pedido.id,
-            numeroPedido: pedido.numeroPedido,
-            nombrePaciente: pedido.nombrePaciente,
-            cliente: pedido.cliente.nombre,
-            montoTotal: Number(pedido.montoTotal),
-            montoPagado: totalPagado,
-            montoPendiente: montoPendiente,
-            estado: pedido.estado,
-          },
-          pagos,
-          resumen: {
-            totalPagos: pagos.length,
-            montoTotal: Number(pedido.montoTotal),
-            totalPagado,
-            montoPendiente,
-            porcentajePagado: Number(pedido.montoTotal) > 0 ? (totalPagado / Number(pedido.montoTotal)) * 100 : 0,
-          },
+          totalPagos,
+          totalRecaudado,
+          pagosPorAdministrador: pagosPorAdminDetalle,
+          pagosPorMes: Object.values(pagosPorMes),
         },
       });
     } catch (error) {
-      console.error('Get payments by order error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor',
-      });
-    }
-  }
-
-  // GET /api/payments/balance
-  static async getBalance(req: Request, res: Response) {
-    try {
-      const filters = balanceFiltersSchema.parse(req.query);
-
-      // Construir filtros para consultas
-      const dateFilter: any = {};
-      if (filters.fechaDesde || filters.fechaHasta) {
-        if (filters.fechaDesde) dateFilter.gte = filters.fechaDesde;
-        if (filters.fechaHasta) dateFilter.lte = filters.fechaHasta;
-      }
-
-      const pagoWhere: any = {};
-      if (Object.keys(dateFilter).length > 0) pagoWhere.fechaPago = dateFilter;
-      if (filters.metodoPago) pagoWhere.metodoPago = filters.metodoPago;
-      if (filters.clienteId) pagoWhere.pedido = { clienteId: filters.clienteId };
-
-      const pedidoWhere: any = {};
-      if (Object.keys(dateFilter).length > 0) pedidoWhere.fechaPedido = dateFilter;
-      if (filters.clienteId) pedidoWhere.clienteId = filters.clienteId;
-
-      // Ejecutar consultas en paralelo
-      const [
-        // Estadísticas de pagos
-        totalPagos,
-        sumaPagos,
-        pagosPorMetodo,
-
-        // Estadísticas de pedidos
-        totalPedidos,
-        sumaPedidos,
-        pedidosPorEstado,
-
-        // Balance general
-        balanceGeneral,
-
-        // Pagos recientes
-        pagosRecientes,
-
-        // Clientes con mayor deuda
-        clientesConDeuda,
-      ] = await Promise.all([
-        // Total de pagos
-        prisma.pago.count({ where: pagoWhere }),
-
-        // Suma de pagos
-        prisma.pago.aggregate({
-          where: pagoWhere,
-          _sum: { monto: true },
-        }),
-
-        // Pagos por método
-        prisma.pago.groupBy({
-          by: ['metodoPago'],
-          where: pagoWhere,
-          _count: { metodoPago: true },
-          _sum: { monto: true },
-        }),
-
-        // Total de pedidos
-        prisma.pedido.count({ where: pedidoWhere }),
-
-        // Suma de pedidos
-        prisma.pedido.aggregate({
-          where: pedidoWhere,
-          _sum: {
-            montoTotal: true,
-            montoPagado: true,
-            montoPendiente: true,
-          },
-        }),
-
-        // Pedidos por estado
-        prisma.pedido.groupBy({
-          by: ['estado'],
-          where: pedidoWhere,
-          _count: { estado: true },
-          _sum: { montoTotal: true, montoPendiente: true },
-        }),
-
-        // Balance general (sin filtros de fecha para obtener totales reales)
-        prisma.pedido.aggregate({
-          _sum: {
-            montoTotal: true,
-            montoPagado: true,
-            montoPendiente: true,
-          },
-        }),
-
-        // Últimos pagos
-        prisma.pago.findMany({
-          where: pagoWhere,
-          include: {
-            pedido: {
-              include: {
-                cliente: {
-                  select: { nombre: true },
-                },
-              },
-            },
-          },
-          orderBy: { fechaPago: 'desc' },
-          take: 10,
-        }),
-
-        // Clientes con mayor deuda
-        prisma.pedido.groupBy({
-          by: ['clienteId'],
-          where: {
-            ...pedidoWhere,
-            montoPendiente: { gt: 0 },
-          },
-          _sum: { montoPendiente: true },
-          orderBy: { _sum: { montoPendiente: 'desc' } },
-          take: 10,
-        }),
-      ]);
-
-      // Obtener información de clientes con deuda
-      const clienteIds = clientesConDeuda.map(c => c.clienteId);
-      const clientesInfo = await prisma.cliente.findMany({
-        where: { id: { in: clienteIds } },
-        select: { id: true, nombre: true, email: true, tipo: true },
-      });
-
-      // Mapear clientes con su deuda
-      const clientesConDeudaCompleto = clientesConDeuda.map(deuda => {
-        const cliente = clientesInfo.find(c => c.id === deuda.clienteId);
-        return {
-          cliente,
-          montoPendiente: Number(deuda._sum.montoPendiente || 0),
-        };
-      });
-
-      // Formatear respuesta
-      res.json({
-        success: true,
-        data: {
-          resumen: {
-            totalIngresos: Number(sumaPagos._sum.monto || 0),
-            totalFacturado: Number(sumaPedidos._sum.montoTotal || 0),
-            totalPendiente: Number(sumaPedidos._sum.montoPendiente || 0),
-            porcentajeCobrado: Number(sumaPedidos._sum.montoTotal || 0) > 0 
-              ? (Number(sumaPagos._sum.monto || 0) / Number(sumaPedidos._sum.montoTotal || 0)) * 100 
-              : 0,
-          },
-          balanceGeneral: {
-            montoTotalHistorico: Number(balanceGeneral._sum.montoTotal || 0),
-            montoPagadoHistorico: Number(balanceGeneral._sum.montoPagado || 0),
-            montoPendienteTotal: Number(balanceGeneral._sum.montoPendiente || 0),
-          },
-          estadisticasPagos: {
-            totalPagos,
-            montoTotal: Number(sumaPagos._sum.monto || 0),
-            promedioporPago: totalPagos > 0 ? Number(sumaPagos._sum.monto || 0) / totalPagos : 0,
-            pagosPorMetodo: pagosPorMetodo.map(p => ({
-              metodoPago: p.metodoPago,
-              cantidad: p._count.metodoPago,
-              monto: Number(p._sum.monto || 0),
-            })),
-          },
-          estadisticasPedidos: {
-            totalPedidos,
-            montoTotal: Number(sumaPedidos._sum.montoTotal || 0),
-            promedioPorPedido: totalPedidos > 0 ? Number(sumaPedidos._sum.montoTotal || 0) / totalPedidos : 0,
-            pedidosPorEstado: pedidosPorEstado.map(p => ({
-              estado: p.estado,
-              cantidad: p._count.estado,
-              montoTotal: Number(p._sum.montoTotal || 0),
-              montoPendiente: Number(p._sum.montoPendiente || 0),
-            })),
-          },
-          pagosRecientes: pagosRecientes.map(pago => ({
-            id: pago.id,
-            numeroPago: pago.numeroPago,
-            monto: Number(pago.monto),
-            metodoPago: pago.metodoPago,
-            fechaPago: pago.fechaPago,
-            cliente: pago.pedido.cliente.nombre,
-            numeroPedido: pago.pedido.numeroPedido,
-          })),
-          clientesConMayorDeuda: clientesConDeudaCompleto.filter(c => c.cliente !== null),
-          filtrosAplicados: filters,
-        },
-      });
-    } catch (error) {
-      console.error('Get balance error:', error);
-
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          error: 'Parámetros de consulta inválidos',
-          details: error.errors,
-        });
-      }
-
-      return res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor',
-      });
-    }
-  }
-
-  // GET /api/payments/stats
-  static async getPaymentStats(req: Request, res: Response) {
-    try {
-      const [
-        totalPayments,
-        totalAmount,
-        paymentsByMethod,
-        paymentsToday,
-        paymentsThisMonth,
-        averagePayment
-      ] = await Promise.all([
-        prisma.pago.count(),
-        
-        prisma.pago.aggregate({
-          _sum: { monto: true },
-        }),
-        
-        prisma.pago.groupBy({
-          by: ['metodoPago'],
-          _count: { metodoPago: true },
-          _sum: { monto: true },
-        }),
-        
-        prisma.pago.count({
-          where: {
-            fechaPago: {
-              gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            },
-          },
-        }),
-        
-        prisma.pago.count({
-          where: {
-            fechaPago: {
-              gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-            },
-          },
-        }),
-        
-        prisma.pago.aggregate({
-          _avg: { monto: true },
-        }),
-      ]);
-
-      res.json({
-        success: true,
-        data: {
-          totalPayments,
-          totalAmount: Number(totalAmount._sum.monto || 0),
-          averagePayment: Number(averagePayment._avg.monto || 0),
-          paymentsToday,
-          paymentsThisMonth,
-          paymentsByMethod: paymentsByMethod.map(p => ({
-            method: p.metodoPago,
-            count: p._count.metodoPago,
-            amount: Number(p._sum.monto || 0),
-          })),
-        },
-      });
-    } catch (error) {
-      console.error('Get payment stats error:', error);
+      console.error('Get payments stats error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
@@ -787,3 +592,4 @@ export class PaymentController {
     }
   }
 }
+

@@ -15,35 +15,34 @@ const loginSchema = z.object({
 
 const registerSchema = z.object({
   email: z.string().email('Email inválido'),
-  username: z.string().min(3, 'Usuario debe tener al menos 3 caracteres'),
+  usuario: z.string().min(3, 'Usuario debe tener al menos 3 caracteres'),
   password: z.string().min(6, 'Contraseña debe tener al menos 6 caracteres'),
-  nombres: z.string().min(2, 'Nombres requeridos'),
-  apellidos: z.string().min(2, 'Apellidos requeridos'),
+  nombre: z.string().min(2, 'Nombre requerido'),
   telefono: z.string().optional(),
-  rol: z.enum(['ADMIN', 'USUARIO']).default('USUARIO'),
+  super_usuario: z.boolean().default(false),
 });
 
 // Generar JWT token
-const generateToken = (userId: string, email: string, role: string): string => {
+const generateToken = (userId: number, email: string, superUsuario: boolean): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
   }
   return jwt.sign(
-    { id: userId, email, role },
+    { id: userId, email, super_usuario: superUsuario },
     secret,
     { expiresIn: '15m' } // Access token: 15 minutos
   );
 };
 
 // Generar Refresh Token
-const generateRefreshToken = (userId: string, email: string, role: string): string => {
+const generateRefreshToken = (userId: number, email: string, superUsuario: boolean): string => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error('JWT_SECRET is not defined');
   }
   return jwt.sign(
-    { id: userId, email, role, type: 'refresh' },
+    { id: userId, email, super_usuario: superUsuario, type: 'refresh' },
     secret,
     { expiresIn: '7d' } // Refresh token: 7 días
   );
@@ -62,27 +61,21 @@ export class AuthController {
         select: {
           id: true,
           email: true,
-          username: true,
+          usuario: true,
           password: true,
-          nombres: true,
-          apellidos: true,
+          nombre: true,
           telefono: true,
-          rol: true,
+          super_usuario: true,
           activo: true,
         },
       });
 
       if (!user || !user.activo) {
         // Registrar intento fallido en auditoría
-        await AuditService.log({
-          administradorId: 'system',
-          accion: 'LOGIN',
-          tipoEntidad: 'auth',
-          entidadId: email,
-          descripcion: `Intento de login fallido: usuario no existe o inactivo - ${email}`,
-          direccionIP: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent'),
-        });
+        await AuditService.log(
+          'sistema',
+          `Intento de login fallido: usuario no existe o inactivo - ${email} desde ${req.ip || 'IP desconocida'}`
+        );
         
         return res.status(401).json({
           success: false,
@@ -94,15 +87,10 @@ export class AuthController {
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         // Registrar intento fallido en auditoría
-        await AuditService.log({
-          administradorId: user.id,
-          accion: 'LOGIN',
-          tipoEntidad: 'auth',
-          entidadId: user.id,
-          descripcion: `Intento de login fallido: contraseña incorrecta - ${email}`,
-          direccionIP: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent'),
-        });
+        await AuditService.log(
+          user.usuario,
+          `Intento de login fallido: contraseña incorrecta - ${email} desde ${req.ip || 'IP desconocida'}`
+        );
         
         return res.status(401).json({
           success: false,
@@ -111,8 +99,8 @@ export class AuthController {
       }
 
       // Generar token
-      const token = generateToken(user.id, user.email, user.rol);
-      const refreshToken = generateRefreshToken(user.id, user.email, user.rol);
+      const token = generateToken(user.id, user.email, user.super_usuario);
+      const refreshToken = generateRefreshToken(user.id, user.email, user.super_usuario);
 
       // Guardar refresh token en BD
       await prisma.administrador.update({
@@ -121,7 +109,7 @@ export class AuthController {
       });
 
       // Registrar login en auditoría
-      await AuditService.logLogin(req, user.id, user.email);
+      await AuditService.logLogin(req, user.usuario, user.email);
 
       // Responder sin contraseña
       const { password: _, ...userWithoutPassword } = user;
@@ -164,7 +152,7 @@ export class AuthController {
         where: {
           OR: [
             { email: userData.email },
-            { username: userData.username },
+            { usuario: userData.usuario },
           ],
         },
       });
@@ -179,30 +167,32 @@ export class AuthController {
       // Hash de la contraseña
       const hashedPassword = await bcrypt.hash(userData.password, 12);
 
+      // Preparar datos (eliminar undefined)
+      const adminData: any = {
+        email: userData.email,
+        usuario: userData.usuario,
+        password: hashedPassword,
+        nombre: userData.nombre,
+        super_usuario: userData.super_usuario,
+      };
+      
+      // Solo agregar telefono si está definido
+      if (userData.telefono) {
+        adminData.telefono = userData.telefono;
+      }
+
       // Crear usuario
       const newUser = await prisma.administrador.create({
-        data: {
-          ...userData,
-          password: hashedPassword,
-        },
+        data: adminData,
         select: {
           id: true,
           email: true,
-          username: true,
-          nombres: true,
-          apellidos: true,
+          usuario: true,
+          nombre: true,
           telefono: true,
-          rol: true,
+          super_usuario: true,
           createdAt: true,
         },
-      });
-
-      // Registrar creación en auditoría
-      await AuditService.logCreate(req, 'administrador', newUser.id, {
-        email: userData.email,
-        username: userData.username,
-        nombres: userData.nombres,
-        apellidos: userData.apellidos
       });
 
       res.status(201).json({
@@ -243,11 +233,10 @@ export class AuthController {
         select: {
           id: true,
           email: true,
-          username: true,
-          nombres: true,
-          apellidos: true,
+          usuario: true,
+          nombre: true,
           telefono: true,
-          rol: true,
+          super_usuario: true,
           activo: true,
           createdAt: true,
           updatedAt: true,
@@ -267,26 +256,6 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Me error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor',
-      });
-    }
-  }
-  static async logout(req: Request, res: Response) {
-    try {
-      const userId = (req as any).user?.id;
-
-      if (userId) {
-        await AuditService.logLogout(req, userId);
-      }
-
-      res.json({
-        success: true,
-        message: 'Logout exitoso',
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
@@ -345,12 +314,6 @@ export class AuthController {
       });
 
       // Registrar cambio en auditoría
-      await AuditService.logUpdate(req, 'administrador', userId, 
-        { action: 'password_change' }, 
-        { action: 'password_changed' },
-        'Cambio de contraseña'
-      );
-
       res.json({
         success: true,
         message: 'Contraseña actualizada exitosamente',
@@ -406,7 +369,7 @@ export class AuthController {
         select: {
           id: true,
           email: true,
-          rol: true,
+          super_usuario: true,
           activo: true,
           refreshToken: true,
         },
@@ -429,18 +392,13 @@ export class AuthController {
       }
 
       // Generar nuevo access token
-      const newAccessToken = generateToken(user.id, user.email, user.rol);
+      const newAccessToken = generateToken(user.id, user.email, user.super_usuario);
 
       // Registrar renovación en auditoría
-      await AuditService.log({
-        administradorId: user.id,
-        accion: 'REFRESH_TOKEN',
-        tipoEntidad: 'auth',
-        entidadId: user.id,
-        descripcion: `Token de acceso renovado - ${user.email}`,
-        direccionIP: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent'),
-      });
+      await AuditService.log(
+        user.email,
+        `Token de acceso renovado desde ${req.ip || 'IP desconocida'}`
+      );
 
       res.json({
         success: true,
@@ -477,15 +435,11 @@ export class AuthController {
       });
 
       // Registrar logout en auditoría
-      await AuditService.log({
-        administradorId: userId,
-        accion: 'LOGOUT',
-        tipoEntidad: 'auth',
-        entidadId: userId,
-        descripcion: 'Cierre de sesión',
-        direccionIP: req.ip || req.connection.remoteAddress,
-        userAgent: req.get('User-Agent'),
-      });
+      const usuario = (req as any).user?.usuario || (req as any).user?.email || 'usuario';
+      await AuditService.logLogout(
+        usuario,
+        (req as any).user?.email
+      );
 
       res.json({
         success: true,

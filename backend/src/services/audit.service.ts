@@ -3,38 +3,24 @@ import { Request } from 'express';
 
 const prisma = new PrismaClient();
 
-export type AuditAction = 'CREAR' | 'ACTUALIZAR' | 'ELIMINAR' | 'LOGIN' | 'LOGOUT' | 'CAMBIO_ESTADO';
-export type EntityType = 'cliente' | 'pedido' | 'pago' | 'administrador' | 'auth' | 'auditoria';
-
-export interface AuditLogData {
-  administradorId: string;
-  accion: AuditAction;
-  tipoEntidad: EntityType;
-  entidadId: string;
-  valoresAnteriores?: any;
-  valoresNuevos?: any;
-  descripcion?: string;
-  direccionIP?: string;
-  userAgent?: string;
-}
-
+/**
+ * Servicio de Auditoría - Modelo Oficial APL
+ * Tabla auditoria: id, usuario, fecha_accion, accion
+ * - Sin relaciones con otras tablas
+ * - Solo registra acciones con texto descriptivo
+ */
 export class AuditService {
   /**
    * Registra una acción en el log de auditoría
+   * @param usuario - Nombre de usuario o email del administrador
+   * @param accion - Descripción de la acción realizada
    */
-  static async log(data: AuditLogData): Promise<void> {
+  static async log(usuario: string, accion: string): Promise<void> {
     try {
       await prisma.auditoria.create({
         data: {
-          administradorId: data.administradorId,
-          accion: data.accion,
-          tipoEntidad: data.tipoEntidad,
-          entidadId: data.entidadId,
-          valoresAnteriores: data.valoresAnteriores || null,
-          valoresNuevos: data.valoresNuevos || null,
-          direccionIP: data.direccionIP,
-          userAgent: data.userAgent,
-          descripcion: data.descripcion || `${data.accion} ${data.tipoEntidad}: ${data.entidadId}`,
+          usuario,
+          accion,
         },
       });
     } catch (error) {
@@ -44,471 +30,353 @@ export class AuditService {
   }
 
   /**
-   * Extrae información del request para auditoría
+   * Extrae información de usuario del request autenticado
    */
-  static extractRequestInfo(req: Request): { ip?: string; userAgent?: string; userId?: string } {
-    return {
-      ip: req.ip || req.connection.remoteAddress,
-      userAgent: req.get('User-Agent'),
-      userId: (req as any).user?.id,
-    };
+  static extractUsuario(req: Request): string {
+    const user = (req as any).user;
+    return user?.email || user?.usuario || 'sistema';
   }
 
   /**
-   * Registra creación de entidad
+   * Registra login exitoso
    */
-  static async logCreate(
-    req: Request,
-    tipoEntidad: EntityType,
-    entidadId: string,
-    datosCreados: any,
-    descripcion?: string
-  ): Promise<void> {
-    const { ip, userAgent, userId } = this.extractRequestInfo(req);
-    
-    if (!userId) return;
+  static async logLogin(req: Request, usuario: string, email: string): Promise<void> {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    await this.log(
+      usuario,
+      `LOGIN exitoso - ${email} desde ${ip}`
+    );
+  }
 
-    await this.log({
-      administradorId: userId,
-      accion: 'CREAR',
-      tipoEntidad,
-      entidadId,
-      valoresNuevos: datosCreados,
-      descripcion: descripcion || `Creación de ${tipoEntidad}: ${entidadId}`,
-      direccionIP: ip,
-      userAgent,
+  /**
+   * Registra logout
+   */
+  static async logLogout(usuario: string, email?: string): Promise<void> {
+    await this.log(
+      usuario,
+      `LOGOUT - ${email || usuario}`
+    );
+  }
+
+  /**
+   * Registra creación de cliente
+   */
+  static async logClientCreated(req: Request, clienteId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `CREAR Cliente - ID: ${clienteId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra actualización de cliente
+   */
+  static async logClientUpdated(req: Request, clienteId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Cliente - ID: ${clienteId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra eliminación de cliente
+   */
+  static async logClientDeleted(req: Request, clienteId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Cliente - ID: ${clienteId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra creación de pedido
+   */
+  static async logOrderCreated(req: Request, pedidoId: number, clienteNombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `CREAR Pedido - ID: ${pedidoId}, Cliente: ${clienteNombre}`
+    );
+  }
+
+  /**
+   * Registra actualización de pedido
+   */
+  static async logOrderUpdated(req: Request, pedidoId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Pedido - ID: ${pedidoId}`
+    );
+  }
+
+  /**
+   * Registra eliminación de pedido
+   */
+  static async logOrderDeleted(req: Request, pedidoId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Pedido - ID: ${pedidoId}`
+    );
+  }
+
+  /**
+   * Registra adición de detalle a pedido
+   */
+  static async logOrderDetailAdded(req: Request, pedidoId: number, productoNombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `AGREGAR Detalle a Pedido - ID Pedido: ${pedidoId}, Producto: ${productoNombre}`
+    );
+  }
+
+  /**
+   * Registra actualización de detalle de pedido
+   */
+  static async logOrderDetailUpdated(req: Request, pedidoId: number, detalleId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Detalle de Pedido - ID Pedido: ${pedidoId}, ID Detalle: ${detalleId}`
+    );
+  }
+
+  /**
+   * Registra eliminación de detalle de pedido
+   */
+  static async logOrderDetailDeleted(req: Request, pedidoId: number, detalleId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Detalle de Pedido - ID Pedido: ${pedidoId}, ID Detalle: ${detalleId}`
+    );
+  }
+
+  /**
+   * Registra creación de pago
+   */
+  static async logPaymentCreated(req: Request, pagoId: number, valor: number, numPedidos: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `CREAR Pago - ID: ${pagoId}, Valor: $${valor}, Aplicado a ${numPedidos} pedido(s)`
+    );
+  }
+
+  /**
+   * Registra aplicación de pago a pedido específico
+   */
+  static async logPaymentAppliedToOrder(req: Request, pagoId: number, pedidoId: number, valor: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `APLICAR Pago a Pedido - ID Pago: ${pagoId}, ID Pedido: ${pedidoId}, Valor: $${valor}`
+    );
+  }
+
+  /**
+   * Registra actualización de pago
+   */
+  static async logPaymentUpdated(req: Request, pagoId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Pago - ID: ${pagoId}`
+    );
+  }
+
+  /**
+   * Registra eliminación de pago
+   */
+  static async logPaymentDeleted(req: Request, pagoId: number): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Pago - ID: ${pagoId}`
+    );
+  }
+
+  /**
+   * Registra creación de producto
+   */
+  static async logProductCreated(req: Request, productoId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `CREAR Producto - ID: ${productoId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra actualización de producto
+   */
+  static async logProductUpdated(req: Request, productoId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Producto - ID: ${productoId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra eliminación de producto
+   */
+  static async logProductDeleted(req: Request, productoId: number, nombre: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Producto - ID: ${productoId}, Nombre: ${nombre}`
+    );
+  }
+
+  /**
+   * Registra creación de estado
+   */
+  static async logStateCreated(req: Request, estadoId: number, estado: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `CREAR Estado - ID: ${estadoId}, Estado: ${estado}`
+    );
+  }
+
+  /**
+   * Registra actualización de estado
+   */
+  static async logStateUpdated(req: Request, estadoId: number, estado: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ACTUALIZAR Estado - ID: ${estadoId}, Estado: ${estado}`
+    );
+  }
+
+  /**
+   * Registra eliminación de estado
+   */
+  static async logStateDeleted(req: Request, estadoId: number, estado: string): Promise<void> {
+    const usuario = this.extractUsuario(req);
+    await this.log(
+      usuario,
+      `ELIMINAR Estado - ID: ${estadoId}, Estado: ${estado}`
+    );
+  }
+
+  /**
+   * Obtiene logs de auditoría con paginación
+   */
+  static async getLogs(
+    limit: number = 100,
+    skip: number = 0
+  ): Promise<any[]> {
+    return await prisma.auditoria.findMany({
+      take: limit,
+      skip: skip,
+      orderBy: {
+        fecha_accion: 'desc',
+      },
     });
   }
 
   /**
-   * Registra actualización de entidad
+   * Obtiene logs filtrados por usuario
    */
-  static async logUpdate(
-    req: Request,
-    tipoEntidad: EntityType,
-    entidadId: string,
-    datosAnteriores: any,
-    datosNuevos: any,
-    descripcion?: string
-  ): Promise<void> {
-    const { ip, userAgent, userId } = this.extractRequestInfo(req);
-    
-    if (!userId) return;
-
-    await this.log({
-      administradorId: userId,
-      accion: 'ACTUALIZAR',
-      tipoEntidad,
-      entidadId,
-      valoresAnteriores: datosAnteriores,
-      valoresNuevos: datosNuevos,
-      descripcion: descripcion || `Actualización de ${tipoEntidad}: ${entidadId}`,
-      direccionIP: ip,
-      userAgent,
+  static async getLogsByUsuario(
+    usuario: string,
+    limit: number = 50
+  ): Promise<any[]> {
+    return await prisma.auditoria.findMany({
+      where: {
+        usuario: {
+          contains: usuario,
+        },
+      },
+      take: limit,
+      orderBy: {
+        fecha_accion: 'desc',
+      },
     });
   }
 
   /**
-   * Registra eliminación de entidad
+   * Obtiene logs filtrados por acción
    */
-  static async logDelete(
-    req: Request,
-    tipoEntidad: EntityType,
-    entidadId: string,
-    datosEliminados: any,
-    descripcion?: string
-  ): Promise<void> {
-    const { ip, userAgent, userId } = this.extractRequestInfo(req);
-    
-    if (!userId) return;
-
-    await this.log({
-      administradorId: userId,
-      accion: 'ELIMINAR',
-      tipoEntidad,
-      entidadId,
-      valoresAnteriores: datosEliminados,
-      descripcion: descripcion || `Eliminación de ${tipoEntidad}: ${entidadId}`,
-      direccionIP: ip,
-      userAgent,
+  static async getLogsByAccion(
+    accionPattern: string,
+    limit: number = 50
+  ): Promise<any[]> {
+    return await prisma.auditoria.findMany({
+      where: {
+        accion: {
+          contains: accionPattern,
+        },
+      },
+      take: limit,
+      orderBy: {
+        fecha_accion: 'desc',
+      },
     });
   }
 
   /**
-   * Registra cambio de estado
+   * Obtiene estadísticas de auditoría
    */
-  static async logStatusChange(
-    req: Request,
-    tipoEntidad: EntityType,
-    entidadId: string,
-    estadoAnterior: string,
-    estadoNuevo: string,
-    descripcion?: string
-  ): Promise<void> {
-    const { ip, userAgent, userId } = this.extractRequestInfo(req);
-    
-    if (!userId) return;
-
-    await this.log({
-      administradorId: userId,
-      accion: 'CAMBIO_ESTADO',
-      tipoEntidad,
-      entidadId,
-      valoresAnteriores: { estado: estadoAnterior },
-      valoresNuevos: { estado: estadoNuevo },
-      descripcion: descripcion || `Cambio de estado en ${tipoEntidad}: ${estadoAnterior} → ${estadoNuevo}`,
-      direccionIP: ip,
-      userAgent,
-    });
-  }
-
-  /**
-   * Registra login de usuario
-   */
-  static async logLogin(req: Request, userId: string, email: string): Promise<void> {
-    const { ip, userAgent } = this.extractRequestInfo(req);
-
-    await this.log({
-      administradorId: userId,
-      accion: 'LOGIN',
-      tipoEntidad: 'auth',
-      entidadId: userId,
-      valoresNuevos: { email, timestamp: new Date() },
-      descripcion: `Login exitoso: ${email}`,
-      direccionIP: ip,
-      userAgent,
-    });
-  }
-
-  /**
-   * Registra logout de usuario
-   */
-  static async logLogout(req: Request, userId: string, email?: string): Promise<void> {
-    const { ip, userAgent } = this.extractRequestInfo(req);
-
-    await this.log({
-      administradorId: userId,
-      accion: 'LOGOUT',
-      tipoEntidad: 'auth',
-      entidadId: userId,
-      valoresNuevos: { timestamp: new Date() },
-      descripcion: `Logout: ${email || userId}`,
-      direccionIP: ip,
-      userAgent,
-    });
-  }
-
-  /**
-   * Obtiene estadísticas de auditoría rápidas
-   */
-  static async getQuickStats(days: number = 7): Promise<{
+  static async getStats(days: number = 7): Promise<{
     totalLogs: number;
     logsByAction: Record<string, number>;
-    logsByEntity: Record<string, number>;
-    uniqueUsers: number;
+    logsByUser: Record<string, number>;
   }> {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const [totalLogs, logsByAction, logsByEntity, uniqueUsers] = await Promise.all([
-      prisma.auditoria.count({
-        where: { timestamp: { gte: since } },
-      }),
-      
-      prisma.auditoria.groupBy({
-        by: ['accion'],
-        where: { timestamp: { gte: since } },
-        _count: { accion: true },
-      }),
-      
-      prisma.auditoria.groupBy({
-        by: ['tipoEntidad'],
-        where: { timestamp: { gte: since } },
-        _count: { tipoEntidad: true },
-      }),
-      
-      prisma.auditoria.findMany({
-        where: { timestamp: { gte: since } },
-        select: { administradorId: true },
-        distinct: ['administradorId'],
-      }),
-    ]);
+    const logs = await prisma.auditoria.findMany({
+      where: {
+        fecha_accion: {
+          gte: since,
+        },
+      },
+    });
+
+    // Agrupar por tipo de acción (primera palabra del campo accion)
+    const logsByAction: Record<string, number> = {};
+    const logsByUser: Record<string, number> = {};
+
+    logs.forEach((log) => {
+      // Extraer tipo de acción (primera palabra: CREATE, UPDATE, DELETE, LOGIN, etc.)
+      const actionType = log.accion.split(' ')[0];
+      logsByAction[actionType] = (logsByAction[actionType] || 0) + 1;
+
+      // Contar por usuario
+      logsByUser[log.usuario] = (logsByUser[log.usuario] || 0) + 1;
+    });
 
     return {
-      totalLogs,
-      logsByAction: logsByAction.reduce((acc, item) => {
-        acc[item.accion] = item._count.accion;
-        return acc;
-      }, {} as Record<string, number>),
-      logsByEntity: logsByEntity.reduce((acc, item) => {
-        acc[item.tipoEntidad] = item._count.tipoEntidad;
-        return acc;
-      }, {} as Record<string, number>),
-      uniqueUsers: uniqueUsers.length,
+      totalLogs: logs.length,
+      logsByAction,
+      logsByUser,
     };
   }
 
   /**
-   * Limpia logs antiguos automáticamente
+   * Limpia logs antiguos (mantiene solo los últimos N días)
    */
-  static async autoCleanup(retentionDays: number = 90): Promise<number> {
+  static async cleanOldLogs(retentionDays: number = 90): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
     const result = await prisma.auditoria.deleteMany({
       where: {
-        timestamp: { lt: cutoffDate },
-        // Nunca eliminar logs de LOGIN/LOGOUT para seguridad
-        accion: { notIn: ['LOGIN', 'LOGOUT'] },
+        fecha_accion: {
+          lt: cutoffDate,
+        },
       },
     });
 
     return result.count;
-  }
-
-  /**
-   * Detecta actividad sospechosa
-   */
-  static async detectSuspiciousActivity(): Promise<{
-    multipleFailedLogins: any[];
-    unusualActivityTimes: any[];
-    massOperations: any[];
-  }> {
-    const lastHour = new Date();
-    lastHour.setHours(lastHour.getHours() - 1);
-
-    const last24Hours = new Date();
-    last24Hours.setHours(last24Hours.getHours() - 24);
-
-    // Múltiples intentos de operaciones en corto tiempo
-    const massOperations = await prisma.auditoria.groupBy({
-      by: ['administradorId', 'accion', 'tipoEntidad'],
-      where: {
-        timestamp: { gte: lastHour },
-        accion: { in: ['CREAR', 'ACTUALIZAR', 'ELIMINAR'] },
-      },
-      _count: { id: true },
-      having: { id: { _count: { gt: 20 } } }, // Más de 20 operaciones por hora
-    });
-
-    // Actividad en horarios inusuales (2am - 6am)
-    const unusualActivityTimes = await prisma.auditoria.findMany({
-      where: {
-        timestamp: { gte: last24Hours },
-      },
-      include: {
-        administrador: {
-          select: { email: true, username: true },
-        },
-      },
-    }).then(logs => 
-      logs.filter(log => {
-        const hour = log.timestamp.getHours();
-        return hour >= 2 && hour <= 6;
-      })
-    );
-
-    return {
-      multipleFailedLogins: [], // Implementar si se agregan logs de fallos de login
-      unusualActivityTimes,
-      massOperations,
-    };
-  }
-
-  /**
-   * Obtiene métricas de rendimiento del sistema
-   */
-  static async getPerformanceMetrics(days: number = 7): Promise<{
-    avgOperationsPerDay: number;
-    peakHour: { hour: number; count: number };
-    slowestOperations: any[];
-  }> {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-
-    const logs = await prisma.auditoria.findMany({
-      where: { timestamp: { gte: since } },
-      select: { timestamp: true, accion: true, tipoEntidad: true },
-    });
-
-    // Operaciones promedio por día
-    const avgOperationsPerDay = logs.length / days;
-
-    // Hora pico de actividad
-    const hourCounts: Record<number, number> = {};
-    logs.forEach(log => {
-      const hour = log.timestamp.getHours();
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-    });
-
-    const peakHour = Object.entries(hourCounts).reduce(
-      (max, [hour, count]) => (count > max.count ? { hour: Number(hour), count } : max),
-      { hour: 0, count: 0 }
-    );
-
-    return {
-      avgOperationsPerDay: Math.round(avgOperationsPerDay),
-      peakHour,
-      slowestOperations: [], // Para futuras optimizaciones
-    };
-  }
-
-  /**
-   * Obtiene timeline de actividades
-   */
-  static async getActivityTimeline(
-    startDate: Date,
-    endDate: Date,
-    groupBy: 'hour' | 'day' | 'week' = 'day'
-  ): Promise<Array<{ date: string; count: number; actions: Record<string, number> }>> {
-    const logs = await prisma.auditoria.findMany({
-      where: {
-        timestamp: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: { timestamp: true, accion: true },
-      orderBy: { timestamp: 'asc' },
-    });
-
-    const timeline: Map<string, { count: number; actions: Record<string, number> }> = new Map();
-
-    logs.forEach(log => {
-      let key: string;
-      
-      if (groupBy === 'hour') {
-        key = log.timestamp.toISOString().substring(0, 13); // YYYY-MM-DDTHH
-      } else if (groupBy === 'day') {
-        key = log.timestamp.toISOString().substring(0, 10); // YYYY-MM-DD
-      } else {
-        // week - calcular semana del año
-        const week = Math.ceil(
-          ((log.timestamp.getTime() - new Date(log.timestamp.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7
-        );
-        key = `${log.timestamp.getFullYear()}-W${week}`;
-      }
-
-      if (!timeline.has(key)) {
-        timeline.set(key, { count: 0, actions: {} });
-      }
-
-      const entry = timeline.get(key)!;
-      entry.count++;
-      entry.actions[log.accion] = (entry.actions[log.accion] || 0) + 1;
-    });
-
-    return Array.from(timeline.entries()).map(([date, data]) => ({
-      date,
-      count: data.count,
-      actions: data.actions,
-    }));
-  }
-
-  /**
-   * Obtiene comparación de actividad por usuarios
-   */
-  static async getUserActivityComparison(
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{
-    usuario: any;
-    totalAcciones: number;
-    accionesPorTipo: Record<string, number>;
-    entidadesModificadas: Set<string>;
-  }>> {
-    const logs = await prisma.auditoria.findMany({
-      where: {
-        timestamp: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        administrador: {
-          select: {
-            id: true,
-            email: true,
-            username: true,
-            nombres: true,
-            apellidos: true,
-          },
-        },
-      },
-    });
-
-    const userStats = new Map<string, any>();
-
-    logs.forEach(log => {
-      const userId = log.administradorId;
-      
-      if (!userStats.has(userId)) {
-        userStats.set(userId, {
-          usuario: {
-            id: log.administrador.id,
-            email: log.administrador.email,
-            username: log.administrador.username,
-            nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
-          },
-          totalAcciones: 0,
-          accionesPorTipo: {},
-          entidadesModificadas: new Set<string>(),
-        });
-      }
-
-      const stats = userStats.get(userId);
-      stats.totalAcciones++;
-      stats.accionesPorTipo[log.accion] = (stats.accionesPorTipo[log.accion] || 0) + 1;
-      stats.entidadesModificadas.add(`${log.tipoEntidad}:${log.entidadId}`);
-    });
-
-    return Array.from(userStats.values());
-  }
-
-  /**
-   * Obtiene cambios realizados en una entidad específica
-   */
-  static async getEntityChangeHistory(
-    tipoEntidad: EntityType,
-    entidadId: string
-  ): Promise<Array<{
-    id: string;
-    timestamp: Date;
-    accion: string;
-    administrador: any;
-    cambios: any;
-  }>> {
-    const logs = await prisma.auditoria.findMany({
-      where: {
-        tipoEntidad,
-        entidadId,
-      },
-      include: {
-        administrador: {
-          select: {
-            id: true,
-            username: true,
-            nombres: true,
-            apellidos: true,
-          },
-        },
-      },
-      orderBy: { timestamp: 'desc' },
-    });
-
-    return logs.map(log => ({
-      id: log.id,
-      timestamp: log.timestamp,
-      accion: log.accion,
-      administrador: {
-        id: log.administrador.id,
-        username: log.administrador.username,
-        nombreCompleto: `${log.administrador.nombres} ${log.administrador.apellidos}`,
-      },
-      cambios: {
-        anterior: log.valoresAnteriores,
-        nuevo: log.valoresNuevos,
-      },
-    }));
   }
 }

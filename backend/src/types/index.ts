@@ -1,99 +1,214 @@
-export interface AuthUser {
-  id: string;
+// ============================================
+// TIPOS DEL MODELO OFICIAL APL
+// ============================================
+
+// Administrador
+export interface Administrador {
+  id: number;
+  nombre: string;
+  telefono: string;
   email: string;
-  username: string;
-  role: 'admin' | 'user';
+  usuario: string;
+  super_usuario: boolean;
+  password: string;
+  activo: boolean;
+  refreshToken: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface AdministradorDTO {
+  id: number;
+  nombre: string;
+  telefono: string;
+  email: string;
+  usuario: string;
+  super_usuario: boolean;
+  activo: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Cliente
+export interface Cliente {
+  id: number;
+  nombre: string;
+  telefono: string;
+  email: string;
+  id_administrador: number;
+  administrador?: Administrador;
+  pedidos?: Pedido[];
+}
+
+export interface ClienteDTO {
+  id: number;
+  nombre: string;
+  telefono: string;
+  email: string;
+  id_administrador: number;
+  totalPedidos?: number;
+  montoTotal?: number;
+  montoPagado?: number;
+  montoPendiente?: number;
+}
+
+// Estado (catálogo)
+export interface Estado {
+  id: number;
+  descripcion: string;
+  fecha_insert: Date;
+  fecha_delete: Date | null;
+}
+
+export interface EstadoDTO {
+  id: number;
+  descripcion: string;
+}
+
+// Producto
+export interface Producto {
+  id: number;
+  tipo: string;
+  valor: number;
+  id_administrador: number;
+  administrador?: Administrador;
+}
+
+export interface ProductoDTO {
+  id: number;
+  tipo: string;
+  valor: number;
+  id_administrador: number;
+}
+
+// Pedido
+export interface Pedido {
+  id: number;
+  id_cliente: number;
+  fecha_pedido: Date;
+  fecha_entrega: Date;
+  fecha_delete: Date | null;
+  id_administrador: number;
+  cliente?: Cliente;
+  administrador?: Administrador;
+  detalles?: DetallePedido[];
+  detallesPago?: DetallePago[];
+}
+
+export interface PedidoDTO {
+  id: number;
+  id_cliente: number;
+  nombreCliente: string;
+  fecha_pedido: Date;
+  fecha_entrega: Date;
+  id_administrador: number;
+  detalles: DetallePedidoDTO[];
+  montoTotal: number;
+  montoPagado: number;
+  montoPendiente: number;
+}
+
+// Detalle de Pedido
+export interface DetallePedido {
+  id: number;
+  id_pedido: number;
+  id_producto: number;
+  cantidad: number;
+  precio_unitario: number;
+  paciente: string;
+  id_estado: number;
+  pedido?: Pedido;
+  producto?: Producto;
+  estado?: Estado;
+}
+
+export interface DetallePedidoDTO {
+  id: number;
+  id_pedido: number;
+  id_producto: number;
+  tipoProducto: string;
+  cantidad: number;
+  precio_unitario: number;
+  paciente: string;
+  id_estado: number;
+  estadoDescripcion: string;
+  subtotal: number;
+}
+
+// Pago
+export interface Pago {
+  id: number;
+  valor: number;
+  id_administrador: number;
+  administrador?: Administrador;
+  detalles?: DetallePago[];
+}
+
+export interface PagoDTO {
+  id: number;
+  valor: number;
+  id_administrador: number;
+  fecha_pago: Date;
+  pedidos: {
+    id_pedido: number;
+    valor: number;
+  }[];
+}
+
+// Detalle de Pago (N:M entre Pago y Pedido)
+export interface DetallePago {
+  id: number;
+  id_pago: number;
+  id_pedido: number;
+  valor: number;
+  fecha_pago: Date;
+  pago?: Pago;
+  pedido?: Pedido;
+}
+
+export interface DetallePagoDTO {
+  id: number;
+  id_pago: number;
+  id_pedido: number;
+  valor: number;
+  fecha_pago: Date;
+}
+
+// Auditoría (sin relaciones)
+export interface Auditoria {
+  id: number;
+  usuario: string;
+  fecha_accion: Date;
+  accion: string;
+}
+
+export interface AuditoriaDTO {
+  id: number;
+  usuario: string;
+  fecha_accion: Date;
+  accion: string;
+}
+
+// ============================================
+// TIPOS DE AUTENTICACIÓN
+// ============================================
 
 export interface LoginCredentials {
   email: string;
   password: string;
 }
 
-export interface RegisterData {
-  email: string;
-  username: string;
-  password: string;
-  role?: 'admin' | 'user';
-}
-
 export interface AuthResponse {
   success: boolean;
   token?: string;
-  user?: Omit<AuthUser, 'password'>;
+  refreshToken?: string;
+  user?: AdministradorDTO;
   message?: string;
 }
 
-export interface Client {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  whatsapp?: string;
-  type: 'clinic' | 'dentist';
-  totalOrders: number;
-  totalAmount: number;
-  pendingAmount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export type OrderStatus = 'pending' | 'in_progress' | 'delivered' | 'paid';
-
-export interface Order {
-  id: string;
-  clientId: string;
-  clientName: string;
-  patientName: string;
-  date: Date;
-  dueDate: Date;
-  description: string;
-  type: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  amountPaid: number;
-  status: OrderStatus;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface OrderDetail {
-  id: string;
-  orderId: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Payment {
-  id: string;
-  orderId: string;
-  amount: number;
-  paymentMethod: 'cash' | 'transfer' | 'card';
-  paymentDate: Date;
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AuditLog {
-  id: string;
-  userId: string;
-  userEmail: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  oldValues?: any;
-  newValues?: any;
-  timestamp: Date;
-  ipAddress?: string;
-}
+// ============================================
+// TIPOS DE RESPUESTAS API
+// ============================================
 
 export interface ApiResponse<T = any> {
   success: boolean;
