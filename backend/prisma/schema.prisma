@@ -1,11 +1,13 @@
 // ================================================================
 // SCHEMA PRISMA - MODELO OFICIAL DEL SECTOR BD
-// Fecha: 14 de enero de 2026
+// Fecha: 15 de enero de 2026
 // Fuente: Diccionario_Datos_APL.xlsx + MR APP APL.jpg
+// Base de datos: PostgreSQL 14+
 // ================================================================
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -85,7 +87,7 @@ model Pedido {
 model Producto {
   id                Int       @id @default(autoincrement())
   tipo              String    @db.VarChar(100)
-  valor             Decimal   @db.Decimal(10,2)
+  precio            Decimal   @db.Decimal(10,2)
   id_administrador  Int
   
   // Relaciones

@@ -8,13 +8,13 @@ const prisma = new PrismaClient();
 // Schemas de validación - Modelo Oficial APL
 const createProductoSchema = z.object({
   tipo: z.string().min(2, 'Tipo de producto debe tener al menos 2 caracteres'),
-  valor: z.number().positive('El valor debe ser mayor a 0'),
+  precio: z.number().positive('El precio debe ser mayor a 0'),
   id_administrador: z.number().int().positive('ID de administrador inválido'),
 });
 
 const updateProductoSchema = z.object({
   tipo: z.string().min(2, 'Tipo de producto debe tener al menos 2 caracteres').optional(),
-  valor: z.number().positive('El valor debe ser mayor a 0').optional(),
+  precio: z.number().positive('El precio debe ser mayor a 0').optional(),
   id_administrador: z.number().int().positive().optional(),
 });
 
@@ -330,7 +330,7 @@ export class ProductoController {
             select: {
               id: true,
               tipo: true,
-              valor: true,
+              precio: true,
             },
           });
           return {

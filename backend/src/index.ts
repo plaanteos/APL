@@ -175,7 +175,7 @@ app.use(errorHandler);
 async function connectDatabase() {
   try {
     await prisma.$connect();
-    logger.info('✅ Connected to MySQL database');
+    logger.info('✅ Connected to PostgreSQL database');
   } catch (error) {
     logger.error('❌ Failed to connect to database:', error);
     process.exit(1);

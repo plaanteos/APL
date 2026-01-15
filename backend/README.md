@@ -5,7 +5,7 @@ Backend API para el sistema de gestión administrativa del laboratorio dental AP
 ## 🚀 Tecnologías
 
 - **Node.js** + **Express.js** + **TypeScript**
-- **Prisma ORM** con **MySQL**
+- **Prisma ORM** con **PostgreSQL**
 - **JWT Authentication**
 - **bcryptjs** para encriptación
 - **Zod** para validación
