@@ -3,8 +3,23 @@ import { Card } from "./ui/card";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { DayOrdersDialog } from "./DayOrdersDialog";
-import { orderService, Order } from "../../services/order.service";
+import orderService from "../../services/order.service";
 import { toast } from "sonner";
+
+type CalendarOrder = {
+  id: string;
+  clienteId: string;
+  nombrePaciente: string;
+  fechaVencimiento: string;
+  descripcion: string;
+  tipoPedido: string;
+  montoTotal: number;
+  montoPagado: number;
+  estado: string;
+  cliente?: {
+    nombre: string;
+  };
+};
 
 interface CalendarWidgetProps {
   onNavigateToBalance?: (clientId: string) => void;
@@ -16,7 +31,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
   const [showDayOrdersDialog, setShowDayOrdersDialog] = useState(false);
   const [preselectedDate, setPreselectedDate] = useState<string>("");
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<CalendarOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -26,13 +41,26 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const fetchedOrders = await orderService.getAllOrders();
-      // Filtrar pedidos válidos que tengan los campos necesarios
-      const validOrders = fetchedOrders.filter(order => 
-        order && 
-        order.fechaVencimiento && 
-        order.tipoPedido
-      );
+      const fetchedOrders = await orderService.getAll();
+      const mappedOrders: CalendarOrder[] = (fetchedOrders || []).map((order: any) => {
+        const firstDetalle = order?.detalles?.[0];
+        const dueDate = order?.fecha_entrega ?? order?.fecha_pedido;
+
+        return {
+          id: String(order?.id ?? ""),
+          clienteId: String(order?.id_cliente ?? ""),
+          nombrePaciente: String(firstDetalle?.paciente ?? ""),
+          fechaVencimiento: dueDate ? new Date(dueDate).toISOString() : new Date().toISOString(),
+          descripcion: String(order?.descripcion ?? ""),
+          tipoPedido: String(firstDetalle?.producto?.tipo ?? "Pedido"),
+          montoTotal: Number(order?.montoTotal ?? 0),
+          montoPagado: Number(order?.montoPagado ?? 0),
+          estado: String(firstDetalle?.estado?.descripcion ?? ""),
+          cliente: { nombre: String(order?.cliente?.nombre ?? "") },
+        };
+      });
+
+      const validOrders = mappedOrders.filter(order => order.fechaVencimiento && order.tipoPedido);
       setOrders(validOrders);
     } catch (error) {
       console.error("Error fetching orders:", error);

@@ -20,9 +20,9 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "sonner";
-import { clientService } from "../../services/client.service";
-import { orderService } from "../../services/order.service";
-import type { Client } from "../types";
+import clientService from "../../services/client.service";
+import orderService from "../../services/order.service";
+import type { IClient } from "../types";
 import { Plus } from "lucide-react";
 
 // Schema de validación con Zod
@@ -66,7 +66,7 @@ export function NewOrderDialog({
   preselectedDate,
   onOrderCreated 
 }: NewOrderDialogProps) {
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<IClient[]>([]);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});

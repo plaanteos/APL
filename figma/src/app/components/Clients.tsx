@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Plus, Mail, Phone, MessageCircle, Building, User, Loader2 } from "lucide-react";
-import { clientService, Client } from "../../services/client.service";
+import clientService from "../../services/client.service";
+import type { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
 
@@ -12,7 +13,7 @@ interface ClientsProps {
 
 export function Clients({ onNavigateToBalance }: ClientsProps) {
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<IClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
