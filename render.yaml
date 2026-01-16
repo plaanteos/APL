@@ -8,7 +8,7 @@ services:
     rootDir: backend
     buildCommand: npm ci --include=dev && npm run build && ls -la && npx prisma generate && npx prisma db push --force-reset --skip-generate && npm run create-admin && npm run db:seed
     startCommand: npm start
-    healthCheckPath: /api/health
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
