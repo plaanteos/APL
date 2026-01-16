@@ -59,7 +59,7 @@ async function main() {
     await prisma.producto.create({
       data: {
         tipo: prod.tipo,
-        valor: prod.valor,
+        precio: prod.valor,
         id_administrador: admin.id,
       },
     });
