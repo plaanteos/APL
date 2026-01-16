@@ -22,7 +22,11 @@ import {
 import { toast } from "sonner";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
+import productoService from "../../services/producto.service";
+import estadoService from "../../services/estado.service";
+import { authService } from "../../services/auth.service";
 import type { IClient } from "../types";
+import type { IProducto, IEstado } from "../types";
 import { Plus } from "lucide-react";
 
 // Schema de validación con Zod
@@ -30,7 +34,8 @@ const orderSchema = z.object({
   clientId: z.string().min(1, "Debe seleccionar un cliente"),
   patientName: z.string().min(2, "El nombre del paciente debe tener al menos 2 caracteres"),
   description: z.string().optional(),
-  type: z.string().min(1, "Debe seleccionar un tipo de trabajo"),
+  productId: z.string().min(1, "Debe seleccionar un producto"),
+  estadoId: z.string().min(1, "Debe seleccionar un estado"),
   quantity: z.string().refine((val) => {
     const num = Number(val);
     return !isNaN(num) && num > 0;
@@ -39,7 +44,6 @@ const orderSchema = z.object({
     const num = Number(val);
     return !isNaN(num) && num > 0;
   }, "El precio debe ser mayor a 0"),
-  status: z.string(),
   dueDate: z.string().refine((val) => {
     if (!val) return false;
     const selectedDate = new Date(val);
@@ -67,6 +71,8 @@ export function NewOrderDialog({
   onOrderCreated 
 }: NewOrderDialogProps) {
   const [clients, setClients] = useState<IClient[]>([]);
+  const [productos, setProductos] = useState<IProducto[]>([]);
+  const [estados, setEstados] = useState<IEstado[]>([]);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,29 +80,30 @@ export function NewOrderDialog({
     clientId: preselectedClientId || "",
     patientName: "",
     description: "",
-    type: "",
+    productId: "",
+    estadoId: "",
     quantity: "1",
     unitPrice: "",
-    status: "PENDIENTE",
     dueDate: preselectedDate || "",
   });
 
   const [newClientData, setNewClientData] = useState({
     nombre: "",
+    email: "",
     telefono: "",
-    tipo: "PARTICULAR" as "CLINICA" | "ODONTOLOGO" | "PARTICULAR",
   });
 
   // Fetch clients
   useEffect(() => {
     if (open) {
       fetchClients();
+      fetchCatalogs();
     }
   }, [open]);
 
   const fetchClients = async () => {
     try {
-      const data = await clientService.getAllClients();
+      const data = await clientService.getAll();
       setClients(data);
     } catch (error) {
       console.error("Error al cargar clientes:", error);
@@ -104,23 +111,48 @@ export function NewOrderDialog({
     }
   };
 
+  const fetchCatalogs = async () => {
+    try {
+      const [productosData, estadosData] = await Promise.all([
+        productoService.getAll(),
+        estadoService.getAll(),
+      ]);
+      setProductos(productosData);
+      setEstados(estadosData);
+
+      // Defaults útiles (evita formularios vacíos y reduce errores)
+      setFormData((prev) => ({
+        ...prev,
+        productId: prev.productId || (productosData[0]?.id?.toString() ?? ""),
+        estadoId: prev.estadoId || (estadosData[0]?.id?.toString() ?? ""),
+      }));
+    } catch (error) {
+      console.error("Error al cargar catálogos:", error);
+      toast.error("Error al cargar productos/estados");
+    }
+  };
+
   const handleCreateClient = async () => {
-    if (!newClientData.nombre || !newClientData.telefono) {
-      toast.error("Por favor complete nombre y teléfono");
+    if (!newClientData.nombre || !newClientData.telefono || !newClientData.email) {
+      toast.error("Por favor complete nombre, email y teléfono");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const newClient = await clientService.createClient(newClientData);
+      const newClient = await clientService.create({
+        nombre: newClientData.nombre,
+        email: newClientData.email,
+        telefono: newClientData.telefono,
+      });
       toast.success("Cliente creado exitosamente");
       await fetchClients();
       setFormData({ ...formData, clientId: newClient.id.toString() });
       setShowNewClientForm(false);
       setNewClientData({
         nombre: "",
+        email: "",
         telefono: "",
-        tipo: "PARTICULAR",
       });
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Error al crear cliente");
@@ -179,28 +211,39 @@ export function NewOrderDialog({
 
     setIsSubmitting(true);
     try {
-      const newOrder = await orderService.createOrder({
-        clienteId: Number(formData.clientId),
-        paciente: formData.patientName,
-        descripcion: formData.description,
-        tipoPedido: formData.type,
-        cantidad: Number(formData.quantity),
-        precioUnitario: Number(formData.unitPrice),
-        estado: formData.status as any,
-        fechaVencimiento: formData.dueDate,
+      const storedUser = authService.getStoredUser();
+      const adminId = storedUser?.id != null ? Number((storedUser as any).id) : NaN;
+      if (!adminId || Number.isNaN(adminId)) {
+        toast.error("No se pudo identificar el administrador (vuelve a iniciar sesión)");
+        return;
+      }
+
+      await orderService.create({
+        id_cliente: Number(formData.clientId),
+        fecha_entrega: formData.dueDate,
+        id_administrador: adminId,
+        detalles: [
+          {
+            id_producto: Number(formData.productId),
+            cantidad: Number(formData.quantity),
+            precio_unitario: Number(formData.unitPrice),
+            paciente: formData.patientName,
+            id_estado: Number(formData.estadoId),
+          },
+        ],
       });
-      
-      toast.success(`Pedido para ${newOrder.paciente} creado exitosamente`);
+
+      toast.success(`Pedido para ${formData.patientName} creado exitosamente`);
       onOpenChange(false);
       onOrderCreated?.();
       setFormData({
         clientId: "",
         patientName: "",
         description: "",
-        type: "",
+        productId: "",
+        estadoId: "",
         quantity: "1",
         unitPrice: "",
-        status: "PENDIENTE",
         dueDate: "",
       });
       setErrors({});
@@ -257,6 +300,18 @@ export function NewOrderDialog({
                   />
                 </div>
                 <div>
+                  <Label htmlFor="newClientEmail">Email</Label>
+                  <Input
+                    id="newClientEmail"
+                    type="email"
+                    value={newClientData.email}
+                    onChange={(e) =>
+                      setNewClientData({ ...newClientData, email: e.target.value })
+                    }
+                    placeholder="Ej: cliente@ejemplo.com"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="newClientPhone">Teléfono</Label>
                   <Input
                     id="newClientPhone"
@@ -267,24 +322,6 @@ export function NewOrderDialog({
                     }
                     placeholder="Ej: +54 11 1234-5678"
                   />
-                </div>
-                <div>
-                  <Label htmlFor="newClientType">Tipo</Label>
-                  <Select
-                    value={newClientData.tipo}
-                    onValueChange={(value: any) =>
-                      setNewClientData({ ...newClientData, tipo: value })
-                    }
-                  >
-                    <SelectTrigger id="newClientType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CLINICA">Clínica</SelectItem>
-                      <SelectItem value="ODONTOLOGO">Odontólogo</SelectItem>
-                      <SelectItem value="PARTICULAR">Particular</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
                 <Button
                   type="button"
@@ -335,26 +372,53 @@ export function NewOrderDialog({
           </div>
 
           <div>
-            <Label htmlFor="type">Tipo de Trabajo</Label>
+            <Label htmlFor="product">Producto *</Label>
             <Select
-              value={formData.type}
-              onValueChange={(value) =>
-                setFormData({ ...formData, type: value })
-              }
+              value={formData.productId}
+              onValueChange={(value) => {
+                setFormData({ ...formData, productId: value });
+                validateField("productId", value);
+              }}
             >
-              <SelectTrigger id="type">
-                <SelectValue placeholder="Seleccionar tipo" />
+              <SelectTrigger id="product" className={errors.productId ? "border-red-500" : ""}>
+                <SelectValue placeholder="Seleccionar producto" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Corona">Corona</SelectItem>
-                <SelectItem value="Puente">Puente</SelectItem>
-                <SelectItem value="Prótesis">Prótesis</SelectItem>
-                <SelectItem value="Carilla">Carilla</SelectItem>
-                <SelectItem value="Incrustación">Incrustación</SelectItem>
-                <SelectItem value="Placa">Placa de Descarga</SelectItem>
-                <SelectItem value="Otro">Otro</SelectItem>
+                {productos.map((p) => (
+                  <SelectItem key={p.id} value={p.id.toString()}>
+                    {p.tipo}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {errors.productId && (
+              <p className="text-sm text-red-500 mt-1">{errors.productId}</p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="estado">Estado *</Label>
+            <Select
+              value={formData.estadoId}
+              onValueChange={(value) => {
+                setFormData({ ...formData, estadoId: value });
+                validateField("estadoId", value);
+              }}
+            >
+              <SelectTrigger id="estado" className={errors.estadoId ? "border-red-500" : ""}>
+                <SelectValue placeholder="Seleccionar estado" />
+              </SelectTrigger>
+              <SelectContent>
+                {estados.map((e) => (
+                  <SelectItem key={e.id} value={e.id.toString()}>
+                    {e.descripcion}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.estadoId && (
+              <p className="text-sm text-red-500 mt-1">{errors.estadoId}</p>
+            )}
           </div>
 
           <div>

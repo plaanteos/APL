@@ -1,64 +1,58 @@
 import api from './api';
-import { IEstado, IEstadoFormData } from '../app/types';
+import { IEstado, IEstadoFormData, ID } from '../app/types';
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  data: T;
+  message?: string;
+  pagination?: any;
+};
 
 class EstadoService {
   /**
-   * Obtener todos los estados (incluyendo eliminados si se especifica)
+   * Obtener catálogo de estados activos
    */
-  async getAll(includeDeleted: boolean = false): Promise<IEstado[]> {
-    const response = await api.get<IEstado[]>('/estados', {
-      params: { includeDeleted }
-    });
-    return response.data;
+  async getAll(): Promise<IEstado[]> {
+    const response = await api.get<ApiEnvelope<IEstado[]>>('/estados');
+    return response.data.data;
   }
 
   /**
    * Obtener estado por ID
    */
-  async getById(id: number): Promise<IEstado> {
-    const response = await api.get<IEstado>(`/estados/${id}`);
-    return response.data;
+  async getById(id: ID): Promise<IEstado> {
+    const response = await api.get<ApiEnvelope<IEstado>>(`/estados/${id}`);
+    return response.data.data;
   }
 
   /**
    * Crear nuevo estado
    */
   async create(data: IEstadoFormData): Promise<IEstado> {
-    const response = await api.post<IEstado>('/estados', data);
-    return response.data;
+    const response = await api.post<ApiEnvelope<IEstado>>('/estados', data);
+    return response.data.data;
   }
 
   /**
    * Actualizar estado
    */
-  async update(id: number, data: Partial<IEstadoFormData>): Promise<IEstado> {
-    const response = await api.put<IEstado>(`/estados/${id}`, data);
-    return response.data;
+  async update(id: ID, data: Partial<IEstadoFormData>): Promise<IEstado> {
+    const response = await api.put<ApiEnvelope<IEstado>>(`/estados/${id}`, data);
+    return response.data.data;
   }
 
   /**
    * Soft delete de estado
    */
-  async softDelete(id: number): Promise<{ message: string }> {
-    const response = await api.delete<{ message: string }>(`/estados/${id}`);
-    return response.data;
+  async softDelete(id: ID): Promise<{ message: string }> {
+    const response = await api.delete<ApiEnvelope<{ message?: string }>>(`/estados/${id}`);
+    return { message: response.data.message || 'Estado eliminado' };
   }
 
   /**
    * Restaurar estado eliminado
    */
-  async restore(id: number): Promise<IEstado> {
-    const response = await api.post<IEstado>(`/estados/${id}/restore`);
-    return response.data;
-  }
-
-  /**
-   * Obtener estadísticas de estados
-   */
-  async getStats(): Promise<{ total: number; activos: number; eliminados: number }> {
-    const response = await api.get('/estados/stats');
-    return response.data;
-  }
+  // Nota: la API backend no expone restore/stats en las rutas actuales.
 }
 
 export default new EstadoService();

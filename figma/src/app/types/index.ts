@@ -56,7 +56,7 @@ export interface IEstado {
   id: ID;
   descripcion: string;
   fecha_delete?: Date | string | null;
-  id_administrador: ID;
+  id_administrador?: ID;
   // Campos calculados
   usageCount?: number;
 }
@@ -276,7 +276,8 @@ export interface IDetallePedidoFormData {
 
 export interface IOrderFormData {
   id_cliente: ID;
-  fecha_pedido: string;
+  fecha_entrega: string;
+  id_administrador: ID;
   detalles: IDetallePedidoFormData[];
 }
 
