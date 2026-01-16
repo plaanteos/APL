@@ -1,7 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const RAW_API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001') as string;
+
+// Normalizar para que siempre apunte a ".../api" independientemente de si el env ya lo incluye.
+const trimmed = RAW_API_URL.replace(/\/+$/, '');
+const API_BASE_URL = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 
 // Create axios instance
 export const apiClient = axios.create({

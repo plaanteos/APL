@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Mail, Phone, MessageCircle, Building, User, Loader2 } from "lucide-react";
+import { Plus, Mail, Phone, MessageCircle, User, Loader2 } from "lucide-react";
 import clientService from "../../services/client.service";
 import type { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
 
 interface ClientsProps {
-  onNavigateToBalance: (clientId: string) => void;
+  onNavigateToBalance: (clientId: number) => void;
 }
 
 export function Clients({ onNavigateToBalance }: ClientsProps) {
@@ -16,13 +16,6 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
   const [clients, setClients] = useState<IClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1
-  });
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
     type: "email" | "whatsapp";
@@ -41,16 +34,9 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
       try {
         setIsLoading(true);
         setError(null);
-        
-        const response = await clientService.getAllClients(page, 20);
-        
-        // Manejar respuesta con o sin paginación
-        if (Array.isArray(response)) {
-          setClients(response);
-        } else {
-          setClients(response.items);
-          setPagination(response.pagination);
-        }
+
+        const response = await clientService.getAll();
+        setClients(response);
       } catch (err: any) {
         console.error('Error fetching clients:', err);
         setError(err.response?.data?.error || 'Error al cargar clientes');
@@ -60,20 +46,14 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
     };
 
     fetchClients();
-  }, [page]);
+  }, []);
 
   const handleClientCreated = () => {
     // Refrescar datos después de crear cliente
-    setPage(1);
     const fetchClients = async () => {
       try {
-        const response = await clientService.getAllClients(1, 20);
-        if (Array.isArray(response)) {
-          setClients(response);
-        } else {
-          setClients(response.items);
-          setPagination(response.pagination);
-        }
+        const response = await clientService.getAll();
+        setClients(response);
       } catch (err) {
         console.error('Error refreshing clients:', err);
       }
@@ -144,26 +124,14 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
             >
               <div className="flex items-start gap-3">
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  {client.tipo === "CLINICA" ? (
-                    <Building size={24} className="text-blue-600" />
-                  ) : (
-                    <User size={24} className="text-blue-600" />
-                  )}
+                  <User size={24} className="text-blue-600" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <h3 className="truncate">{client.nombre}</h3>
-                      <p className="text-sm text-gray-500 capitalize">
-                        {client.tipo === "CLINICA" ? "Clínica" : client.tipo === "DENTISTA" ? "Odontólogo" : "Particular"}
-                      </p>
                     </div>
-                    {!client.activo && (
-                      <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full flex-shrink-0">
-                        Inactivo
-                      </span>
-                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -178,12 +146,12 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
                     </button>
                     <button
                       onClick={(e) =>
-                        handleOpenMessage("whatsapp", client.nombre, client.whatsapp || client.telefono, e)
+                        handleOpenMessage("whatsapp", client.nombre, client.telefono, e)
                       }
                       className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors w-full text-left"
                     >
                       <MessageCircle size={14} />
-                      <span className="truncate underline">{client.whatsapp || client.telefono}</span>
+                      <span className="truncate underline">{client.telefono}</span>
                     </button>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Phone size={14} />
@@ -196,31 +164,6 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
           ))
         )}
       </div>
-
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-gray-600">
-            Página {page} de {pagination.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-            disabled={page === pagination.totalPages}
-          >
-            Siguiente
-          </Button>
-        </div>
-      )}
 
       <NewClientDialog
         open={showNewClientDialog}

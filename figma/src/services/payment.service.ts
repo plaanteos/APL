@@ -8,21 +8,30 @@ import {
   ID
 } from '../app/types';
 
+type ApiEnvelope<T> = {
+  success: boolean;
+  data: T;
+  message?: string;
+  pagination?: any;
+};
+
 class PaymentService {
   /**
    * Obtener todos los pagos
    */
   async getAll(): Promise<IPagoWithDetails[]> {
-    const response = await api.get<IPagoWithDetails[]>('/pagos');
-    return response.data;
+    const response = await api.get<ApiEnvelope<IPagoWithDetails[]>>('/payments', {
+      params: { page: 1, limit: 1000 },
+    });
+    return response.data.data;
   }
 
   /**
    * Obtener pago por ID con detalles
    */
   async getById(id: ID): Promise<IPagoWithDetails> {
-    const response = await api.get<IPagoWithDetails>(`/pagos/${id}`);
-    return response.data;
+    const response = await api.get<ApiEnvelope<IPagoWithDetails>>(`/payments/${id}`);
+    return response.data.data;
   }
 
   /**
@@ -38,44 +47,38 @@ class PaymentService {
       );
     }
 
-    const response = await api.post<IPago>('/pagos', data);
-    return response.data;
+    const response = await api.post<ApiEnvelope<IPago>>('/payments', data);
+    return response.data.data;
   }
 
   /**
    * Eliminar pago (elimina también sus detalles)
    */
   async delete(id: ID): Promise<{ message: string }> {
-    const response = await api.delete<{ message: string }>(`/pagos/${id}`);
-    return response.data;
+    const response = await api.delete<ApiEnvelope<{ message?: string }>>(`/payments/${id}`);
+    return { message: response.data.message || 'Pago eliminado' };
   }
 
   /**
    * Obtener pagos por cliente
    */
   async getByClient(clienteId: ID): Promise<IPagoWithDetails[]> {
-    const response = await api.get<IPagoWithDetails[]>('/pagos/cliente', {
-      params: { clienteId }
-    });
-    return response.data;
+    throw new Error('getByClient no está disponible en la API actual');
   }
 
   /**
    * Obtener pagos por pedido
    */
   async getByOrder(pedidoId: ID): Promise<IPagoWithDetails[]> {
-    const response = await api.get<IPagoWithDetails[]>('/pagos/pedido', {
-      params: { pedidoId }
-    });
-    return response.data;
+    throw new Error('getByOrder no está disponible en la API actual');
   }
 
   /**
    * Obtener estadísticas de pagos
    */
   async getStats(): Promise<IPaymentStats> {
-    const response = await api.get<IPaymentStats>('/pagos/stats');
-    return response.data;
+    const response = await api.get<ApiEnvelope<IPaymentStats>>('/payments/stats');
+    return response.data.data;
   }
 
   /**
@@ -83,11 +86,7 @@ class PaymentService {
    * Retorna el monto máximo que se puede pagar
    */
   async validatePayment(pedidoId: ID, monto: number): Promise<{ valid: boolean; montoPendiente: number }> {
-    const response = await api.post<{ valid: boolean; montoPendiente: number }>(
-      '/pagos/validar',
-      { pedidoId, monto }
-    );
-    return response.data;
+    throw new Error('validatePayment no está disponible en la API actual');
   }
 }
 

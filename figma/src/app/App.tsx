@@ -12,7 +12,7 @@ type View = "dashboard" | "orders" | "clients" | "balance";
 export default function App() {
   const { user, logout, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<View>("dashboard");
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [navigationHistory, setNavigationHistory] = useState<View[]>(["dashboard"]);
 
@@ -24,7 +24,7 @@ export default function App() {
     setNavigationHistory(["dashboard"]);
   };
 
-  const navigateTo = (view: View, clientId?: string, filter?: string) => {
+  const navigateTo = (view: View, clientId?: number, filter?: string) => {
     // Reset filter when not navigating to orders
     if (view !== "orders") {
       setOrderFilter("all");
@@ -54,7 +54,7 @@ export default function App() {
     }
   };
 
-  const navigateToBalance = (clientId: string) => {
+  const navigateToBalance = (clientId: number) => {
     setSelectedClientId(clientId);
     navigateTo("balance", clientId);
   };

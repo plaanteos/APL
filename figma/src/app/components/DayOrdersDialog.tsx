@@ -27,7 +27,7 @@ interface DayOrdersDialogProps {
   onOpenChange: (open: boolean) => void;
   date: Date | null;
   orders: Order[];
-  onNavigateToBalance?: (clientId: string) => void;
+  onNavigateToBalance?: (clientId: number) => void;
 }
 
 export function DayOrdersDialog({
@@ -95,7 +95,10 @@ export function DayOrdersDialog({
               <Card
                 key={order.id}
                 className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${getStatusColor(order.estado)}`}
-                onClick={() => onNavigateToBalance?.(order.clienteId)}
+                onClick={() => {
+                  const parsed = Number(order.clienteId);
+                  if (!Number.isNaN(parsed)) onNavigateToBalance?.(parsed);
+                }}
               >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between">

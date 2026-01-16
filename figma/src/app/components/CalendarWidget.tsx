@@ -22,7 +22,7 @@ type CalendarOrder = {
 };
 
 interface CalendarWidgetProps {
-  onNavigateToBalance?: (clientId: string) => void;
+  onNavigateToBalance?: (clientId: number) => void;
 }
 
 export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
@@ -108,21 +108,6 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "PENDIENTE":
-        return "bg-[#fedc97]/80 text-[#b5b682] border-l-2 border-[#b5b682]";
-      case "EN_PROCESO":
-        return "bg-blue-50 text-blue-700 border-l-2 border-blue-500";
-      case "PAGADO":
-        return "bg-[#7c9885]/40 text-[#28666e] border-l-2 border-[#28666e]";
-      case "ENTREGADO":
-        return "bg-[#7c9885]/60 text-[#033f63] border-l-2 border-[#033f63]";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
   const previousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
@@ -181,6 +166,11 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   return (
     <>
       <Card className="p-4">
+        {isLoading && (
+          <div className="mb-3 text-sm text-gray-500">
+            Cargando pedidos…
+          </div>
+        )}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-[#033f63]">Calendario de Entregas</h2>
