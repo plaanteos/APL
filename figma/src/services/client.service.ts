@@ -63,8 +63,51 @@ class ClientService {
    * Obtener balance del cliente (pedidos con detalles de pagos)
    */
   async getBalance(id: number): Promise<IClientBalance> {
-    const response = await api.get<ApiEnvelope<IClientBalance>>(`/clients/${id}/balance`);
-    return response.data.data;
+    const response = await api.get<ApiEnvelope<any>>(`/clients/${id}/balance`);
+    const raw = response.data.data;
+
+    // Backend actual devuelve: { cliente, resumen, pedidos }
+    if (raw && typeof raw === 'object' && 'resumen' in raw && 'pedidos' in raw) {
+      const cliente = raw.cliente || {};
+      const resumen = raw.resumen || {};
+      const pedidos = Array.isArray(raw.pedidos) ? raw.pedidos : [];
+
+      return {
+        cliente: {
+          id: Number(cliente.id),
+          nombre: String(cliente.nombre ?? ''),
+          email: String(cliente.email ?? ''),
+          telefono: String(cliente.telefono ?? ''),
+          // El endpoint de balance no incluye id_administrador; se completa para satisfacer el tipo.
+          id_administrador: Number(cliente.id_administrador ?? 0),
+        },
+        pedidos: pedidos.map((p: any) => {
+          const montoTotal = Number(p.montoTotal ?? 0);
+          const montoPagado = Number(p.montoPagado ?? 0);
+          const montoPendiente = Number(p.montoPendiente ?? Math.max(0, montoTotal - montoPagado));
+          const pedidoId = Number(p.id ?? p.pedidoId ?? 0);
+          const fecha = p.fecha_pedido ?? p.fecha ?? new Date().toISOString();
+
+          return {
+            pedidoId,
+            fecha,
+            // El backend no expone paciente/productos en este endpoint; se usa un fallback legible.
+            paciente: String(p.paciente ?? ''),
+            productos: String(p.productos ?? `${Number(p.cantidadProductos ?? 0)} productos`),
+            montoTotal,
+            montoPagado,
+            montoPendiente,
+            entregado: !!p.fecha_entrega,
+          };
+        }),
+        totalGeneral: Number(resumen.montoTotal ?? resumen.totalGeneral ?? 0),
+        totalPagado: Number(resumen.montoPagado ?? resumen.totalPagado ?? 0),
+        totalPendiente: Number(resumen.montoPendiente ?? resumen.totalPendiente ?? 0),
+      };
+    }
+
+    // Fallback: si el backend ya devuelve el tipo esperado.
+    return raw as IClientBalance;
   }
 
   /**

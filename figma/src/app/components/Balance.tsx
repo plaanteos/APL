@@ -284,19 +284,19 @@ export function Balance({ selectedClientId }: BalanceProps) {
             <Card className="p-4">
               <p className="text-sm text-gray-500">Total</p>
               <p className="text-2xl font-semibold text-[#033f63]">
-                ${balanceData.totalGeneral.toLocaleString()}
+                ${(balanceData.totalGeneral ?? 0).toLocaleString()}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-sm text-gray-500">Pagado</p>
               <p className="text-2xl font-semibold text-[#7c9885]">
-                ${balanceData.totalPagado.toLocaleString()}
+                ${(balanceData.totalPagado ?? 0).toLocaleString()}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-sm text-gray-500">Pendiente</p>
               <p className="text-2xl font-semibold text-[#b5b682]">
-                ${balanceData.totalPendiente.toLocaleString()}
+                ${(balanceData.totalPendiente ?? 0).toLocaleString()}
               </p>
             </Card>
           </div>
@@ -358,20 +358,20 @@ export function Balance({ selectedClientId }: BalanceProps) {
                           <div>
                             <p className="text-xs text-gray-500">Total</p>
                             <p className="text-lg font-semibold text-[#033f63]">
-                              ${item.montoTotal.toLocaleString()}
+                              ${(item.montoTotal ?? 0).toLocaleString()}
                             </p>
                           </div>
                           <div className="flex gap-3">
                             <div>
                               <p className="text-xs text-gray-500">Pagado</p>
                               <p className="text-sm text-[#7c9885]">
-                                ${item.montoPagado.toLocaleString()}
+                                ${(item.montoPagado ?? 0).toLocaleString()}
                               </p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500">Pendiente</p>
                               <p className="text-sm text-[#b5b682]">
-                                ${item.montoPendiente.toLocaleString()}
+                                ${(item.montoPendiente ?? 0).toLocaleString()}
                               </p>
                             </div>
                           </div>
@@ -400,7 +400,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
       <NewOrderDialog
         open={showNewOrderDialog}
         onOpenChange={setShowNewOrderDialog}
-        preselectedClientId={currentClientId || undefined}
+        preselectedClientId={currentClientId != null ? currentClientId.toString() : undefined}
         onOrderCreated={handleOrderCreated}
       />
 
