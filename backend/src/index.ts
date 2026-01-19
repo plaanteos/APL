@@ -37,6 +37,11 @@ export const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Render (y la mayoría de PaaS) se ejecuta detrás de un proxy/ingress.
+// Esto permite a Express leer correctamente la IP real desde X-Forwarded-For,
+// y evita el ValidationError de express-rate-limit.
+app.set('trust proxy', 1);
+
 // CORS configuration - DEBE IR ANTES QUE TODO
 const allowedOrigins = [
   'https://administracionapl.netlify.app',
