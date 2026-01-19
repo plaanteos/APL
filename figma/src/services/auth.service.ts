@@ -68,7 +68,19 @@ export const authService = {
 
   // Logout
   logout: async (): Promise<void> => {
-    await apiClient.post('/auth/logout');
+    try {
+      await apiClient.post('/auth/logout');
+    } catch {
+      // Si no hay conexión o el backend no responde, igual se debe limpiar la sesión local.
+    } finally {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
+  },
+
+  // Limpieza local (sin llamadas a red)
+  clearLocalSession: (): void => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');

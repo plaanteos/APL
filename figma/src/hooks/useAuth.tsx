@@ -24,14 +24,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = authService.getToken();
 
         if (storedUser && token) {
-          // Verify token is still valid by fetching current user
-          const currentUser = await authService.getCurrentUser();
-          setUser(currentUser);
+          // Si no hay conexión, conservar sesión local y evitar errores de red.
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            setUser(storedUser);
+          } else {
+            // Verify token is still valid by fetching current user
+            const currentUser = await authService.getCurrentUser();
+            setUser(currentUser);
+          }
         }
       } catch (error) {
         // Token is invalid or expired
         console.error('Auth initialization error:', error);
-        authService.logout();
+        authService.clearLocalSession();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -58,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
       // Even if the server request fails, clear local state
-      authService.logout();
+      authService.clearLocalSession();
       setUser(null);
     }
   };
