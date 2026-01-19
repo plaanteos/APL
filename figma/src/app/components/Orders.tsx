@@ -217,7 +217,10 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                                 <div className="text-right">
                                   <p className="text-xs text-gray-500">Cantidad: {detalle.cantidad}</p>
                                   <p className="font-medium">
-                                    ${(detalle.cantidad * detalle.precio_unitario).toLocaleString()}
+                                    ${(
+                                      Number(detalle.cantidad ?? 0) *
+                                      Number(detalle.precio_unitario ?? 0)
+                                    ).toLocaleString()}
                                   </p>
                                 </div>
                               </div>
@@ -232,16 +235,16 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                   <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <div className="flex-1">
                       <p className="text-gray-500 text-sm">Total</p>
-                      <p className="text-lg font-semibold">${order.montoTotal.toLocaleString()}</p>
+                      <p className="text-lg font-semibold">${Number(order.montoTotal ?? 0).toLocaleString()}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-gray-500 text-xs">Pagado</p>
-                      <p className="text-sm text-green-600">${order.montoPagado.toLocaleString()}</p>
+                      <p className="text-sm text-green-600">${Number(order.montoPagado ?? 0).toLocaleString()}</p>
                     </div>
                     {order.montoPendiente > 0 && (
                       <div className="text-right ml-4">
                         <p className="text-gray-500 text-xs">Pendiente</p>
-                        <p className="text-sm text-red-600">${order.montoPendiente.toLocaleString()}</p>
+                        <p className="text-sm text-red-600">${Number(order.montoPendiente ?? 0).toLocaleString()}</p>
                       </div>
                     )}
                   </div>

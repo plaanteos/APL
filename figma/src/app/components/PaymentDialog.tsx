@@ -32,7 +32,11 @@ export function PaymentDialog({
   amountPaid,
   onPayment,
 }: PaymentDialogProps) {
-  const remaining = total - amountPaid;
+  const safeTotal = Number(total ?? 0);
+  const safeAmountPaid = Number(amountPaid ?? 0);
+  const remaining = Math.max(0, safeTotal - safeAmountPaid);
+  const formatMoney = (value: unknown) => Number(value ?? 0).toLocaleString();
+
   const [paymentAmount, setPaymentAmount] = useState(remaining.toString());
   const [error, setError] = useState("");
 
@@ -95,19 +99,19 @@ export function PaymentDialog({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total del trabajo:</span>
               <span className="text-[#033f63] font-medium">
-                ${total.toLocaleString()}
+                ${formatMoney(safeTotal)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Ya pagado:</span>
               <span className="text-[#7c9885] font-medium">
-                ${amountPaid.toLocaleString()}
+                ${formatMoney(safeAmountPaid)}
               </span>
             </div>
             <div className="flex justify-between border-t border-[#033f63]/20 pt-2">
               <span className="text-[#033f63] font-semibold">Falta pagar:</span>
               <span className="text-[#b5b682] font-bold text-lg">
-                ${remaining.toLocaleString()}
+                ${formatMoney(remaining)}
               </span>
             </div>
           </div>
@@ -132,7 +136,7 @@ export function PaymentDialog({
               <p className="text-sm text-red-500 mt-1">{error}</p>
             ) : (
               <p className="text-xs text-gray-500 mt-1">
-                Máximo: ${remaining.toLocaleString()}
+                Máximo: ${formatMoney(remaining)}
               </p>
             )}
           </div>

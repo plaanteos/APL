@@ -73,6 +73,8 @@ export function NewOrderDialog({
   const [clients, setClients] = useState<IClient[]>([]);
   const [productos, setProductos] = useState<IProducto[]>([]);
   const [estados, setEstados] = useState<IEstado[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -103,16 +105,20 @@ export function NewOrderDialog({
 
   const fetchClients = async () => {
     try {
+      setIsLoadingClients(true);
       const data = await clientService.getAll();
       setClients(data);
     } catch (error) {
       console.error("Error al cargar clientes:", error);
       toast.error("Error al cargar la lista de clientes");
+    } finally {
+      setIsLoadingClients(false);
     }
   };
 
   const fetchCatalogs = async () => {
     try {
+      setIsLoadingCatalogs(true);
       const [productosData, estadosData] = await Promise.all([
         productoService.getAll(),
         estadoService.getAll(),
@@ -129,6 +135,8 @@ export function NewOrderDialog({
     } catch (error) {
       console.error("Error al cargar catálogos:", error);
       toast.error("Error al cargar productos/estados");
+    } finally {
+      setIsLoadingCatalogs(false);
     }
   };
 
@@ -338,16 +346,23 @@ export function NewOrderDialog({
                 onValueChange={(value) =>
                   setFormData({ ...formData, clientId: value })
                 }
+                disabled={isLoadingClients || clients.length === 0}
               >
                 <SelectTrigger id="client">
                   <SelectValue placeholder="Seleccionar cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id.toString()}>
-                      {client.nombre}
+                  {clients.length > 0 ? (
+                    clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
+                        {client.nombre}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="__no_clients" disabled>
+                      {isLoadingClients ? "Cargando clientes..." : "No hay clientes"}
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             )}
@@ -379,16 +394,23 @@ export function NewOrderDialog({
                 setFormData({ ...formData, productId: value });
                 validateField("productId", value);
               }}
+              disabled={isLoadingCatalogs || productos.length === 0}
             >
               <SelectTrigger id="product" className={errors.productId ? "border-red-500" : ""}>
                 <SelectValue placeholder="Seleccionar producto" />
               </SelectTrigger>
               <SelectContent>
-                {productos.map((p) => (
-                  <SelectItem key={p.id} value={p.id.toString()}>
-                    {p.tipo}
+                {productos.length > 0 ? (
+                  productos.map((p) => (
+                    <SelectItem key={p.id} value={p.id.toString()}>
+                      {p.tipo}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="__no_products" disabled>
+                    {isLoadingCatalogs ? "Cargando productos..." : "No hay productos"}
                   </SelectItem>
-                ))}
+                )}
               </SelectContent>
             </Select>
             {errors.productId && (
@@ -404,16 +426,23 @@ export function NewOrderDialog({
                 setFormData({ ...formData, estadoId: value });
                 validateField("estadoId", value);
               }}
+              disabled={isLoadingCatalogs || estados.length === 0}
             >
               <SelectTrigger id="estado" className={errors.estadoId ? "border-red-500" : ""}>
                 <SelectValue placeholder="Seleccionar estado" />
               </SelectTrigger>
               <SelectContent>
-                {estados.map((e) => (
-                  <SelectItem key={e.id} value={e.id.toString()}>
-                    {e.descripcion}
+                {estados.length > 0 ? (
+                  estados.map((e) => (
+                    <SelectItem key={e.id} value={e.id.toString()}>
+                      {e.descripcion}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="__no_states" disabled>
+                    {isLoadingCatalogs ? "Cargando estados..." : "No hay estados"}
                   </SelectItem>
-                ))}
+                )}
               </SelectContent>
             </Select>
             {errors.estadoId && (
