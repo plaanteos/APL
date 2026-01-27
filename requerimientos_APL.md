@@ -70,13 +70,15 @@ La base de datos debe contemplar tres niveles de normalización:
 
 ### RBD-02: Implementación Técnica
 La base de datos debe incluir:
-- Creación de la base de datos en MySQL  
+- Creación de la base de datos en MySQL o PostgreSQL (según motor elegido)  
 - Creación de tablas  
 - Creación de usuarios y permisos  
 - Creación de índices  
 - Creación de triggers  
 - Scripts de inserción de datos  
 - Consultas para validación de datos y pruebas de triggers  
+
+**Nota:** El motor relacional puede ser seleccionado por el proyecto. La entrega de scripts SQL debe corresponder al motor utilizado.
 
 ---
 

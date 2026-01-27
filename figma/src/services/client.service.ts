@@ -111,6 +111,25 @@ class ClientService {
   }
 
   /**
+   * Exportar balance del cliente a Excel (descarga desde backend)
+   */
+  async exportBalance(id: number, clientName: string): Promise<void> {
+    const response = await api.get(`/clients/${id}/balance/export`, {
+      responseType: 'blob',
+    });
+
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `Balance_${clientName.replace(/\s+/g, '_')}_${date}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  /**
    * Buscar clientes
    */
   async search(query: string): Promise<IClient[]> {

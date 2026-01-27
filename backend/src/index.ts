@@ -14,6 +14,7 @@ import paymentRoutes from './routes/payment.routes';
 import auditRoutes from './routes/audit.routes';
 import productoRoutes from './routes/producto.routes';
 import estadoRoutes from './routes/estado.routes';
+import notificationRoutes from './routes/notification.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -23,6 +24,7 @@ import { requestLogger } from './middleware/logger';
 // Import utils
 import logger from './utils/logger';
 import { validateEnv } from './utils/validateEnv';
+import { closeNotificationQueue, initNotificationWorker } from './queues/notification.queue';
 
 // Load environment variables
 dotenv.config();
@@ -171,6 +173,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/estados', estadoRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -190,6 +193,9 @@ async function connectDatabase() {
 // Start server
 async function startServer() {
   await connectDatabase();
+
+  // Cola de trabajos (Redis/BullMQ) para envíos asíncronos si está configurada
+  initNotificationWorker();
   
   app.listen(PORT, () => {
     logger.info(`🚀 APL Backend API server running on port ${PORT}`);
@@ -201,12 +207,14 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  await closeNotificationQueue();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  await closeNotificationQueue();
   await prisma.$disconnect();
   process.exit(0);
 });

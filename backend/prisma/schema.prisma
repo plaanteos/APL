@@ -35,6 +35,10 @@ model Administrador {
   activo        Boolean   @default(true)
   refreshToken  String?   @db.Text
   
+  // Password recovery fields
+  resetPasswordToken   String?   @db.Text
+  resetPasswordExpiry  DateTime?
+  
   // Relaciones según MR
   clientes      Cliente[]
   pedidos       Pedido[]
@@ -59,6 +63,9 @@ model Cliente {
   pedidos           Pedido[]
   
   @@map("cliente")
+  @@index([id_administrador])
+  @@index([nombre])
+  @@index([telefono])
 }
 
 // ================================================================
@@ -79,6 +86,11 @@ model Pedido {
   detallesPago      DetallePago[]
   
   @@map("pedidos")
+  @@index([id_cliente])
+  @@index([id_administrador])
+  @@index([fecha_pedido])
+  @@index([fecha_entrega])
+  @@index([fecha_delete])
 }
 
 // ================================================================
@@ -95,6 +107,8 @@ model Producto {
   detalles          DetallePedido[]
   
   @@map("producto")
+  @@index([id_administrador])
+  @@index([tipo])
 }
 
 // ================================================================
@@ -115,6 +129,9 @@ model DetallePedido {
   estado          Estado   @relation(fields: [id_estado], references: [id])
   
   @@map("detalle_pedidos")
+  @@index([id_pedido])
+  @@index([id_producto])
+  @@index([id_estado])
 }
 
 // ================================================================
@@ -130,6 +147,7 @@ model Estado {
   detalles      DetallePedido[]
   
   @@map("estado")
+  @@index([fecha_delete])
 }
 
 // ================================================================
@@ -145,6 +163,7 @@ model Pago {
   detalles          DetallePago[]
   
   @@map("pago")
+  @@index([id_administrador])
 }
 
 // ================================================================
@@ -162,6 +181,9 @@ model DetallePago {
   pedido     Pedido   @relation(fields: [id_pedido], references: [id], onDelete: Cascade)
   
   @@map("detalle_pago")
+  @@index([id_pedido])
+  @@index([id_pago])
+  @@index([fecha_pago])
 }
 
 // ================================================================
@@ -174,4 +196,6 @@ model Auditoria {
   accion        String   @db.VarChar(100)
   
   @@map("auditoria")
+  @@index([fecha_accion])
+  @@index([usuario])
 }

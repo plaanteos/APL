@@ -9,6 +9,7 @@ Backend API para el sistema de gestión administrativa del laboratorio dental AP
 - **JWT Authentication**
 - **bcryptjs** para encriptación
 - **Zod** para validación
+- (Opcional) **BullMQ + Redis** para cola de trabajos (envíos asíncronos)
 
 ## 📁 Estructura del Proyecto
 

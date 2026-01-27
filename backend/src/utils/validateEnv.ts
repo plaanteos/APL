@@ -43,6 +43,29 @@ export const validateEnv = (): void => {
     warnings.push(`PORT debe ser un número, recibido: "${process.env.PORT}"`);
   }
 
+  // Configuración de Email (Gmail/SMTP) - warning si falta
+  if (process.env.SMTP_USER && !process.env.SMTP_PASS) {
+    warnings.push('SMTP_USER está definido pero falta SMTP_PASS. Para Gmail usa App Password.');
+  }
+  if (!process.env.SMTP_USER && process.env.SMTP_PASS) {
+    warnings.push('SMTP_PASS está definido pero falta SMTP_USER.');
+  }
+  if (!process.env.FRONTEND_URL) {
+    warnings.push('FRONTEND_URL no está definido. Es requerido para el email de recuperar contraseña.');
+  }
+
+  // Configuración de WhatsApp Cloud API - warning si está incompleta
+  const waToken = process.env.WHATSAPP_TOKEN;
+  const waPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if ((waToken && !waPhoneId) || (!waToken && waPhoneId)) {
+    warnings.push('WhatsApp está parcialmente configurado. Se requieren WHATSAPP_TOKEN y WHATSAPP_PHONE_NUMBER_ID.');
+  }
+
+  // Configuración de Job Queue (BullMQ + Redis) - opcional
+  if (process.env.NOTIFICATION_QUEUE_ENABLED === 'true' && !process.env.REDIS_URL) {
+    warnings.push('NOTIFICATION_QUEUE_ENABLED=true pero falta REDIS_URL. Se usará envío directo (sin cola).');
+  }
+
   // Mostrar warnings
   if (warnings.length > 0) {
     warnings.forEach(warning => logger.warn(`⚠️  ${warning}`));

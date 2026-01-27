@@ -1,0 +1,716 @@
+# AUDITORÍA TÉCNICA DEL SISTEMA APL
+## Laboratorio Dental - Gestión Administrativa
+
+**Fecha de Auditoría:** 20 de enero de 2026  
+**Auditor:** Arquitecto de Software Senior / Analista de Sistemas  
+**Alcance:** Evaluación exhaustiva del sistema desarrollado vs. requerimientos oficiales
+
+---
+
+## 📋 RESUMEN EJECUTIVO
+
+El sistema APL presenta una **implementación parcial** de los requerimientos especificados. Se identificó:
+
+- ✅ **Plataforma Web funcional** con autenticación y módulos principales
+- ✅ **Backend robusto** con API RESTful, JWT y validaciones
+- ✅ **Base de datos normalizada** con PostgreSQL y Prisma ORM
+- ❌ **Aplicación mobile NO EXISTE** (incumplimiento crítico de RNF-02)
+- ❌ **Scripts SQL incompletos** para PostgreSQL (faltan: usuarios/permisos, triggers, consultas de validación) - RBD-02
+- ⚠️ **Pendientes de arquitectura/DB** (scripts SQL/triggers/índices/roles según motor elegido)
+- ✅ **Integraciones de comunicación**: envío de Email (Gmail/SMTP) y WhatsApp (Cloud API) implementadas
+- ✅ **Recuperación de contraseña** implementada (forgot/reset)
+
+---
+
+## 1. ANÁLISIS DE CUMPLIMIENTO DE REQUERIMIENTOS
+
+### 1.1 REQUERIMIENTOS FUNCIONALES
+
+#### ✅ **RF-01: Login** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [backend/src/controllers/auth.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/auth.controller.ts#L53-L142): Implementación completa de login
+- [figma/src/app/components/Login.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Login.tsx): Componente de login en frontend
+- Autenticación mediante email y contraseña
+- Generación de JWT (access token 15min + refresh token 7 días)
+- Validación con Zod
+- Rate limiting (5 intentos en 15 minutos)
+- Registro en auditoría de intentos fallidos
+- ✅ **Funcionalidad "Recordar sesión" implementada**:
+  - Checkbox en formulario de login
+  - Uso de localStorage para sesiones persistentes (rememberMe = true)
+  - Uso de sessionStorage para sesiones temporales (rememberMe = false)
+  - Implementado en [auth.service.ts](file:///c:/Users/Jesu/Desktop/APL/figma/src/services/auth.service.ts)
+- ✅ **Recuperación de contraseña implementada**:
+  - Endpoints: `POST /api/auth/forgot-password` y `POST /api/auth/reset-password`
+  - Envío de email (Gmail/SMTP) con enlace de recuperación
+
+**Observaciones:**
+- ✅ Cumple con autenticación de usuario administrador
+- ✅ Implementa seguridad adicional (bcrypt, JWT, rate limiting)
+- ✅ Permite recordar sesión con persistencia configurable
+- ✅ Recuperación de contraseña: backend implementado y operativo vía email
+
+---
+
+#### ✅ **RF-02: Dashboard Inicial** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [figma/src/app/components/Dashboard.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Dashboard.tsx): Componente dashboard completo
+- Muestra estadísticas:
+  - Total de pedidos (línea 51)
+  - Total de clientes (línea 52)
+  - Total de ingresos (línea 53)
+  - Pedidos pendientes (línea 54)
+- Calendario para visualizar pedidos (línea 153: `<CalendarWidget />`)
+- Acción de logout (línea 111-117 en App.tsx)
+- Barra de navegación inferior (línea 125-178 en App.tsx)
+
+**Observaciones:**
+- ✅ Cumple con todos los elementos requeridos
+- ✅ Navegación funcional hacia otras bandejas
+- ✅ Diseño responsive y moderno
+
+---
+
+#### ✅ **RF-03: Bandeja de Pedidos** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [figma/src/app/components/Orders.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Orders.tsx): Componente de pedidos
+- [backend/src/controllers/order.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/order.controller.ts): CRUD completo de pedidos
+- Endpoints disponibles:
+  - `GET /api/orders` - Listar pedidos con filtros
+  - `POST /api/orders` - Crear pedido
+  - `GET /api/orders/:id` - Obtener pedido específico
+  - `PUT /api/orders/:id` - Actualizar pedido
+  - `DELETE /api/orders/:id` - Eliminar pedido (soft delete)
+
+**Funcionalidades implementadas:**
+- ✅ Consultar estado de pedidos
+- ✅ Cargar nuevos pedidos
+- ✅ Seleccionar pedidos y expandir detalles
+- ✅ **Acceso directo al balance del cliente desde pedido**:
+  - Botón "Ver Balance del Cliente" en vista expandida del pedido
+  - Ícono TrendingUp para identificación visual
+  - Navegación directa al balance del cliente asociado
+  - Implementado con `stopPropagation` para evitar conflictos
+
+**Observaciones:**
+- ✅ Cumple completamente con el requerimiento
+- ✅ Navegación intuitiva y explícita al balance
+- ✅ Mejora la experiencia de usuario con acceso directo
+
+---
+
+#### ✅ **RF-04: Bandeja de Clientes** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [figma/src/app/components/Clients.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Clients.tsx): Componente de clientes
+- [backend/src/controllers/client.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts): CRUD completo
+- Endpoints disponibles:
+  - `GET /api/clients` - Listar clientes con estadísticas
+  - `POST /api/clients` - Crear cliente
+  - `GET /api/clients/:id` - Obtener cliente
+  - `PUT /api/clients/:id` - Actualizar cliente
+  - `DELETE /api/clients/:id` - Eliminar cliente
+  - `GET /api/clients/:id/balance` - Balance del cliente
+
+**Funcionalidades implementadas:**
+- ✅ Consultar información de clientes
+- ✅ Cargar nuevos clientes
+- ✅ Acceder al balance de cada cliente
+- ✅ Enviar mensajes al cliente (se evidencia en el código frontend)
+
+**Observaciones:**
+- ✅ Cumple con todos los elementos requeridos
+- ✅ Incluye validaciones de email único
+- ✅ Calcula estadísticas dinámicamente (totalPedidos, montoTotal, montoPagado, montoPendiente)
+
+---
+
+#### ✅ **RF-05: Bandeja de Balance** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [figma/src/app/components/Balance.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Balance.tsx): Componente de balance
+- [backend/src/controllers/payment.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/payment.controller.ts): Gestión de pagos
+- [backend/src/controllers/client.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts#L447-L550): Endpoint [getClientBalance](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts#447-551)
+- [backend/src/routes/order.routes.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/routes/order.routes.ts): Endpoint `PATCH /api/orders/:id/deliver` (marcar entregado)
+- [backend/src/routes/client.routes.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/routes/client.routes.ts): Endpoint `GET /api/clients/:id/balance/export` (Excel)
+- [backend/src/services/excel.service.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/services/excel.service.ts): Generación de Excel con ExcelJS
+- [backend/src/routes/notification.routes.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/routes/notification.routes.ts): Endpoint `POST /api/notifications/send` (email/whatsapp)
+- [backend/src/services/email.service.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/services/email.service.ts): Envío por SMTP (Gmail recomendado)
+- [backend/src/services/whatsapp.service.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/services/whatsapp.service.ts): Envío por WhatsApp Cloud API
+
+**Funcionalidades implementadas:**
+- ✅ Gestionar pagos de pedidos (crear, actualizar, eliminar)
+- ✅ Visualizar balance total
+- ✅ Consultar balances por cliente
+- ✅ Agregar pagos
+- ✅ Marcar pedidos como entregados
+- ✅ Enviar el balance al cliente por WhatsApp o email
+- ✅ Descargar el balance del cliente en formato Excel
+
+**Justificación técnica:**
+El requerimiento RF-05 se considera cumplido al evidenciar:
+1. Endpoint para marcar pedido como entregado (`PATCH /api/orders/:id/deliver`)
+2. Servicio de email por SMTP (Gmail)
+3. Integración WhatsApp Cloud API
+4. Endpoint para generar Excel (`GET /api/clients/:id/balance/export`)
+
+---
+
+### 1.2 REQUERIMIENTOS DE BASE DE DATOS
+
+#### ✅ **RBD-01: Normalización** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma): Esquema completo de base de datos
+
+**Análisis de normalización:**
+
+**Primera Forma Normal (1FN):**
+- ✅ `Administrador` (id, nombre, telefono, email, usuario, password)
+- ✅ `Cliente` (id, nombre, telefono, email, id_administrador)
+- ✅ `Pedido` (id, id_cliente, fecha_pedido, fecha_entrega, fecha_delete, id_administrador)
+
+**Segunda Forma Normal (2FN):**
+- ✅ `DetallePedido` (id, id_pedido, id_producto, cantidad, precio_unitario, paciente, id_estado)
+  - Elimina dependencias parciales, relaciona pedido con producto
+- ✅ `Pago` (id, valor, id_administrador)
+  - Entidad independiente para pagos
+- ✅ `DetallePago` (id, id_pago, id_pedido, valor, fecha_pago)
+  - Relación N:M entre pago y pedido
+
+**Tercera Forma Normal (3FN):**
+- ✅ `Auditoria` (id, usuario, fecha_accion, accion)
+  - Tabla independiente sin dependencias transitivas
+- ✅ `Estado` (id, descripcion, fecha_insert, fecha_delete)
+  - Catálogo de estados
+- ✅ `Producto` (id, tipo, precio, id_administrador)
+  - Catálogo de productos
+
+**Observaciones:**
+- ✅ Cumple con los tres niveles de normalización especificados
+- ✅ Diseño coherente con el modelo relacional descrito en [BD/descripcionBD.md](file:///c:/Users/Jesu/Desktop/APL/BD/descripcionBD.md)
+- ✅ Uso correcto de claves foráneas y relaciones
+
+---
+
+#### ⚠️ **RBD-02: Implementación Técnica** - **PARCIALMENTE CUMPLIDO**
+
+**Evidencia buscada:**
+- Scripts SQL para creación de base de datos
+- Scripts de creación de tablas
+- Scripts de creación de usuarios y permisos
+- Scripts de creación de índices
+- Scripts de creación de triggers
+- Scripts de inserción de datos
+- Consultas de validación
+
+**Evidencia encontrada:**
+- ✅ Esquema Prisma (equivalente a creación de tablas): [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
+- ✅ Script de seed (inserción de datos): [backend/prisma/seed.ts](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/seed.ts)
+- ✅ Script SQL (PostgreSQL) para índices: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
+- ❌ **NO se encontraron scripts de creación de usuarios y permisos**
+- ⚠️ **Índices**: declarados en Prisma y script SQL; pendiente confirmar ejecución/aplicación en la BD desplegada
+- ❌ **NO se encontraron triggers**
+- ❌ **NO se encontraron consultas de validación**
+
+**Justificación técnica:**
+El requerimiento especifica **explícitamente**:
+> "La base de datos debe incluir: Creación de la base de datos en **MySQL o PostgreSQL (según motor elegido)**, Creación de tablas, Creación de usuarios y permisos, Creación de índices, Creación de triggers, Scripts de inserción de datos, Consultas para validación de datos y pruebas de triggers"
+
+**Hallazgos críticos:**
+1. **Motor de BD**: El sistema usa **PostgreSQL**, lo cual es válido (motor elegido)
+2. **Scripts SQL incompletos**: Se usa Prisma ORM (esquema y migraciones), pero faltan scripts SQL completos para administración (roles/permisos), triggers y validaciones
+3. **Triggers**: No se encontró evidencia de triggers para auditoría automática/validaciones/integridad
+4. **Índices**: Se definieron índices recomendados (Prisma + script SQL), pero su aplicación depende de migración/ejecución en la BD
+5. **Gestión de usuarios/permisos**: No hay scripts para crear roles/usuarios con permisos mínimos
+
+**Impacto:**
+- ⚠️ Incumplimiento parcial del requerimiento RBD-02
+- ⚠️ Riesgo de performance si los índices no están aplicados en la BD desplegada
+- ⚠️ Auditoría manual en lugar de automática (sin triggers)
+- ⚠️ Falta de control granular de permisos a nivel de base de datos
+
+**Actualización (PostgreSQL):**
+- ✅ Se agregó script de índices para PostgreSQL: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
+- ✅ Índices declarados en Prisma: [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
+
+---
+
+### 1.3 REQUERIMIENTOS NO FUNCIONALES
+
+#### ✅ **RNF-01: Plataforma Web** - **CUMPLIDO**
+
+**Evidencia encontrada:**
+- Frontend web completo en carpeta [figma/](file:///c:/Users/Jesu/Desktop/APL/figma)
+- Tecnologías: React + Vite + TypeScript + TailwindCSS
+- Componentes principales:
+  - [App.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/App.tsx): Aplicación principal
+  - [Login.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Login.tsx): Autenticación
+  - [Dashboard.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Dashboard.tsx): Panel principal
+  - [Orders.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Orders.tsx): Gestión de pedidos
+  - [Clients.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Clients.tsx): Gestión de clientes
+  - [Balance.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Balance.tsx): Balance financiero
+
+**Configuración de despliegue:**
+- [netlify.toml](file:///c:/Users/Jesu/Desktop/APL/netlify.toml): Configuración para Netlify
+- URL de producción: `https://administracionapl.netlify.app` (configurada en CORS del backend)
+
+**Observaciones:**
+- ✅ Cumple con el requerimiento de aplicación web
+- ✅ Accesible desde diferentes direcciones IP (desplegada en Netlify)
+- ✅ Diseño responsive y moderno
+- ✅ Integración completa con backend API
+
+---
+
+#### ❌ **RNF-02: Plataforma Mobile** - **NO CUMPLIDO**
+
+**Evidencia buscada:**
+- Aplicación Android (carpeta android, archivos .apk, .gradle)
+- Aplicación iOS (carpeta ios, archivos .xcodeproj, .swift)
+- Framework mobile (React Native, Flutter, Ionic, etc.)
+
+**Búsqueda realizada:**
+- Búsqueda de carpetas: `*mobile*`, `*android*`, `*ios*` → **0 resultados**
+- Búsqueda de archivos de configuración mobile → **0 resultados**
+- Revisión de estructura del proyecto → **Solo web**
+
+**Hallazgos:**
+- ❌ **NO EXISTE aplicación mobile**
+- ❌ **Incumplimiento total del requerimiento RNF-02**
+
+**Justificación técnica:**
+El requerimiento especifica:
+> "El sistema debe contar con una aplicación mobile compatible con Android e iOS"
+
+**Impacto:**
+- ❌ **Incumplimiento crítico**: Falta uno de los dos pilares del sistema (web + mobile)
+- ❌ Los usuarios no pueden gestionar el laboratorio desde dispositivos móviles nativos
+- ⚠️ La aplicación web es responsive, pero no es equivalente a una app nativa
+
+**Recomendación:**
+- Desarrollar aplicación mobile con React Native o Flutter
+- Reutilizar la misma API backend
+- Implementar autenticación biométrica para mobile
+- Considerar notificaciones push para pedidos
+
+---
+
+#### ⚠️ **RNF-03: Seguridad** - **PARCIALMENTE CUMPLIDO**
+
+**Evidencia encontrada:**
+
+**Autenticación:**
+- ✅ Login con credenciales (email + password)
+- ✅ Hash de contraseñas con bcrypt (12 rounds)
+- ✅ JWT con access token (15min) y refresh token (7 días)
+- ✅ Middleware de autenticación: [backend/src/middleware/auth.middleware.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/middleware/auth.middleware.ts)
+- ✅ Rate limiting en login (5 intentos / 15 minutos)
+
+**Cambio de contraseña:**
+- ✅ Endpoint implementado: `PUT /api/auth/change-password`
+- ✅ Validación de contraseña actual
+- ✅ Validación de longitud mínima (6 caracteres)
+- ✅ Disponible desde web
+
+**Funcionalidades faltantes:**
+- ❌ **No se evidencia cambio de contraseña desde mobile** (porque no existe app mobile)
+- ✅ **Recuperación de contraseña implementada** (forgot/reset password)
+- ⚠️ **No se evidencia autenticación de dos factores (2FA)**
+- ⚠️ **No se evidencia política de expiración de contraseñas**
+
+**Medidas de seguridad adicionales encontradas:**
+- ✅ Helmet.js para headers de seguridad
+- ✅ CORS configurado con whitelist
+- ✅ Validación de entrada con Zod
+- ✅ Sanitización de respuestas (no se envían passwords)
+- ✅ Auditoría de acciones (login, logout, intentos fallidos)
+
+**Observaciones:**
+- ✅ Cumple con autenticación básica y cambio de contraseña
+- ✅ Recuperación de contraseña implementada (crítico resuelto para producción)
+- ⚠️ Falta 2FA (recomendado para sistemas administrativos)
+
+---
+
+#### ⚠️ **RNF-04: Escalabilidad y Robustez** - **PARCIALMENTE CUMPLIDO**
+
+**Evidencia encontrada:**
+
+**Backend:**
+- ✅ Node.js + Express (arquitectura escalable)
+- ✅ Prisma ORM con connection pooling
+- ✅ Manejo de errores centralizado: [backend/src/middleware/errorHandler.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/middleware/errorHandler.ts)
+- ✅ Logging estructurado: [backend/src/utils/logger.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/utils/logger.ts)
+- ✅ Validación de variables de entorno
+- ✅ Graceful shutdown (SIGTERM, SIGINT)
+- ✅ Configuración para despliegue en Render.com
+
+**Base de datos:**
+- ✅ PostgreSQL (base de datos robusta y escalable)
+- ✅ Relaciones con integridad referencial
+- ✅ Índices automáticos en claves primarias y únicas
+- ⚠️ **Índices personalizados** definidos (Prisma + script SQL); pendiente confirmar ejecución/aplicación en la BD
+- ⚠️ **Falta triggers** para auditoría automática
+- ⚠️ **Falta particionamiento** para grandes volúmenes
+
+**Consultas:**
+- ✅ Paginación implementada en todos los listados
+- ✅ Filtros y búsquedas optimizadas
+- ⚠️ **Cálculos dinámicos en cada consulta** (montoPagado, montoPendiente)
+  - Impacto: Puede ser lento con muchos pedidos/pagos
+  - Recomendación: Usar campos calculados o vistas materializadas
+
+**Escalabilidad:**
+- ✅ API RESTful stateless (permite escalado horizontal)
+- ✅ Separación frontend/backend
+- ⚠️ **Caché**: no se evidencia caché distribuida (Redis/Memcached); se implementó caché TTL en memoria para catálogos
+- ⚠️ **No se evidencia cola de trabajos** (Bull, RabbitMQ)
+- ⚠️ **No se evidencia CDN** para assets estáticos
+
+**Observaciones:**
+- ✅ Arquitectura base preparada para escalar
+- ⚠️ Falta optimizaciones para grandes volúmenes (índices, caché, colas)
+- ⚠️ Cálculos dinámicos pueden ser cuello de botella
+
+---
+
+## 2. DETECCIÓN DE FALLAS DEL SISTEMA
+
+### 2.1 FALLAS FUNCIONALES
+
+#### 🔴 **CRÍTICO: Aplicación Mobile Inexistente**
+- **Descripción**: No existe aplicación mobile para Android e iOS
+- **Requerimiento afectado**: RNF-02
+- **Impacto**: Incumplimiento total de un requerimiento no funcional crítico
+- **Prioridad**: CRÍTICA
+
+#### ✅ **RESUELTO: Funcionalidades de Balance (RF-05)**
+- **Descripción**: ~~Faltaban funcionalidades clave en RF-05~~ (entregado, envíos, Excel)
+- **Solución implementada**:
+  - Endpoint `PATCH /api/orders/:id/deliver`
+  - Endpoint `GET /api/clients/:id/balance/export`
+  - Endpoint `POST /api/notifications/send` para Email/WhatsApp
+- **Estado**: COMPLETADO
+
+#### ✅ **RESUELTO: Acceso a Balance desde Pedidos**
+- **Descripción**: ~~No se evidencia navegación directa al balance desde la selección de un pedido (RF-03)~~
+- **Solución implementada**: Botón "Ver Balance del Cliente" agregado en vista expandida de pedidos
+- **Estado**: COMPLETADO
+
+#### ✅ **RESUELTO: Recuperación de Contraseña**
+- **Descripción**: ~~No existía funcionalidad de "olvidé mi contraseña"~~
+- **Solución implementada**: `POST /api/auth/forgot-password` + `POST /api/auth/reset-password` + email de recuperación
+- **Estado**: COMPLETADO
+
+---
+
+### 2.2 FALLAS DE DISEÑO (UX/UI)
+
+#### 🟢 **BAJO: Diseño General**
+- **Observación**: El diseño web es moderno, responsive y funcional
+- **Fortalezas**:
+  - Navegación clara con barra inferior
+  - Uso de iconos intuitivos (Lucide React)
+  - Componentes reutilizables (shadcn/ui)
+  - Paleta de colores coherente
+- **Áreas de mejora**:
+  - No se evidencian estados de carga en todas las acciones
+  - No se evidencian mensajes de confirmación antes de eliminar
+  - No se evidencia manejo de errores visual consistente
+
+---
+
+### 2.3 FALLAS DE ARQUITECTURA
+
+#### ✅ **RESUELTO: Motor de Base de Datos (PostgreSQL)**
+- **Descripción**: El proyecto utiliza PostgreSQL como motor relacional
+- **Estado**: ACEPTADO (no es un incumplimiento)
+- **Nota**: La evaluación se centra en la entrega de scripts SQL del motor elegido (RBD-02)
+
+#### 🔴 **CRÍTICO: Ausencia de Scripts SQL**
+- **Descripción**: No existen scripts SQL completos para PostgreSQL para:
+  - Creación de base de datos
+  - Creación de usuarios y permisos
+  - Creación de índices personalizados (pendiente aplicar en BD si no se usan migraciones)
+  - Creación de triggers
+  - Consultas de validación
+- **Impacto**: Incumplimiento parcial de RBD-02
+- **Prioridad**: CRÍTICA
+
+#### 🟡 **MEDIO: Cálculos Dinámicos Costosos**
+- **Descripción**: Los montos (total, pagado, pendiente) se calculan en cada consulta mediante agregaciones
+- **Ubicación**: 
+  - [client.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts#L76-L103)
+  - [order.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/order.controller.ts)
+- **Impacto**: Performance degradada con grandes volúmenes de datos
+- **Recomendación**: Usar campos calculados, triggers o vistas materializadas
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Caché**
+- **Descripción**: No se evidencia caché distribuida (Redis/Memcached); se implementó caché TTL en memoria para catálogos
+- **Impacto**: Mitigado en endpoints de catálogo; en despliegues multi-instancia se recomienda Redis
+- **Prioridad**: MEDIA
+
+---
+
+### 2.4 PROBLEMAS DE BASE DE DATOS
+
+#### 🔴 **CRÍTICO: Sin Triggers de Auditoría**
+- **Descripción**: La auditoría se realiza manualmente desde el código, no automáticamente con triggers
+- **Riesgo**: Acciones directas en BD no quedan auditadas
+- **Recomendación**: Implementar triggers para INSERT, UPDATE, DELETE en tablas críticas
+- **Prioridad**: ALTA
+
+#### 🟡 **MEDIO: Índices Optimizados Pendientes de Aplicar**
+- **Descripción**: Se definieron índices recomendados, pero deben aplicarse en la BD real (migración/ejecución)
+- **Consultas afectadas**:
+  - Búsqueda de clientes por nombre/email/teléfono
+  - Filtrado de pedidos por fecha
+  - Filtrado de pagos por administrador
+- **Recomendación**: Crear índices en:
+  ```sql
+  CREATE INDEX idx_cliente_nombre ON cliente(nombre);
+  CREATE INDEX idx_pedido_fecha ON pedidos(fecha_pedido);
+  CREATE INDEX idx_pedido_cliente ON pedidos(id_cliente);
+  CREATE INDEX idx_detalle_pago_fecha ON detalle_pago(fecha_pago);
+  ```
+- **Evidencia**:
+  - Script PostgreSQL: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
+  - Prisma schema: [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Constraints Adicionales**
+- **Descripción**: Faltan constraints de validación a nivel de base de datos:
+  - CHECK para valores positivos (precios, cantidades, montos)
+  - CHECK para fechas lógicas (fecha_entrega >= fecha_pedido)
+- **Impacto**: Validación solo en capa de aplicación
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Gestión de Usuarios de BD**
+- **Descripción**: No hay scripts para crear usuarios con permisos específicos
+- **Riesgo**: La aplicación usa un usuario con permisos totales
+- **Recomendación**: Crear usuarios con permisos mínimos necesarios
+- **Prioridad**: MEDIA
+
+---
+
+### 2.5 PROBLEMAS DE SEGURIDAD
+
+#### ✅ **RESUELTO: Recuperación de Contraseña**
+- **Descripción**: Flujo de recuperación implementado (forgot/reset)
+- **Estado**: COMPLETADO
+
+#### 🟡 **MEDIO: Sin Autenticación de Dos Factores (2FA)**
+- **Descripción**: No se implementa 2FA
+- **Impacto**: Menor seguridad en cuentas administrativas
+- **Recomendación**: Implementar TOTP (Google Authenticator) o SMS
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Contraseña Mínima de 6 Caracteres**
+- **Descripción**: La validación permite contraseñas de solo 6 caracteres
+- **Recomendación**: Aumentar a 8-12 caracteres y requerir complejidad
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Política de Expiración de Contraseñas**
+- **Descripción**: Las contraseñas no expiran
+- **Impacto**: Contraseñas comprometidas pueden usarse indefinidamente
+- **Prioridad**: BAJA
+
+#### 🟡 **MEDIO: Tokens en Variables de Entorno**
+- **Descripción**: JWT_SECRET en archivo .env
+- **Recomendación**: Usar gestor de secretos (AWS Secrets Manager, HashiCorp Vault)
+- **Prioridad**: MEDIA (para producción)
+
+---
+
+### 2.6 RIESGOS DE ESCALABILIDAD Y MANTENIBILIDAD
+
+#### 🟡 **MEDIO: Cálculos Dinámicos en Algunas Rutas**
+- **Descripción**: Parte de los cálculos siguen siendo dinámicos; se optimizaron endpoints críticos (clientes/balance) y persisten cálculos en otras rutas
+- **Ejemplo**: [client.controller.ts:76-113](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts#L76-L113)
+- **Impacto**: Con 1000+ clientes y 10,000+ pedidos, las consultas serán lentas
+- **Recomendación**:
+  - Agregar campos calculados: `monto_total`, `monto_pagado`, `monto_pendiente` en tabla `pedidos`
+  - Actualizar con triggers o jobs programados
+  - Usar vistas materializadas para reportes
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Paginación en Algunas Consultas**
+- **Descripción**: Algunas consultas no implementan paginación
+- **Impacto**: Carga completa de datos en memoria
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Monitoreo y Observabilidad**
+- **Descripción**: No se evidencia:
+  - APM (Application Performance Monitoring)
+  - Métricas de performance
+  - Alertas automáticas
+- **Recomendación**: Implementar Sentry, DataDog, New Relic o similar
+- **Prioridad**: MEDIA
+
+#### 🟡 **MEDIO: Sin Tests Automatizados**
+- **Descripción**: No se encontraron tests unitarios ni de integración
+- **Impacto**: Riesgo de regresiones en cambios futuros
+- **Recomendación**: Implementar Jest + Supertest para backend, Vitest para frontend
+- **Prioridad**: MEDIA
+
+#### 🟢 **BAJO: Código Duplicado**
+- **Descripción**: Lógica de cálculo de montos repetida en múltiples controladores
+- **Recomendación**: Extraer a servicio compartido
+- **Prioridad**: BAJA
+
+---
+
+## 3. MATRIZ DE CUMPLIMIENTO
+
+| Código | Requerimiento | Estado | Cumplimiento | Observaciones |
+|--------|---------------|--------|--------------|---------------|
+| **RF-01** | Login | ✅ Cumplido | 100% | Implementación completa + recordar sesión |
+| **RF-02** | Dashboard Inicial | ✅ Cumplido | 100% | Todos los elementos presentes |
+| **RF-03** | Bandeja de Pedidos | ✅ Cumplido | 100% | Incluye botón de acceso directo a balance |
+| **RF-04** | Bandeja de Clientes | ✅ Cumplido | 100% | Funcionalidad completa |
+| **RF-05** | Bandeja de Balance | ✅ Cumplido | 100% | Incluye entregado, envíos Email/WhatsApp y export Excel |
+| **RBD-01** | Normalización | ✅ Cumplido | 100% | 3 niveles de normalización correctos |
+| **RBD-02** | Implementación Técnica | ⚠️ Parcial | 45% | Motor PostgreSQL aceptado; faltan scripts SQL completos (roles/permisos, triggers, validaciones). Índices definidos pero pendientes de aplicar |
+| **RNF-01** | Plataforma Web | ✅ Cumplido | 100% | Web funcional y desplegada |
+| **RNF-02** | Plataforma Mobile | ❌ No Cumplido | 0% | No existe aplicación mobile |
+| **RNF-03** | Seguridad | ⚠️ Parcial | 80% | Falta: 2FA y app mobile para gestión desde mobile |
+| **RNF-04** | Escalabilidad y Robustez | ⚠️ Parcial | 70% | Falta: índices, caché, optimizaciones |
+
+**Cumplimiento Global: 81%**
+
+---
+
+## 4. RECOMENDACIONES PRIORITARIAS
+
+### 🔴 **PRIORIDAD CRÍTICA**
+
+1. **Desarrollar Aplicación Mobile** (RNF-02)
+   - Framework recomendado: React Native o Flutter
+   - Reutilizar API backend existente
+   - Implementar autenticación biométrica
+   - Estimación: 4-6 semanas
+
+2. **Crear Scripts SQL Completos** (RBD-02)
+  - Scripts SQL para PostgreSQL (motor elegido)
+  - Scripts de creación de BD y tablas
+   - Scripts de usuarios y permisos
+   - Scripts de índices optimizados
+   - Scripts de triggers de auditoría
+   - Consultas de validación
+   - Estimación: 1-2 semanas
+
+3. **Completar Funcionalidades de Balance** (RF-05)
+  - ✅ COMPLETADO (entregado + envíos Email/WhatsApp + Excel)
+
+### 🟡 **PRIORIDAD ALTA**
+
+4. **Implementar Triggers de Auditoría**
+   - Triggers para INSERT, UPDATE, DELETE en tablas críticas
+   - Auditoría automática sin depender del código
+   - Estimación: 1 semana
+
+5. **Crear Índices Optimizados**
+  - Aplicar/validar índices definidos (migraciones Prisma o script SQL)
+  - Medir performance (EXPLAIN ANALYZE) en queries críticas
+  - Estimación: 1-2 días
+
+6. **Implementar Recuperación de Contraseña**
+  - ✅ COMPLETADO (forgot/reset + email de recuperación)
+
+7. **Optimizar Cálculos de Balance**
+   - Agregar campos calculados en BD
+   - Triggers para actualizar montos automáticamente
+   - Vistas materializadas para reportes
+   - Estimación: 1-2 semanas
+
+### 🟢 **PRIORIDAD MEDIA**
+
+8. **Implementar Caché**
+  - ✅ Caché TTL en memoria implementada para catálogos (estados/productos)
+  - (Opcional) Redis para caché distribuida en despliegues multi-instancia
+  - Estimación: 1 semana (si se agrega Redis)
+
+9. **Agregar Tests Automatizados**
+   - Tests unitarios para servicios
+   - Tests de integración para API
+   - Tests E2E para flujos críticos
+   - Estimación: 2-3 semanas
+
+10. **Implementar 2FA**
+    - TOTP con Google Authenticator
+    - Backup codes
+    - Estimación: 1 semana
+
+---
+
+## 5. CONCLUSIONES
+
+### ✅ **Fortalezas del Sistema**
+
+1. **Arquitectura Moderna y Escalable**
+   - Backend con Node.js + Express + TypeScript
+   - Frontend con React + Vite + TypeScript
+   - Base de datos PostgreSQL con Prisma ORM
+   - Separación clara de responsabilidades
+
+2. **Seguridad Básica Implementada**
+   - Autenticación JWT robusta
+   - Hash de contraseñas con bcrypt
+   - Rate limiting en login
+   - Validación de entrada con Zod
+   - CORS configurado correctamente
+
+3. **Base de Datos Bien Diseñada**
+   - Normalización correcta (1FN, 2FN, 3FN)
+   - Relaciones con integridad referencial
+   - Modelo coherente con requerimientos
+
+4. **Funcionalidades Core Implementadas**
+   - Login funcional
+   - Dashboard con estadísticas
+   - CRUD completo de clientes, pedidos, pagos
+   - Cálculo dinámico de balances
+
+### ❌ **Debilidades Críticas**
+
+1. **Aplicación Mobile Inexistente**
+   - Incumplimiento total de RNF-02
+   - Uno de los dos pilares del sistema no existe
+
+2. **Scripts SQL Incompletos (PostgreSQL)**
+  - Incumplimiento parcial de RBD-02
+  - Pendiente: roles/usuarios/permisos, triggers y consultas de validación
+
+3. **Problemas de Performance**
+  - Cálculos optimizados en endpoints críticos (clientes/balance) usando agregaciones SQL
+  - Índices definidos (Prisma + script SQL) para filtros frecuentes (pendiente aplicar migración/ejecución en DB)
+  - Caché TTL implementada para catálogos (estados/productos)
+
+5. **Seguridad Mejorable**
+  - Recuperación de contraseña implementada
+   - Sin 2FA
+   - Contraseñas débiles permitidas (6 caracteres)
+
+### 📊 **Evaluación Final**
+
+**Cumplimiento Global: 81%**
+
+El sistema APL presenta una **implementación mayormente completa** de los requerimientos funcionales. Cuenta con una base sólida en términos de arquitectura y funcionalidades core. Los principales **incumplimientos críticos** son:
+
+- ❌ **Aplicación mobile inexistente** (RNF-02)
+- ⚠️ **Scripts SQL incompletos** (RBD-02)
+- ⚠️ **Brecha técnica de BD**: scripts SQL/triggers/usuarios/permisos para PostgreSQL (RBD-02)
+
+**Recomendación:** Priorizar (1) desarrollo de la aplicación mobile y (2) entregar scripts SQL (PostgreSQL) según RBD-02. En paralelo, aplicar los índices declarados en la BD real y evaluar métricas/latencias con datos representativos.
+
+---
+
+**Fin del Informe de Auditoría Técnica**
+
+*Elaborado por: Arquitecto de Software Senior / Analista de Sistemas*  
+*Fecha: 20 de enero de 2026*

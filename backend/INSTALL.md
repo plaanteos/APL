@@ -35,6 +35,49 @@ npm install
 DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/apl_dental_lab?schema=public"
 ```
 
+### 3.1 Configurar Gmail (SMTP) y URL del frontend (recuperar contraseña)
+
+En tu `.env` agrega (ejemplo):
+
+```bash
+# URL del frontend para armar el link de recuperación
+FRONTEND_URL="http://localhost:5173"
+
+# Gmail/SMTP (recomendado: App Password, no tu password normal)
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_USER="tu-cuenta@gmail.com"
+SMTP_PASS="TU_APP_PASSWORD"
+```
+
+### 3.2 Configurar WhatsApp (Cloud API de Meta)
+
+Opcional. En tu `.env` agrega:
+
+```bash
+WHATSAPP_TOKEN="EAAG..."
+WHATSAPP_PHONE_NUMBER_ID="123456789012345"
+WHATSAPP_API_VERSION="v19.0"
+
+# (Opcional) también enviar link de recuperación por WhatsApp
+PASSWORD_RESET_SEND_WHATSAPP="false"
+```
+
+### 3.3 Configurar cola de trabajos (BullMQ + Redis) - opcional
+
+Recomendado si querés que el envío de **Email/WhatsApp** se procese en segundo plano (reintentos, sin bloquear requests).
+
+En tu `.env` agrega:
+
+```bash
+# Redis (Upstash/Redis Cloud/local) para la cola de trabajos
+REDIS_URL="redis://localhost:6379"
+
+# Opcional: forzar habilitar/deshabilitar la cola de notificaciones
+# Si NO está en "false" y existe REDIS_URL, la cola se usa automáticamente.
+NOTIFICATION_QUEUE_ENABLED="true"
+```
+
 ### 4. Crear base de datos
 ```bash
 # Conectarse a PostgreSQL y crear la base de datos

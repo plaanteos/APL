@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
@@ -24,9 +24,9 @@ export class ClientController {
   // GET /api/clients
   static async getClients(req: Request, res: Response) {
     try {
-      const { 
-        page = 1, 
-        limit = 10, 
+      const {
+        page = 1,
+        limit = 10,
         search,
       } = req.query;
 
@@ -43,7 +43,7 @@ export class ClientController {
         ];
       }
 
-      // Obtener clientes con estadísticas calculadas dinámicamente
+      // Obtener clientes (sin cargar pedidos/detalles) y luego calcular stats por SQL.
       const [clientes, total] = await Promise.all([
         prisma.cliente.findMany({
           where,
@@ -55,16 +55,6 @@ export class ClientController {
                 email: true,
               },
             },
-            pedidos: {
-              include: {
-                detalles: {
-                  include: {
-                    producto: true,
-                  },
-                },
-                detallesPago: true,
-              },
-            },
           },
           orderBy: { id: 'desc' },
           skip: offset,
@@ -73,41 +63,55 @@ export class ClientController {
         prisma.cliente.count({ where }),
       ]);
 
-      // Calcular estadísticas por cliente
-      const clientesWithStats = clientes.map(cliente => {
-        const totalPedidos = cliente.pedidos.filter(p => !p.fecha_delete).length;
-        
-        // Calcular montoTotal (suma de todos los detalles)
-        const montoTotal = cliente.pedidos
-          .filter(p => !p.fecha_delete)
-          .reduce((sum, pedido) => {
-            const montoPedido = pedido.detalles.reduce(
-              (detSum, det) => detSum + (det.cantidad * Number(det.precio_unitario)),
-              0
-            );
-            return sum + montoPedido;
-          }, 0);
+      const clienteIds = clientes.map(c => c.id);
 
-        // Calcular montoPagado (suma de todos los detalles de pago)
-        const montoPagado = cliente.pedidos
-          .filter(p => !p.fecha_delete)
-          .reduce((sum, pedido) => {
-            const pagadoPedido = pedido.detallesPago.reduce(
-              (pagSum, det) => pagSum + Number(det.valor),
-              0
-            );
-            return sum + pagadoPedido;
-          }, 0);
+      type ClienteStatsRow = {
+        cliente_id: number;
+        total_pedidos: bigint | number;
+        monto_total: any;
+        monto_pagado: any;
+      };
 
-        // Calcular montoPendiente
-        const montoPendiente = montoTotal - montoPagado;
+      const statsRows: ClienteStatsRow[] = clienteIds.length
+        ? await prisma.$queryRaw<ClienteStatsRow[]>(Prisma.sql`
+            SELECT
+              p.id_cliente AS cliente_id,
+              COUNT(*) AS total_pedidos,
+              COALESCE(SUM(dp_agg.monto_total), 0) AS monto_total,
+              COALESCE(SUM(pg_agg.monto_pagado), 0) AS monto_pagado
+            FROM pedidos p
+            LEFT JOIN (
+              SELECT id_pedido, SUM(cantidad * precio_unitario) AS monto_total
+              FROM detalle_pedidos
+              GROUP BY id_pedido
+            ) dp_agg ON dp_agg.id_pedido = p.id
+            LEFT JOIN (
+              SELECT id_pedido, SUM(valor) AS monto_pagado
+              FROM detalle_pago
+              GROUP BY id_pedido
+            ) pg_agg ON pg_agg.id_pedido = p.id
+            WHERE p.fecha_delete IS NULL
+              AND p.id_cliente IN (${Prisma.join(clienteIds)})
+            GROUP BY p.id_cliente
+          `)
+        : [];
 
-        const { pedidos, ...clienteData } = cliente;
+      const statsByClienteId = new Map<number, { totalPedidos: number; montoTotal: number; montoPagado: number }>();
+      for (const row of statsRows) {
+        const totalPedidos = Number(row.total_pedidos ?? 0);
+        const montoTotal = Number(row.monto_total ?? 0);
+        const montoPagado = Number(row.monto_pagado ?? 0);
+        statsByClienteId.set(Number(row.cliente_id), { totalPedidos, montoTotal, montoPagado });
+      }
+
+      const clientesWithStats = clientes.map((cliente) => {
+        const stats = statsByClienteId.get(cliente.id) ?? { totalPedidos: 0, montoTotal: 0, montoPagado: 0 };
+        const montoPendiente = stats.montoTotal - stats.montoPagado;
         return {
-          ...clienteData,
-          totalPedidos,
-          montoTotal,
-          montoPagado,
+          ...cliente,
+          totalPedidos: stats.totalPedidos,
+          montoTotal: stats.montoTotal,
+          montoPagado: stats.montoPagado,
           montoPendiente,
         };
       });
@@ -173,7 +177,7 @@ export class ClientController {
 
       // Calcular estadísticas
       const totalPedidos = cliente.pedidos.length;
-      
+
       const montoTotal = cliente.pedidos.reduce((sum, pedido) => {
         const montoPedido = pedido.detalles.reduce(
           (detSum, det) => detSum + (det.cantidad * Number(det.precio_unitario)),
@@ -451,28 +455,11 @@ export class ClientController {
 
       const cliente = await prisma.cliente.findUnique({
         where: { id: Number(id) },
-        include: {
-          pedidos: {
-            where: {
-              fecha_delete: null,
-            },
-            include: {
-              detalles: {
-                include: {
-                  producto: true,
-                  estado: true,
-                },
-              },
-              detallesPago: {
-                include: {
-                  pago: true,
-                },
-              },
-            },
-            orderBy: {
-              fecha_pedido: 'desc',
-            },
-          },
+        select: {
+          id: true,
+          nombre: true,
+          email: true,
+          telefono: true,
         },
       });
 
@@ -483,35 +470,75 @@ export class ClientController {
         });
       }
 
-      // Calcular estadísticas por pedido
-      const pedidosConBalance = cliente.pedidos.map(pedido => {
-        const montoTotal = pedido.detalles.reduce(
-          (sum, det) => sum + (det.cantidad * Number(det.precio_unitario)),
-          0
-        );
-        const montoPagado = pedido.detallesPago.reduce(
-          (sum, det) => sum + Number(det.valor),
-          0
-        );
-        const montoPendiente = montoTotal - montoPagado;
+      type PedidoBalanceRow = {
+        id: number;
+        fecha_pedido: Date;
+        fecha_entrega: Date;
+        cantidad_productos: bigint | number | null;
+        monto_total: any;
+        monto_pagado: any;
+        cantidad_pagos: bigint | number | null;
+        ultimo_pago_fecha: Date | null;
+        ultimo_pago_valor: any;
+      };
 
+      const pedidosConBalance = await prisma.$queryRaw<PedidoBalanceRow[]>(Prisma.sql`
+        SELECT
+          p.id,
+          p.fecha_pedido,
+          p.fecha_entrega,
+          COALESCE(dp_agg.cantidad_productos, 0) AS cantidad_productos,
+          COALESCE(dp_agg.monto_total, 0) AS monto_total,
+          COALESCE(pg_agg.monto_pagado, 0) AS monto_pagado,
+          COALESCE(pg_agg.cantidad_pagos, 0) AS cantidad_pagos,
+          lastp.fecha_pago AS ultimo_pago_fecha,
+          lastp.valor AS ultimo_pago_valor
+        FROM pedidos p
+        LEFT JOIN (
+          SELECT
+            id_pedido,
+            COUNT(*) AS cantidad_productos,
+            SUM(cantidad * precio_unitario) AS monto_total
+          FROM detalle_pedidos
+          GROUP BY id_pedido
+        ) dp_agg ON dp_agg.id_pedido = p.id
+        LEFT JOIN (
+          SELECT
+            id_pedido,
+            COUNT(*) AS cantidad_pagos,
+            SUM(valor) AS monto_pagado
+          FROM detalle_pago
+          GROUP BY id_pedido
+        ) pg_agg ON pg_agg.id_pedido = p.id
+        LEFT JOIN (
+          SELECT DISTINCT ON (id_pedido)
+            id_pedido,
+            fecha_pago,
+            valor
+          FROM detalle_pago
+          ORDER BY id_pedido, fecha_pago DESC, id DESC
+        ) lastp ON lastp.id_pedido = p.id
+        WHERE p.id_cliente = ${Number(id)}
+          AND p.fecha_delete IS NULL
+        ORDER BY p.fecha_pedido DESC
+      `).then(rows => rows.map(r => {
+        const montoTotal = Number(r.monto_total ?? 0);
+        const montoPagado = Number(r.monto_pagado ?? 0);
+        const montoPendiente = montoTotal - montoPagado;
         return {
-          id: pedido.id,
-          fecha_pedido: pedido.fecha_pedido,
-          fecha_entrega: pedido.fecha_entrega,
-          cantidadProductos: pedido.detalles.length,
+          id: Number(r.id),
+          fecha_pedido: r.fecha_pedido,
+          fecha_entrega: r.fecha_entrega,
+          cantidadProductos: Number(r.cantidad_productos ?? 0),
           montoTotal,
           montoPagado,
           montoPendiente,
-          cantidadPagos: pedido.detallesPago.length,
-          ultimoPago: pedido.detallesPago.length > 0 
-            ? {
-                fecha: pedido.detallesPago[0].fecha_pago,
-                monto: Number(pedido.detallesPago[0].valor),
-              }
+          cantidadPagos: Number(r.cantidad_pagos ?? 0),
+          ultimoPago: r.ultimo_pago_fecha
+            ? { fecha: r.ultimo_pago_fecha, monto: Number(r.ultimo_pago_valor ?? 0) }
             : null,
         };
-      });
+      }));
 
       // Resumen global
       const totalPedidos = pedidosConBalance.length;
@@ -545,6 +572,53 @@ export class ClientController {
       res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  /**
+   * GET /api/clients/:id/balance/export - Exportar balance a Excel
+   */
+  static async exportBalanceToExcel(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      // Verificar que el cliente existe
+      const cliente = await prisma.cliente.findUnique({
+        where: { id: Number(id) },
+      });
+
+      if (!cliente) {
+        return res.status(404).json({
+          success: false,
+          error: 'Cliente no encontrado',
+        });
+      }
+
+      // Generar Excel
+      const { ExcelService } = await import('../services/excel.service');
+      const buffer = await ExcelService.generateBalanceExcel(Number(id));
+
+      // Configurar headers para descarga
+      const filename = `Balance_${cliente.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', buffer.length.toString());
+
+      // Registrar en auditoría
+      const usuario = (req as any).user?.usuario || 'sistema';
+      await AuditService.log(
+        usuario,
+        `BALANCE_EXPORTED - Balance exportado a Excel para cliente ${cliente.nombre} (ID: ${id})`
+      );
+
+      res.send(buffer);
+    } catch (error) {
+      console.error('Export balance to Excel error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar archivo Excel',
       });
     }
   }

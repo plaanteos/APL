@@ -76,7 +76,7 @@ export class AuthController {
           'sistema',
           `Intento de login fallido: usuario no existe o inactivo - ${email} desde ${req.ip || 'IP desconocida'}`
         );
-        
+
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -91,7 +91,7 @@ export class AuthController {
           user.usuario,
           `Intento de login fallido: contraseña incorrecta - ${email} desde ${req.ip || 'IP desconocida'}`
         );
-        
+
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -175,7 +175,7 @@ export class AuthController {
         nombre: userData.nombre,
         super_usuario: userData.super_usuario,
       };
-      
+
       // Solo agregar telefono si está definido
       if (userData.telefono) {
         adminData.telefono = userData.telefono;
@@ -451,6 +451,181 @@ export class AuthController {
         success: false,
         error: 'Error interno del servidor',
       });
+    }
+  }
+
+  /**
+   * Solicitar recuperación de contraseña
+   * POST /api/auth/forgot-password
+   */
+  static async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email } = z.object({
+        email: z.string().email('Email inválido'),
+      }).parse(req.body);
+
+      // Buscar usuario por email
+      const user = await prisma.administrador.findUnique({
+        where: { email },
+      });
+
+      // Por seguridad, siempre devolver el mismo mensaje
+      const successMessage = 'Si el email existe, recibirás un enlace de recuperación';
+
+      if (!user || !user.activo) {
+        return res.status(200).json({ success: true, message: successMessage });
+      }
+
+      // Generar token de reset (válido por 1 hora)
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error('JWT_SECRET is not defined');
+      }
+
+      const resetToken = jwt.sign(
+        { id: user.id, email: user.email, type: 'password-reset' },
+        secret,
+        { expiresIn: '1h' }
+      );
+
+      // Guardar hash del token y fecha de expiración
+      const resetTokenHash = await bcrypt.hash(resetToken, 10);
+      const resetExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+      await prisma.administrador.update({
+        where: { id: user.id },
+        data: {
+          resetPasswordToken: resetTokenHash,
+          resetPasswordExpiry: resetExpiry,
+        },
+      });
+
+      // Enviar notificación(es). Por seguridad, nunca fallar la respuesta por errores de envío.
+      // Email (Gmail/SMTP)
+      try {
+        const { emailService } = await import('../services/email.service');
+        await emailService.sendPasswordResetEmail(email, resetToken);
+      } catch (sendError) {
+        console.error('Forgot password: error enviando email:', sendError);
+      }
+
+      // WhatsApp (opcional)
+      try {
+        const shouldSendWhatsApp = (process.env.PASSWORD_RESET_SEND_WHATSAPP || '').toLowerCase() === 'true';
+        if (shouldSendWhatsApp && user.telefono && process.env.FRONTEND_URL) {
+          const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+          const { whatsappService } = await import('../services/whatsapp.service');
+          await whatsappService.sendTextMessage({
+            to: user.telefono,
+            body: `Recuperación de contraseña APL. Usá este enlace (expira en 1 hora): ${resetUrl}`,
+          });
+        }
+      } catch (sendError) {
+        console.error('Forgot password: error enviando WhatsApp:', sendError);
+      }
+
+      await AuditService.log(
+        user.usuario,
+        `PASSWORD_RESET_REQUESTED - Solicitud de recuperación para ${email}`
+      );
+
+      return res.status(200).json({ success: true, message: successMessage });
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: error.issues[0].message
+        });
+      }
+
+      // Mantener respuesta consistente para evitar filtración de información
+      return res.status(200).json({ success: true, message: 'Si el email existe, recibirás un enlace de recuperación' });
+    }
+  }
+
+  /**
+   * Restablecer contraseña con token
+   * POST /api/auth/reset-password
+   */
+  static async resetPassword(req: Request, res: Response) {
+    try {
+      const { token, newPassword } = z.object({
+        token: z.string().min(1, 'Token requerido'),
+        newPassword: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+      }).parse(req.body);
+
+      // Verificar token
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error('JWT_SECRET is not defined');
+      }
+
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, secret);
+      } catch (jwtError) {
+        return res.status(400).json({ success: false, error: 'Token inválido o expirado' });
+      }
+
+      if (decoded.type !== 'password-reset') {
+        return res.status(400).json({ success: false, error: 'Token inválido' });
+      }
+
+      const user = await prisma.administrador.findUnique({
+        where: { id: decoded.id },
+      });
+
+      if (!user || !user.activo) {
+        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+
+      if (!user.resetPasswordToken || !user.resetPasswordExpiry) {
+        return res.status(400).json({ success: false, error: 'Token inválido' });
+      }
+
+      if (new Date() > user.resetPasswordExpiry) {
+        return res.status(400).json({ success: false, error: 'Token expirado' });
+      }
+
+      const isValidToken = await bcrypt.compare(token, user.resetPasswordToken);
+      if (!isValidToken) {
+        return res.status(400).json({ success: false, error: 'Token inválido' });
+      }
+
+      // Actualizar contraseña
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+      await prisma.administrador.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          resetPasswordToken: null,
+          resetPasswordExpiry: null,
+        },
+      });
+
+      await AuditService.log(
+        user.usuario,
+        `PASSWORD_RESET_COMPLETED - Contraseña restablecida para ${user.email}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Contraseña actualizada exitosamente'
+      });
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: error.issues[0].message
+        });
+      }
+
+      return res.status(500).json({ success: false, error: 'Error al restablecer contraseña' });
     }
   }
 }

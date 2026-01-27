@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
+import { ttlCache } from '../utils/ttlCache';
 
 const prisma = new PrismaClient();
 
@@ -45,25 +46,52 @@ export class ProductoController {
         where.id_administrador = Number(id_administrador);
       }
 
-      // Obtener productos
-      const [productos, total] = await Promise.all([
-        prisma.producto.findMany({
-          where,
-          include: {
-            administrador: {
-              select: {
-                id: true,
-                nombre: true,
-                email: true,
+      const canCache = !search && Number(page) === 1;
+      const cacheKey = canCache
+        ? `productos:v1:admin:${id_administrador ? Number(id_administrador) : 'all'}:limit:${Number(limit)}`
+        : null;
+
+      // Obtener productos (con caché en el caso típico de catálogo)
+      const [productos, total] = cacheKey
+        ? await ttlCache.getOrSet(cacheKey, 60_000, async () => {
+          const result = await Promise.all([
+            prisma.producto.findMany({
+              where,
+              include: {
+                administrador: {
+                  select: {
+                    id: true,
+                    nombre: true,
+                    email: true,
+                  },
+                },
+              },
+              orderBy: { tipo: 'asc' },
+              skip: offset,
+              take: Number(limit),
+            }),
+            prisma.producto.count({ where }),
+          ]);
+          return result as [typeof result[0], number];
+        })
+        : await Promise.all([
+          prisma.producto.findMany({
+            where,
+            include: {
+              administrador: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  email: true,
+                },
               },
             },
-          },
-          orderBy: { tipo: 'asc' },
-          skip: offset,
-          take: Number(limit),
-        }),
-        prisma.producto.count({ where }),
-      ]);
+            orderBy: { tipo: 'asc' },
+            skip: offset,
+            take: Number(limit),
+          }),
+          prisma.producto.count({ where }),
+        ]);
 
       res.json({
         success: true,
@@ -156,6 +184,8 @@ export class ProductoController {
         },
       });
 
+      ttlCache.deleteByPrefix('productos:v1:');
+
       res.status(201).json({
         success: true,
         message: 'Producto creado exitosamente',
@@ -229,6 +259,8 @@ export class ProductoController {
         },
       });
 
+      ttlCache.deleteByPrefix('productos:v1:');
+
       // Registrar auditoría
       res.json({
         success: true,
@@ -285,6 +317,8 @@ export class ProductoController {
       await prisma.producto.delete({
         where: { id: Number(id) },
       });
+
+      ttlCache.deleteByPrefix('productos:v1:');
 
       // Registrar auditoría
       res.json({

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
+import { ttlCache } from '../utils/ttlCache';
 
 const prisma = new PrismaClient();
 
@@ -18,11 +19,13 @@ export class EstadoController {
   // GET /api/estados - Obtener catálogo de estados activos
   static async getEstados(req: Request, res: Response) {
     try {
-      const estados = await prisma.estado.findMany({
-        where: {
-          fecha_delete: null, // Solo estados activos
-        },
-        orderBy: { descripcion: 'asc' },
+      const estados = await ttlCache.getOrSet('estados:activos:v1', 60_000, async () => {
+        return prisma.estado.findMany({
+          where: {
+            fecha_delete: null, // Solo estados activos
+          },
+          orderBy: { descripcion: 'asc' },
+        });
       });
 
       res.json({
@@ -92,6 +95,8 @@ export class EstadoController {
         data: estadoData,
       });
 
+      ttlCache.delete('estados:activos:v1');
+
       res.status(201).json({
         success: true,
         message: 'Estado creado exitosamente',
@@ -156,6 +161,8 @@ export class EstadoController {
         data: updateData,
       });
 
+      ttlCache.delete('estados:activos:v1');
+
       // Registrar auditoría
       res.json({
         success: true,
@@ -219,6 +226,8 @@ export class EstadoController {
         where: { id: Number(id) },
         data: { fecha_delete: new Date() },
       });
+
+      ttlCache.delete('estados:activos:v1');
 
       res.json({
         success: true,

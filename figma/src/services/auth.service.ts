@@ -34,15 +34,20 @@ export interface AuthResponse {
 
 export const authService = {
   // Login
-  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+  login: async (credentials: LoginCredentials, rememberMe: boolean = false): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', credentials);
     const { token, refreshToken, user } = response.data.data; // Backend devuelve data.data
-    // Save tokens to localStorage
-    localStorage.setItem('authToken', token);
+
+    // Choose storage based on rememberMe flag
+    const storage = rememberMe ? localStorage : sessionStorage;
+
+    // Save tokens to chosen storage
+    storage.setItem('authToken', token);
     if (refreshToken) {
-      localStorage.setItem('refreshToken', refreshToken);
+      storage.setItem('refreshToken', refreshToken);
     }
-    localStorage.setItem('user', JSON.stringify(user));
+    storage.setItem('user', JSON.stringify(user));
+
     return { token, refreshToken, user };
   },
 
@@ -62,7 +67,11 @@ export const authService = {
   getCurrentUser: async (): Promise<User> => {
     const response = await apiClient.get('/auth/me');
     const user = response.data.data; // Backend devuelve data.data
-    localStorage.setItem('user', JSON.stringify(user));
+
+    // Save to the same storage where the token is
+    const storage = localStorage.getItem('authToken') ? localStorage : sessionStorage;
+    storage.setItem('user', JSON.stringify(user));
+
     return user;
   },
 
@@ -73,17 +82,25 @@ export const authService = {
     } catch {
       // Si no hay conexión o el backend no responde, igual se debe limpiar la sesión local.
     } finally {
+      // Clear from both storages
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('refreshToken');
+      sessionStorage.removeItem('user');
     }
   },
 
   // Limpieza local (sin llamadas a red)
   clearLocalSession: (): void => {
+    // Clear from both storages
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
   },
 
   // Change password
@@ -94,19 +111,19 @@ export const authService = {
     });
   },
 
-  // Get stored token
+  // Get stored token (check both storages)
   getToken: (): string | null => {
-    return localStorage.getItem('authToken');
+    return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
   },
 
-  // Get stored user
+  // Get stored user (check both storages)
   getStoredUser: (): User | null => {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
   },
 
-  // Check if authenticated
+  // Check if authenticated (check both storages)
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('authToken');
+    return !!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken'));
   },
 };

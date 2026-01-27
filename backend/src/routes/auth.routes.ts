@@ -22,4 +22,10 @@ router.get('/me', authenticate, AuthController.me);
 // PUT /api/auth/change-password (requiere autenticación)
 router.put('/change-password', authenticate, AuthController.changePassword);
 
+// POST /api/auth/forgot-password
+router.post('/forgot-password', AuthController.forgotPassword);
+
+// POST /api/auth/reset-password
+router.post('/reset-password', AuthController.resetPassword);
+
 export default router;

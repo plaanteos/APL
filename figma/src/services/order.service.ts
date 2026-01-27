@@ -70,8 +70,9 @@ class OrderService {
   /**
    * Marcar pedido como entregado
    */
-  async markAsDelivered(id: ID): Promise<IOrder> {
-    throw new Error('markAsDelivered no está disponible en la API actual');
+  async markAsDelivered(id: ID): Promise<IOrderWithCalculations> {
+    const response = await api.patch<ApiEnvelope<IOrderWithCalculations>>(`/orders/${id}/deliver`);
+    return response.data.data;
   }
 
   /**

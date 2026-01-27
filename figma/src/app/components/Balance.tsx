@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Mail, MessageCircle, Download, Plus, DollarSign, Package, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, MessageCircle, Download, Plus, DollarSign, Package, Loader2, ChevronDown, ChevronUp, CheckCircle } from "lucide-react";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
 import paymentService from "../../services/payment.service";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { PaymentDialog } from "./PaymentDialog";
 import * as XLSX from "xlsx";
+import { notificationService } from "../../services/notification.service";
 
 interface BalanceProps {
   selectedClientId: number | null;
@@ -106,64 +107,99 @@ export function Balance({ selectedClientId }: BalanceProps) {
     });
   };
 
-  const handleDownloadExcel = () => {
-    if (!balanceData) return;
+  const handleDownloadExcel = async () => {
+    if (!currentClientId || !selectedClient) return;
 
     try {
-      const selectedClient = clients.find(c => c.id === currentClientId);
-
-      // Crear datos para Excel
-      const excelData = balanceData.pedidos.map((item) => ({
-        Pedido: `#${item.pedidoId}`,
-        Fecha: new Date(item.fecha).toLocaleDateString('es-ES'),
-        Paciente: item.paciente,
-        Productos: item.productos,
-        Total: item.montoTotal,
-        Pagado: item.montoPagado,
-        Pendiente: item.montoPendiente,
-        Entregado: item.entregado ? 'Sí' : 'No',
-      }));
-
-      // Agregar fila de total
-      excelData.push({
-        Pedido: '',
-        Fecha: '',
-        Paciente: '',
-        Productos: 'TOTAL',
-        Total: balanceData.totalGeneral,
-        Pagado: balanceData.totalPagado,
-        Pendiente: balanceData.totalPendiente,
-        Entregado: '',
-      });
-
-      // Crear libro de trabajo
-      const ws = XLSX.utils.json_to_sheet(excelData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Balance");
-
-      // Descargar archivo
-      const fileName = `Balance_${selectedClient?.nombre}_${new Date().toLocaleDateString()}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-
-      toast.success("Excel descargado correctamente");
+      toast.promise(
+        clientService.exportBalance(currentClientId, selectedClient.nombre),
+        {
+          loading: 'Generando Excel...',
+          success: 'Excel descargado correctamente',
+          error: 'Error al descargar Excel',
+        }
+      );
     } catch (error) {
-      console.error('Error downloading Excel:', error);
-      toast.error("Error al descargar Excel");
+      console.error('Error in download excel handler:', error);
     }
   };
 
-  const handleSendEmail = () => {
-    const selectedClient = clients.find(c => c.id === currentClientId);
-    toast.success("Resumen enviado por email", {
-      description: `Email enviado a ${selectedClient?.email}`,
-    });
+  const handleMarkAsDelivered = async (pedidoId: number) => {
+    try {
+      await orderService.markAsDelivered(pedidoId);
+      toast.success("Pedido marcado como entregado");
+      fetchBalance(); // Recargar balance para ver cambios
+    } catch (err: any) {
+      console.error('Error marking as delivered:', err);
+      toast.error(err.response?.data?.error || 'Error al marcar como entregado');
+    }
   };
 
-  const handleSendWhatsApp = () => {
-    const selectedClient = clients.find(c => c.id === currentClientId);
-    toast.success("Resumen enviado por WhatsApp", {
-      description: `Mensaje enviado a ${selectedClient?.telefono}`,
-    });
+  const buildBalanceMessage = () => {
+    if (!selectedClient || !balanceData) return "";
+    const total = (balanceData.totalGeneral ?? 0).toLocaleString();
+    const pagado = (balanceData.totalPagado ?? 0).toLocaleString();
+    const pendiente = (balanceData.totalPendiente ?? 0).toLocaleString();
+
+    return [
+      `Hola ${selectedClient.nombre},`,
+      `Resumen de balance:`,
+      `Total: $${total}`,
+      `Pagado: $${pagado}`,
+      `Pendiente: $${pendiente}`,
+      `- APL Laboratorio Dental`,
+    ].join("\n");
+  };
+
+  const handleSendEmail = async () => {
+    if (!selectedClient?.email) {
+      toast.error('El cliente no tiene email');
+      return;
+    }
+    const msg = buildBalanceMessage();
+    if (!msg) {
+      toast.error('No hay datos de balance para enviar');
+      return;
+    }
+
+    toast.promise(
+      notificationService.send({
+        channel: 'email',
+        to: selectedClient.email,
+        subject: `Resumen de balance - ${selectedClient.nombre}`,
+        message: msg,
+      }),
+      {
+        loading: 'Enviando email...',
+        success: 'Resumen enviado por email',
+        error: (e: any) => e?.response?.data?.error || 'Error al enviar email',
+      }
+    );
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!selectedClient?.telefono) {
+      toast.error('El cliente no tiene teléfono');
+      return;
+    }
+    const msg = buildBalanceMessage();
+    if (!msg) {
+      toast.error('No hay datos de balance para enviar');
+      return;
+    }
+
+    toast.promise(
+      notificationService.send({
+        channel: 'whatsapp',
+        to: selectedClient.telefono,
+        message: msg,
+      }),
+      {
+        loading: 'Enviando WhatsApp...',
+        success: 'Resumen enviado por WhatsApp',
+        error: (e: any) => e?.response?.data?.error || 'Error al enviar WhatsApp',
+      }
+    );
   };
 
   if (isLoadingClients) {
@@ -206,8 +242,8 @@ export function Balance({ selectedClientId }: BalanceProps) {
       <Card className="p-4">
         <div className="space-y-3">
           <label className="text-sm font-medium text-gray-700">Cliente</label>
-          <Select 
-            value={currentClientId?.toString() || ""} 
+          <Select
+            value={currentClientId?.toString() || ""}
             onValueChange={(val) => setCurrentClientId(Number(val))}
           >
             <SelectTrigger className="w-full">
@@ -304,7 +340,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
           {/* Orders List */}
           <Card className="p-4">
             <h3 className="font-medium mb-4">Pedidos del Cliente</h3>
-            
+
             {balanceData.pedidos.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 No hay pedidos registrados para este cliente
@@ -313,7 +349,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               <div className="space-y-3">
                 {balanceData.pedidos.map((item) => {
                   const isExpanded = expandedOrders.has(item.pedidoId);
-                  
+
                   return (
                     <div
                       key={item.pedidoId}
@@ -338,12 +374,12 @@ export function Balance({ selectedClientId }: BalanceProps) {
                               </span>
                             )}
                           </div>
-                          
+
                           <p className="text-sm text-gray-600">
                             {new Date(item.fecha).toLocaleDateString('es-ES')}
                           </p>
                           <p className="text-sm text-gray-600">Paciente: {item.paciente}</p>
-                          
+
                           <button
                             onClick={() => toggleOrderExpanded(item.pedidoId)}
                             className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mt-2"
@@ -353,7 +389,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </button>
                         </div>
-                        
+
                         <div className="text-right space-y-2">
                           <div>
                             <p className="text-xs text-gray-500">Total</p>
@@ -375,7 +411,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                               </p>
                             </div>
                           </div>
-                          
+
                           {item.montoPendiente > 0 && (
                             <Button
                               onClick={() => setShowPaymentDialog(true)}
@@ -384,6 +420,18 @@ export function Balance({ selectedClientId }: BalanceProps) {
                             >
                               <DollarSign size={14} className="mr-1" />
                               Registrar Pago
+                            </Button>
+                          )}
+
+                          {!item.entregado && (
+                            <Button
+                              onClick={() => handleMarkAsDelivered(item.pedidoId)}
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 w-full text-green-600 border-green-600 hover:bg-green-50"
+                            >
+                              <CheckCircle size={14} className="mr-1" />
+                              Marcar Entregado
                             </Button>
                           )}
                         </div>

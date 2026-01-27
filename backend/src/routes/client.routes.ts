@@ -22,6 +22,9 @@ router.get('/:id', ClientController.getClientById);
 // GET /api/clients/:id/balance - Balance del cliente
 router.get('/:id/balance', ClientController.getClientBalance);
 
+// GET /api/clients/:id/balance/export - Exportar balance a Excel
+router.get('/:id/balance/export', ClientController.exportBalanceToExcel);
+
 // PUT /api/clients/:id
 router.put('/:id', ClientController.updateClient);
 

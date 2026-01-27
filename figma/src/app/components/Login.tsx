@@ -19,6 +19,7 @@ export function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -29,7 +30,7 @@ export function Login() {
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        setErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+        setErrors(prev => ({ ...prev, [field]: error.issues[0].message }));
       }
       return false;
     }
@@ -37,7 +38,7 @@ export function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validar todo el formulario
     try {
       loginSchema.parse({ email, password });
@@ -45,7 +46,7 @@ export function Login() {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach(err => {
+        error.issues.forEach((err: z.ZodIssue) => {
           if (err.path[0]) {
             fieldErrors[err.path[0] as string] = err.message;
           }
@@ -57,7 +58,7 @@ export function Login() {
     }
 
     setIsLoading(true);
-    
+
     try {
       await login(email, password);
       toast.success("Sesión iniciada correctamente");
@@ -99,9 +100,8 @@ export function Login() {
                 setEmail(e.target.value);
                 validateField("email", e.target.value);
               }}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${
-                errors.email ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${errors.email ? "border-red-500" : "border-gray-300"
+                }`}
               placeholder="tu@email.com"
             />
             {errors.email && (
@@ -124,14 +124,30 @@ export function Login() {
                 setPassword(e.target.value);
                 validateField("password", e.target.value);
               }}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${
-                errors.password ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] ${errors.password ? "border-red-500" : "border-gray-300"
+                }`}
               placeholder="••••••••"
             />
             {errors.password && (
               <p className="text-sm text-red-500 mt-1">{errors.password}</p>
             )}
+          </div>
+
+          {/* Remember Me Checkbox */}
+          <div className="flex items-center gap-2">
+            <input
+              id="rememberMe"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 text-[#033f63] border-gray-300 rounded focus:ring-[#28666e]"
+            />
+            <label
+              htmlFor="rememberMe"
+              className="text-sm text-gray-700 cursor-pointer"
+            >
+              Recordar sesión
+            </label>
           </div>
 
           <Button
@@ -141,6 +157,17 @@ export function Login() {
           >
             {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
           </Button>
+
+          {/* Forgot Password Link */}
+          <div className="text-center">
+            <button
+              type="button"
+              className="text-sm text-[#033f63] hover:text-[#28666e] hover:underline"
+              onClick={() => toast.info("Funcionalidad de recuperación de contraseña próximamente")}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
         </form>
       </Card>
     </div>

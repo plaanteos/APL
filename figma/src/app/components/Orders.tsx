@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package } from "lucide-react";
+import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp } from "lucide-react";
 import orderService from "../../services/order.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
@@ -42,9 +42,9 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const filters: any = {};
-      
+
       // Mapear filtros del frontend al backend
       switch (statusFilter) {
         case "pending":
@@ -57,7 +57,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
           filters.conDeuda = true;
           break;
       }
-      
+
       const data = await orderService.getAll(filters);
       setOrders(data);
     } catch (err: any) {
@@ -144,16 +144,15 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
           orders.map((order) => {
             const isExpanded = expandedOrders.has(order.id);
             const hasDetalles = order.detalles && order.detalles.length > 0;
-            
+
             return (
               <Card
                 key={order.id}
                 className="p-4 hover:shadow-md transition-shadow"
               >
                 <div className="space-y-3">
-                  <div 
-                    className="flex items-start justify-between cursor-pointer"
-                    onClick={() => onNavigateToBalance(order.id_cliente)}
+                  <div
+                    className="flex items-start justify-between"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{order.cliente?.nombre || 'Cliente desconocido'}</p>
@@ -201,7 +200,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                         <span>{order.detalles!.length} {order.detalles!.length === 1 ? 'detalle' : 'detalles'}</span>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
-                      
+
                       {isExpanded && (
                         <div className="mt-3 space-y-2 pl-6">
                           {order.detalles!.map((detalle) => (
@@ -226,6 +225,22 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                               </div>
                             </div>
                           ))}
+
+                          {/* Botón para ver balance del cliente */}
+                          <div className="pt-2 mt-2 border-t border-gray-200">
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigateToBalance(order.id_cliente);
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="w-full text-[#033f63] border-[#033f63] hover:bg-[#033f63] hover:text-white"
+                            >
+                              <TrendingUp size={16} className="mr-2" />
+                              Ver Balance del Cliente
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -304,7 +304,7 @@ export class OrderController {
       // Verificar que todos los estados existen
       const estadoIds = orderData.detalles.map(d => d.id_estado);
       const estados = await prisma.estado.findMany({
-        where: { 
+        where: {
           id: { in: estadoIds },
           fecha_delete: null,
         },
@@ -778,6 +778,77 @@ export class OrderController {
       });
     } catch (error) {
       console.error('Get orders stats error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor',
+      });
+    }
+  }
+
+  /**
+   * PATCH /api/orders/:id/deliver - Marcar pedido como entregado
+   */
+  static async markAsDelivered(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const pedido = await prisma.pedido.findUnique({
+        where: { id: Number(id) },
+      });
+
+      if (!pedido || pedido.fecha_delete) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pedido no encontrado',
+        });
+      }
+
+      if (pedido.fecha_entrega && pedido.fecha_entrega <= new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: 'El pedido ya está marcado como entregado',
+        });
+      }
+
+      // Marcar como entregado con la fecha actual
+      const updatedOrder = await prisma.pedido.update({
+        where: { id: Number(id) },
+        data: { fecha_entrega: new Date() },
+        include: {
+          cliente: true,
+          administrador: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+          detalles: {
+            include: {
+              producto: true,
+              estado: true,
+            },
+          },
+          detallesPago: true,
+        },
+      });
+
+      const formatted = formatOrderWithCalculations(updatedOrder);
+
+      // Registrar en auditoría
+      const usuario = (req as any).user?.usuario || 'sistema';
+      await AuditService.log(
+        usuario,
+        `ORDER_DELIVERED - Pedido #${id} marcado como entregado`
+      );
+
+      res.json({
+        success: true,
+        message: 'Pedido marcado como entregado exitosamente',
+        data: formatted,
+      });
+    } catch (error) {
+      console.error('Mark as delivered error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',

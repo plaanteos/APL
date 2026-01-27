@@ -34,4 +34,7 @@ router.put('/:id/detalles/:detalleId', OrderController.updateDetalle);
 // DELETE /api/orders/:id/detalles/:detalleId - Eliminar detalle
 router.delete('/:id/detalles/:detalleId', OrderController.deleteDetalle);
 
+// PATCH /api/orders/:id/deliver - Marcar como entregado
+router.patch('/:id/deliver', OrderController.markAsDelivered);
+
 export default router;

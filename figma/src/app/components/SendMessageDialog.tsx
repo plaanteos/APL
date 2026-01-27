@@ -11,6 +11,8 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Mail, MessageCircle } from "lucide-react";
+import { toast } from "sonner";
+import { notificationService } from "../../services/notification.service";
 
 interface SendMessageDialogProps {
   open: boolean;
@@ -28,25 +30,35 @@ export function SendMessageDialog({
   contactInfo,
 }: SendMessageDialogProps) {
   const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSend = () => {
-    if (type === "whatsapp") {
-      // Remove non-numeric characters and format for WhatsApp
-      const phoneNumber = contactInfo.replace(/\D/g, "");
-      const encodedMessage = encodeURIComponent(message);
-      window.open(
-        `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
-        "_blank"
-      );
-    } else {
-      // Email
-      const subject = encodeURIComponent("Mensaje desde Laboratorio Dental");
-      const body = encodeURIComponent(message);
-      window.location.href = `mailto:${contactInfo}?subject=${subject}&body=${body}`;
+  const handleSend = async () => {
+    if (!message.trim()) return;
+
+    try {
+      setIsSending(true);
+
+      await notificationService.send({
+        channel: type,
+        to: contactInfo,
+        subject: type === "email" ? "Mensaje desde Laboratorio Dental" : undefined,
+        message: message.trim(),
+      });
+
+      toast.success(type === "whatsapp" ? "WhatsApp enviado" : "Email enviado", {
+        description: `Enviado a ${clientName}`,
+      });
+
+      setMessage("");
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error("Error sending notification:", err);
+      toast.error("No se pudo enviar", {
+        description: err?.response?.data?.error || err?.message || "Revisá configuración de Gmail/WhatsApp",
+      });
+    } finally {
+      setIsSending(false);
     }
-    
-    setMessage("");
-    onOpenChange(false);
   };
 
   const isWhatsApp = type === "whatsapp";
@@ -113,7 +125,7 @@ export function SendMessageDialog({
           <Button
             type="button"
             onClick={handleSend}
-            disabled={!message.trim()}
+            disabled={!message.trim() || isSending}
             className={
               isWhatsApp
                 ? "bg-green-600 hover:bg-green-700"
@@ -123,12 +135,12 @@ export function SendMessageDialog({
             {isWhatsApp ? (
               <>
                 <MessageCircle size={16} className="mr-2" />
-                Abrir WhatsApp
+                {isSending ? "Enviando..." : "Enviar WhatsApp"}
               </>
             ) : (
               <>
                 <Mail size={16} className="mr-2" />
-                Abrir Email
+                {isSending ? "Enviando..." : "Enviar Email"}
               </>
             )}
           </Button>
