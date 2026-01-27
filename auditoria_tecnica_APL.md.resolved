@@ -17,6 +17,8 @@ El sistema APL presenta una **implementación parcial** de los requerimientos es
 - ❌ **Aplicación mobile NO EXISTE** (incumplimiento crítico de RNF-02)
 - ❌ **Scripts SQL incompletos** para PostgreSQL (faltan: usuarios/permisos, triggers, consultas de validación) - RBD-02
 - ⚠️ **Pendientes de arquitectura/DB** (scripts SQL/triggers/índices/roles según motor elegido)
+- ✅ **Cola de trabajos** implementada para notificaciones (BullMQ + Redis opcional, con fallback a envío directo)
+- ✅ **Caché** implementada para catálogos (Redis opcional vía `REDIS_URL` + fallback TTL en memoria)
 - ✅ **Integraciones de comunicación**: envío de Email (Gmail/SMTP) y WhatsApp (Cloud API) implementadas
 - ✅ **Recuperación de contraseña** implementada (forgot/reset)
 
@@ -106,6 +108,8 @@ El sistema APL presenta una **implementación parcial** de los requerimientos es
 
 **Evidencia encontrada:**
 - [figma/src/app/components/Clients.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/Clients.tsx): Componente de clientes
+- [figma/src/app/components/SendMessageDialog.tsx](file:///c:/Users/Jesu/Desktop/APL/figma/src/app/components/SendMessageDialog.tsx): Modal para enviar Email/WhatsApp
+- [backend/src/routes/notification.routes.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/routes/notification.routes.ts): Endpoint `POST /api/notifications/send`
 - [backend/src/controllers/client.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/client.controller.ts): CRUD completo
 - Endpoints disponibles:
   - `GET /api/clients` - Listar clientes con estadísticas
@@ -119,7 +123,7 @@ El sistema APL presenta una **implementación parcial** de los requerimientos es
 - ✅ Consultar información de clientes
 - ✅ Cargar nuevos clientes
 - ✅ Acceder al balance de cada cliente
-- ✅ Enviar mensajes al cliente (se evidencia en el código frontend)
+- ✅ Enviar mensajes al cliente mediante email o WhatsApp desde un **modal** (SendMessageDialog)
 
 **Observaciones:**
 - ✅ Cumple con todos los elementos requeridos
@@ -367,13 +371,13 @@ El requerimiento especifica:
 **Escalabilidad:**
 - ✅ API RESTful stateless (permite escalado horizontal)
 - ✅ Separación frontend/backend
-- ⚠️ **Caché**: no se evidencia caché distribuida (Redis/Memcached); se implementó caché TTL en memoria para catálogos
-- ⚠️ **No se evidencia cola de trabajos** (Bull, RabbitMQ)
+- ✅ **Caché**: caché distribuida con **Redis** (vía `REDIS_URL`) + fallback TTL en memoria para catálogos (estados/productos)
+- ✅ **Cola de trabajos**: cola real para notificaciones (BullMQ + Redis opcional), con reintentos y cleanup
 - ⚠️ **No se evidencia CDN** para assets estáticos
 
 **Observaciones:**
 - ✅ Arquitectura base preparada para escalar
-- ⚠️ Falta optimizaciones para grandes volúmenes (índices, caché, colas)
+- ⚠️ Pendiente confirmar aplicación de índices en la BD desplegada y completar optimizaciones a nivel BD (triggers, constraints, particionamiento si aplica)
 - ⚠️ Cálculos dinámicos pueden ser cuello de botella
 
 ---
@@ -450,10 +454,17 @@ El requerimiento especifica:
 - **Recomendación**: Usar campos calculados, triggers o vistas materializadas
 - **Prioridad**: MEDIA
 
-#### 🟡 **MEDIO: Sin Caché**
-- **Descripción**: No se evidencia caché distribuida (Redis/Memcached); se implementó caché TTL en memoria para catálogos
-- **Impacto**: Mitigado en endpoints de catálogo; en despliegues multi-instancia se recomienda Redis
-- **Prioridad**: MEDIA
+#### 🟢 **BAJO: Caché Implementada (Redis + TTL)**
+- **Descripción**: Se implementó caché para catálogos con **fallback a memoria** y opción de **caché distribuida en Redis** (vía `REDIS_URL`).
+- **Impacto**: Reduce carga en endpoints de catálogo (estados/productos). En despliegues multi-instancia, Redis mantiene consistencia entre instancias.
+- **Evidencia**: caché en Redis opcional + invalidación por prefijo en mutaciones.
+- **Prioridad**: BAJA
+
+#### ✅ **RESUELTO: Cola de trabajos para notificaciones**
+- **Descripción**: Se implementó cola de trabajos para envíos (email/WhatsApp) con Redis opcional.
+- **Solución implementada**: BullMQ + worker de notificaciones con reintentos; fallback a envío directo si Redis no está configurado.
+- **Evidencia**: cola/worker en backend y uso desde el endpoint unificado de notificaciones.
+- **Estado**: COMPLETADO
 
 ---
 
@@ -579,9 +590,9 @@ El requerimiento especifica:
 | **RNF-01** | Plataforma Web | ✅ Cumplido | 100% | Web funcional y desplegada |
 | **RNF-02** | Plataforma Mobile | ❌ No Cumplido | 0% | No existe aplicación mobile |
 | **RNF-03** | Seguridad | ⚠️ Parcial | 80% | Falta: 2FA y app mobile para gestión desde mobile |
-| **RNF-04** | Escalabilidad y Robustez | ⚠️ Parcial | 70% | Falta: índices, caché, optimizaciones |
+| **RNF-04** | Escalabilidad y Robustez | ⚠️ Parcial | 80% | Pendiente: confirmar aplicación de índices, completar scripts/triggers/constraints a nivel BD, y CDN opcional |
 
-**Cumplimiento Global: 81%**
+**Cumplimiento Global: 82%**
 
 ---
 
@@ -632,8 +643,8 @@ El requerimiento especifica:
 
 8. **Implementar Caché**
   - ✅ Caché TTL en memoria implementada para catálogos (estados/productos)
-  - (Opcional) Redis para caché distribuida en despliegues multi-instancia
-  - Estimación: 1 semana (si se agrega Redis)
+  - ✅ Caché distribuida implementada con Redis (usando `REDIS_URL`)
+  - Estimación: 0 días (completado)
 
 9. **Agregar Tests Automatizados**
    - Tests unitarios para servicios
@@ -690,6 +701,7 @@ El requerimiento especifica:
   - Cálculos optimizados en endpoints críticos (clientes/balance) usando agregaciones SQL
   - Índices definidos (Prisma + script SQL) para filtros frecuentes (pendiente aplicar migración/ejecución en DB)
   - Caché TTL implementada para catálogos (estados/productos)
+  - Cola de trabajos implementada para notificaciones (BullMQ + Redis opcional)
 
 5. **Seguridad Mejorable**
   - Recuperación de contraseña implementada
@@ -698,7 +710,7 @@ El requerimiento especifica:
 
 ### 📊 **Evaluación Final**
 
-**Cumplimiento Global: 81%**
+**Cumplimiento Global: 82%**
 
 El sistema APL presenta una **implementación mayormente completa** de los requerimientos funcionales. Cuenta con una base sólida en términos de arquitectura y funcionalidades core. Los principales **incumplimientos críticos** son:
 

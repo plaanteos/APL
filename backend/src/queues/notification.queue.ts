@@ -1,9 +1,9 @@
 import { Queue, Worker } from 'bullmq';
-import IORedis from 'ioredis';
 import logger from '../utils/logger';
 import { emailService } from '../services/email.service';
 import { whatsappService } from '../services/whatsapp.service';
 import { buildBasicEmailHtml } from '../utils/notificationTemplates';
+import { closeRedisClient, getRedisClient } from '../utils/redisClient';
 
 export type NotificationJobData = {
   channel: 'email' | 'whatsapp';
@@ -14,7 +14,6 @@ export type NotificationJobData = {
 
 const QUEUE_NAME = 'apl:notifications';
 
-let redis: IORedis | null = null;
 let queue: Queue<NotificationJobData> | null = null;
 let worker: Worker<NotificationJobData> | null = null;
 
@@ -24,24 +23,7 @@ const isEnabledByEnv = () => {
 };
 
 const getRedis = () => {
-  if (redis) return redis;
-
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    throw new Error('REDIS_URL no está configurado');
-  }
-
-  redis = new IORedis(redisUrl, {
-    // BullMQ recomienda deshabilitar esto para evitar errores con pipelines/long running.
-    maxRetriesPerRequest: null,
-    // Para rediss:// (TLS)
-    tls: redisUrl.startsWith('rediss://') ? {} : undefined,
-  });
-
-  redis.on('error', (err) => logger.error('❌ Redis error:', err));
-  redis.on('connect', () => logger.info('✅ Redis connected (job queue)'));
-
-  return redis;
+  return getRedisClient();
 };
 
 export const isNotificationQueueEnabled = () => {
@@ -121,11 +103,8 @@ export const initNotificationWorker = () => {
 export const closeNotificationQueue = async () => {
   await worker?.close();
   await queue?.close();
-  if (redis) {
-    await redis.quit();
-  }
+  await closeRedisClient();
 
   worker = null;
   queue = null;
-  redis = null;
 };

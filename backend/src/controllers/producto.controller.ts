@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
-import { ttlCache } from '../utils/ttlCache';
+import { cacheDelByPrefix, cacheGetOrSet } from '../utils/cache';
 
 const prisma = new PrismaClient();
 
@@ -53,7 +53,7 @@ export class ProductoController {
 
       // Obtener productos (con caché en el caso típico de catálogo)
       const [productos, total] = cacheKey
-        ? await ttlCache.getOrSet(cacheKey, 60_000, async () => {
+        ? await cacheGetOrSet(cacheKey, 60_000, async () => {
           const result = await Promise.all([
             prisma.producto.findMany({
               where,
@@ -184,7 +184,7 @@ export class ProductoController {
         },
       });
 
-      ttlCache.deleteByPrefix('productos:v1:');
+      await cacheDelByPrefix('productos:v1:');
 
       res.status(201).json({
         success: true,
@@ -259,7 +259,7 @@ export class ProductoController {
         },
       });
 
-      ttlCache.deleteByPrefix('productos:v1:');
+      await cacheDelByPrefix('productos:v1:');
 
       // Registrar auditoría
       res.json({
@@ -318,7 +318,7 @@ export class ProductoController {
         where: { id: Number(id) },
       });
 
-      ttlCache.deleteByPrefix('productos:v1:');
+      await cacheDelByPrefix('productos:v1:');
 
       // Registrar auditoría
       res.json({
