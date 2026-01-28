@@ -29,10 +29,10 @@ export class AuditController {
 
       if (filters.usuario) {
         // Filtrar por usuario
-        logs = await AuditService.getLogsByUsuario(filters.usuario, filters.limit);
+        logs = await AuditService.getLogsByUsuario(filters.usuario, filters.limit, skip);
       } else if (filters.accion) {
         // Filtrar por acción
-        logs = await AuditService.getLogsByAccion(filters.accion, filters.limit);
+        logs = await AuditService.getLogsByAccion(filters.accion, filters.limit, skip);
       } else {
         // Obtener todos
         logs = await AuditService.getLogs(filters.limit, skip);

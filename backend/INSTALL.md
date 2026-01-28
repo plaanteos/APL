@@ -86,6 +86,50 @@ CREATE DATABASE apl_dental_lab;
 \q
 ```
 
+### 4.1 (Opcional) Crear roles/usuarios y permisos (PostgreSQL)
+
+Si necesitás cumplir la parte de **usuarios/permisos** del requerimiento de BD (RBD-02), hay un script listo en:
+
+- `backend/prisma/scripts/01_roles_permissions_postgres.sql`
+
+Ejecutalo conectado a la DB:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/01_roles_permissions_postgres.sql
+```
+
+> Nota: el script trae placeholders `CHANGE_ME_*` para contraseñas. Reemplazalos antes de ejecutar.
+
+### 4.2 (Opcional) Aplicar índices recomendados (PostgreSQL)
+
+Si no usás migraciones Prisma (o querés aplicarlos manualmente), podés ejecutar:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/add_indexes_postgres.sql
+```
+
+### 4.3 (Opcional) Consultas de validación (PostgreSQL)
+
+Para validar tablas/índices/permisos y checks básicos (RBD-02):
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/02_validation_queries_postgres.psql
+```
+
+### 4.4 (Opcional) Aplicar constraints CHECK (PostgreSQL)
+
+Para reforzar integridad **sin triggers**, existe este script:
+
+- `backend/prisma/scripts/03_add_constraints_postgres.sql`
+
+Ejecutalo así:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/03_add_constraints_postgres.sql
+```
+
+> Nota: las constraints se crean como `NOT VALID` para no romper datos legacy. Si querés validarlas para datos existentes, seguí las instrucciones al final del script.
+
 **Alternativa con pgAdmin:**
 1. Abrir pgAdmin 4
 2. Conectarse al servidor PostgreSQL

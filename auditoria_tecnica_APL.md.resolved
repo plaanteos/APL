@@ -14,9 +14,10 @@ El sistema APL presenta una **implementación parcial** de los requerimientos es
 - ✅ **Plataforma Web funcional** con autenticación y módulos principales
 - ✅ **Backend robusto** con API RESTful, JWT y validaciones
 - ✅ **Base de datos normalizada** con PostgreSQL y Prisma ORM
+- ✅ **Requerimientos funcionales RF-01 a RF-05 cumplidos** (login, dashboard, pedidos, clientes, balance)
 - ❌ **Aplicación mobile NO EXISTE** (incumplimiento crítico de RNF-02)
-- ❌ **Scripts SQL incompletos** para PostgreSQL (faltan: usuarios/permisos, triggers, consultas de validación) - RBD-02
-- ⚠️ **Pendientes de arquitectura/DB** (scripts SQL/triggers/índices/roles según motor elegido)
+- ⚠️ **Scripts SQL parcialmente completos** para PostgreSQL (pendiente: triggers; disponibles: creación DB, roles/permisos, índices, constraints CHECK y consultas de validación) - RBD-02
+- ⚠️ **Pendientes de arquitectura/DB** (scripts SQL/triggers/índices según motor elegido)
 - ✅ **Cola de trabajos** implementada para notificaciones (BullMQ + Redis opcional, con fallback a envío directo)
 - ✅ **Caché** implementada para catálogos (Redis opcional vía `REDIS_URL` + fallback TTL en memoria)
 - ✅ **Integraciones de comunicación**: envío de Email (Gmail/SMTP) y WhatsApp (Cloud API) implementadas
@@ -214,11 +215,13 @@ El requerimiento RF-05 se considera cumplido al evidenciar:
 **Evidencia encontrada:**
 - ✅ Esquema Prisma (equivalente a creación de tablas): [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
 - ✅ Script de seed (inserción de datos): [backend/prisma/seed.ts](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/seed.ts)
+- ✅ Script SQL (PostgreSQL) creación de base de datos: [backend/prisma/scripts/00_create_database_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/00_create_database_postgres.sql)
+- ✅ Script SQL (PostgreSQL) roles/usuarios y permisos: [backend/prisma/scripts/01_roles_permissions_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/01_roles_permissions_postgres.sql)
 - ✅ Script SQL (PostgreSQL) para índices: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
-- ❌ **NO se encontraron scripts de creación de usuarios y permisos**
+- ✅ Script SQL (PostgreSQL) constraints CHECK (opcional): [backend/prisma/scripts/03_add_constraints_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/03_add_constraints_postgres.sql)
+- ✅ Consultas de validación (PostgreSQL): [backend/prisma/scripts/02_validation_queries_postgres.psql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/02_validation_queries_postgres.psql)
 - ⚠️ **Índices**: declarados en Prisma y script SQL; pendiente confirmar ejecución/aplicación en la BD desplegada
-- ❌ **NO se encontraron triggers**
-- ❌ **NO se encontraron consultas de validación**
+- ❌ **NO se encontraron triggers** (en desarrollo por otro sector)
 
 **Justificación técnica:**
 El requerimiento especifica **explícitamente**:
@@ -226,19 +229,22 @@ El requerimiento especifica **explícitamente**:
 
 **Hallazgos críticos:**
 1. **Motor de BD**: El sistema usa **PostgreSQL**, lo cual es válido (motor elegido)
-2. **Scripts SQL incompletos**: Se usa Prisma ORM (esquema y migraciones), pero faltan scripts SQL completos para administración (roles/permisos), triggers y validaciones
-3. **Triggers**: No se encontró evidencia de triggers para auditoría automática/validaciones/integridad
+2. **Scripts SQL**: Se incorporaron scripts SQL para creación de DB, roles/permisos, índices, constraints CHECK y consultas de validación; se mantiene pendiente la entrega de triggers
+3. **Triggers**: No se encontró evidencia de triggers para auditoría automática/validaciones/integridad (en desarrollo por otro sector)
 4. **Índices**: Se definieron índices recomendados (Prisma + script SQL), pero su aplicación depende de migración/ejecución en la BD
-5. **Gestión de usuarios/permisos**: No hay scripts para crear roles/usuarios con permisos mínimos
 
 **Impacto:**
 - ⚠️ Incumplimiento parcial del requerimiento RBD-02
 - ⚠️ Riesgo de performance si los índices no están aplicados en la BD desplegada
-- ⚠️ Auditoría manual en lugar de automática (sin triggers)
-- ⚠️ Falta de control granular de permisos a nivel de base de datos
+- ⚠️ Auditoría manual en lugar de automática (sin triggers) hasta completar el sector correspondiente
+- ✅ Control granular de permisos a nivel de base de datos disponible vía script (pendiente de ejecución por ambiente)
 
 **Actualización (PostgreSQL):**
+- ✅ Se agregó script de creación de DB (PostgreSQL): [backend/prisma/scripts/00_create_database_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/00_create_database_postgres.sql)
+- ✅ Se agregó script de roles/permisos (PostgreSQL): [backend/prisma/scripts/01_roles_permissions_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/01_roles_permissions_postgres.sql)
+- ✅ Se agregó script de validaciones (PostgreSQL): [backend/prisma/scripts/02_validation_queries_postgres.psql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/02_validation_queries_postgres.psql)
 - ✅ Se agregó script de índices para PostgreSQL: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
+- ✅ Se agregó script de constraints CHECK para PostgreSQL: [backend/prisma/scripts/03_add_constraints_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/03_add_constraints_postgres.sql)
 - ✅ Índices declarados en Prisma: [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
 
 ---
@@ -303,7 +309,7 @@ El requerimiento especifica:
 
 ---
 
-#### ⚠️ **RNF-03: Seguridad** - **PARCIALMENTE CUMPLIDO**
+#### ✅ **RNF-03: Seguridad** - **CUMPLIDO (Web)**
 
 **Evidencia encontrada:**
 
@@ -311,20 +317,24 @@ El requerimiento especifica:
 - ✅ Login con credenciales (email + password)
 - ✅ Hash de contraseñas con bcrypt (12 rounds)
 - ✅ JWT con access token (15min) y refresh token (7 días)
-- ✅ Middleware de autenticación: [backend/src/middleware/auth.middleware.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/middleware/auth.middleware.ts)
+- ✅ Middleware de autenticación: [backend/src/middleware/auth.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/middleware/auth.ts)
 - ✅ Rate limiting en login (5 intentos / 15 minutos)
 
 **Cambio de contraseña:**
 - ✅ Endpoint implementado: `PUT /api/auth/change-password`
 - ✅ Validación de contraseña actual
-- ✅ Validación de longitud mínima (6 caracteres)
+- ✅ Política de contraseña configurable (por variables de entorno) aplicada en registro/cambio/reset
+- ✅ Evidencia: [backend/src/utils/passwordPolicy.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/utils/passwordPolicy.ts)
 - ✅ Disponible desde web
 
-**Funcionalidades faltantes:**
-- ❌ **No se evidencia cambio de contraseña desde mobile** (porque no existe app mobile)
-- ✅ **Recuperación de contraseña implementada** (forgot/reset password)
-- ⚠️ **No se evidencia autenticación de dos factores (2FA)**
-- ⚠️ **No se evidencia política de expiración de contraseñas**
+**Cobertura del requerimiento RNF-03 (según requerimientos oficiales):**
+- ✅ Autenticación mediante credenciales: **cumplido**
+- ✅ Cambio de contraseña desde la aplicación **web o mobile**: **cumplido en web**
+- ⚠️ Mobile no aplica en este punto por ausencia de app (ver RNF-02)
+
+**Mejoras recomendadas (no exigidas por RNF-03):**
+- Implementar autenticación de dos factores (2FA)
+- Implementar política de expiración/rotación de contraseñas
 
 **Medidas de seguridad adicionales encontradas:**
 - ✅ Helmet.js para headers de seguridad
@@ -334,9 +344,9 @@ El requerimiento especifica:
 - ✅ Auditoría de acciones (login, logout, intentos fallidos)
 
 **Observaciones:**
-- ✅ Cumple con autenticación básica y cambio de contraseña
-- ✅ Recuperación de contraseña implementada (crítico resuelto para producción)
-- ⚠️ Falta 2FA (recomendado para sistemas administrativos)
+- ✅ Cumple con autenticación y cambio de contraseña desde web
+- ✅ Recuperación de contraseña implementada (mejora relevante para producción)
+- ⚠️ 2FA recomendado para cuentas administrativas
 
 ---
 
@@ -435,15 +445,15 @@ El requerimiento especifica:
 - **Estado**: ACEPTADO (no es un incumplimiento)
 - **Nota**: La evaluación se centra en la entrega de scripts SQL del motor elegido (RBD-02)
 
-#### 🔴 **CRÍTICO: Ausencia de Scripts SQL**
-- **Descripción**: No existen scripts SQL completos para PostgreSQL para:
-  - Creación de base de datos
-  - Creación de usuarios y permisos
-  - Creación de índices personalizados (pendiente aplicar en BD si no se usan migraciones)
-  - Creación de triggers
-  - Consultas de validación
-- **Impacto**: Incumplimiento parcial de RBD-02
-- **Prioridad**: CRÍTICA
+#### 🟡 **MEDIO: Scripts SQL Parciales (PostgreSQL)**
+- **Descripción**: Se incorporaron scripts SQL para PostgreSQL (RBD-02), pero el set aún no está 100% completo.
+  - ✅ Creación de base de datos: [backend/prisma/scripts/00_create_database_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/00_create_database_postgres.sql)
+  - ✅ Roles/usuarios y permisos: [backend/prisma/scripts/01_roles_permissions_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/01_roles_permissions_postgres.sql)
+  - ✅ Índices personalizados: [backend/prisma/scripts/add_indexes_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/add_indexes_postgres.sql)
+  - ✅ Consultas de validación: [backend/prisma/scripts/02_validation_queries_postgres.psql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/02_validation_queries_postgres.psql)
+  - ❌ Triggers: pendiente (en desarrollo por otro sector)
+- **Impacto**: Incumplimiento parcial de RBD-02 (pendiente: triggers + confirmación de aplicación por ambiente)
+- **Prioridad**: MEDIA
 
 #### 🟡 **MEDIO: Cálculos Dinámicos Costosos**
 - **Descripción**: Los montos (total, pagado, pendiente) se calculan en cada consulta mediante agregaciones
@@ -494,18 +504,20 @@ El requerimiento especifica:
   - Prisma schema: [backend/prisma/schema.prisma](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/schema.prisma)
 - **Prioridad**: MEDIA
 
-#### 🟡 **MEDIO: Sin Constraints Adicionales**
-- **Descripción**: Faltan constraints de validación a nivel de base de datos:
+#### 🟡 **MEDIO: Constraints CHECK disponibles (pendiente aplicar por ambiente)**
+- **Descripción**: Se agregaron constraints de validación a nivel de base de datos (sin triggers) como script opcional:
   - CHECK para valores positivos (precios, cantidades, montos)
   - CHECK para fechas lógicas (fecha_entrega >= fecha_pedido)
-- **Impacto**: Validación solo en capa de aplicación
+- **Evidencia**: [backend/prisma/scripts/03_add_constraints_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/03_add_constraints_postgres.sql)
+- **Notas**: Se crean como `NOT VALID` para no romper datos legacy; se pueden validar después por ambiente.
 - **Prioridad**: MEDIA
 
-#### 🟡 **MEDIO: Sin Gestión de Usuarios de BD**
-- **Descripción**: No hay scripts para crear usuarios con permisos específicos
-- **Riesgo**: La aplicación usa un usuario con permisos totales
-- **Recomendación**: Crear usuarios con permisos mínimos necesarios
-- **Prioridad**: MEDIA
+#### 🟢 **BAJO: Gestión de Usuarios de BD Pendiente de Aplicación por Ambiente**
+- **Descripción**: Existe script para roles/usuarios y permisos, pero debe ejecutarse y validarse en cada ambiente.
+- **Evidencia**: [backend/prisma/scripts/01_roles_permissions_postgres.sql](file:///c:/Users/Jesu/Desktop/APL/backend/prisma/scripts/01_roles_permissions_postgres.sql)
+- **Riesgo**: Si no se aplica, la aplicación podría usar un usuario con permisos excesivos.
+- **Recomendación**: Ejecutar el script, probar accesos por rol y mantener contraseñas fuera del repositorio.
+- **Prioridad**: BAJA
 
 ---
 
@@ -521,9 +533,11 @@ El requerimiento especifica:
 - **Recomendación**: Implementar TOTP (Google Authenticator) o SMS
 - **Prioridad**: MEDIA
 
-#### 🟡 **MEDIO: Contraseña Mínima de 6 Caracteres**
-- **Descripción**: La validación permite contraseñas de solo 6 caracteres
-- **Recomendación**: Aumentar a 8-12 caracteres y requerir complejidad
+#### ✅ **RESUELTO (parcial): Política de Contraseñas Mejorada**
+- **Descripción**: Se fortaleció la validación de contraseña en registro/cambio/reset.
+- **Implementación**: Política configurable (`PASSWORD_MIN_LENGTH` y `PASSWORD_REQUIRE_COMPLEXITY`, default: mínimo 8 + complejidad).
+- **Evidencia**: [backend/src/utils/passwordPolicy.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/utils/passwordPolicy.ts)
+- **Nota**: En login no se fuerza la policy para no bloquear usuarios legacy; se recomienda rotación/cambio de contraseña.
 - **Prioridad**: MEDIA
 
 #### 🟡 **MEDIO: Sin Política de Expiración de Contraseñas**
@@ -550,9 +564,9 @@ El requerimiento especifica:
   - Usar vistas materializadas para reportes
 - **Prioridad**: MEDIA
 
-#### 🟡 **MEDIO: Sin Paginación en Algunas Consultas**
-- **Descripción**: Algunas consultas no implementan paginación
-- **Impacto**: Carga completa de datos en memoria
+#### ✅ **RESUELTO: Paginación en Listados Principales**
+- **Descripción**: Los listados principales implementan paginación (incluyendo auditoría con filtros).
+- **Evidencia**: [backend/src/controllers/audit.controller.ts](file:///c:/Users/Jesu/Desktop/APL/backend/src/controllers/audit.controller.ts)
 - **Prioridad**: MEDIA
 
 #### 🟡 **MEDIO: Sin Monitoreo y Observabilidad**
@@ -578,21 +592,21 @@ El requerimiento especifica:
 
 ## 3. MATRIZ DE CUMPLIMIENTO
 
-| Código | Requerimiento | Estado | Cumplimiento | Observaciones |
-|--------|---------------|--------|--------------|---------------|
-| **RF-01** | Login | ✅ Cumplido | 100% | Implementación completa + recordar sesión |
-| **RF-02** | Dashboard Inicial | ✅ Cumplido | 100% | Todos los elementos presentes |
-| **RF-03** | Bandeja de Pedidos | ✅ Cumplido | 100% | Incluye botón de acceso directo a balance |
-| **RF-04** | Bandeja de Clientes | ✅ Cumplido | 100% | Funcionalidad completa |
-| **RF-05** | Bandeja de Balance | ✅ Cumplido | 100% | Incluye entregado, envíos Email/WhatsApp y export Excel |
-| **RBD-01** | Normalización | ✅ Cumplido | 100% | 3 niveles de normalización correctos |
-| **RBD-02** | Implementación Técnica | ⚠️ Parcial | 45% | Motor PostgreSQL aceptado; faltan scripts SQL completos (roles/permisos, triggers, validaciones). Índices definidos pero pendientes de aplicar |
-| **RNF-01** | Plataforma Web | ✅ Cumplido | 100% | Web funcional y desplegada |
-| **RNF-02** | Plataforma Mobile | ❌ No Cumplido | 0% | No existe aplicación mobile |
-| **RNF-03** | Seguridad | ⚠️ Parcial | 80% | Falta: 2FA y app mobile para gestión desde mobile |
-| **RNF-04** | Escalabilidad y Robustez | ⚠️ Parcial | 80% | Pendiente: confirmar aplicación de índices, completar scripts/triggers/constraints a nivel BD, y CDN opcional |
+| Código     | Requerimiento           | Estado          | Cumplimiento | Observaciones |
+|------------|-------------------------|-----------------|--------------|---------------|
+| **RF-01**  | Login                   | ✅ Cumplido    | 100% | Implementación completa + recordar sesión |
+| **RF-02**  | Dashboard Inicial       | ✅ Cumplido    | 100% | Todos los elementos presentes |
+| **RF-03**  | Bandeja de Pedidos      | ✅ Cumplido    | 100% | Incluye botón de acceso directo a balance |
+| **RF-04**  | Bandeja de Clientes     | ✅ Cumplido    | 100% | Funcionalidad completa |
+| **RF-05**  | Bandeja de Balance      | ✅ Cumplido    | 100% | Incluye entregado, envíos Email/WhatsApp y export Excel |
+| **RBD-01** | Normalización           | ✅ Cumplido    | 100% | 3 niveles de normalización correctos |
+| **RBD-02** | Implementación Técnica  | ⚠️ Parcial     | 70% | Motor PostgreSQL aceptado; disponibles scripts de DB, roles/permisos, validaciones y constraints CHECK. Pendiente: triggers. Índices definidos pero pendientes de aplicar |
+| **RNF-01** | Plataforma Web          | ✅ Cumplido    | 100% | Web funcional y desplegada |
+| **RNF-02** | Plataforma Mobile       | ❌ No Cumplido | 0% | No existe aplicación mobile |
+| **RNF-03** | Seguridad               | ✅ Cumplido    | 100% | Cumplido en web (cambio de contraseña). 2FA recomendado, no exigido. Mobile no existe (RNF-02) |
+| **RNF-04** | Escalabilidad y Robustez| ⚠️ Parcial     | 80% | Pendiente: confirmar aplicación de índices y constraints a nivel BD (por ambiente). Triggers pendientes (otro sector) y CDN opcional |
 
-**Cumplimiento Global: 82%**
+**Cumplimiento Global: 86% (aprox.)**
 
 ---
 
@@ -606,14 +620,14 @@ El requerimiento especifica:
    - Implementar autenticación biométrica
    - Estimación: 4-6 semanas
 
-2. **Crear Scripts SQL Completos** (RBD-02)
-  - Scripts SQL para PostgreSQL (motor elegido)
-  - Scripts de creación de BD y tablas
-   - Scripts de usuarios y permisos
-   - Scripts de índices optimizados
-   - Scripts de triggers de auditoría
-   - Consultas de validación
-   - Estimación: 1-2 semanas
+2. **Completar Scripts SQL (PostgreSQL)** (RBD-02)
+  - ✅ Script creación de BD
+  - ✅ Script de roles/usuarios y permisos
+  - ✅ Script de índices optimizados (pendiente aplicar/confirmar en BD real)
+  - ✅ Script de constraints CHECK (pendiente aplicar/confirmar en BD real)
+  - ❌ Script de triggers de auditoría (en desarrollo por otro sector)
+  - ✅ Consultas de validación
+  - Estimación: 2-4 días (sin considerar triggers)
 
 3. **Completar Funcionalidades de Balance** (RF-05)
   - ✅ COMPLETADO (entregado + envíos Email/WhatsApp + Excel)
@@ -695,7 +709,7 @@ El requerimiento especifica:
 
 2. **Scripts SQL Incompletos (PostgreSQL)**
   - Incumplimiento parcial de RBD-02
-  - Pendiente: roles/usuarios/permisos, triggers y consultas de validación
+  - Pendiente: triggers (en desarrollo por otro sector) y confirmar aplicación por ambiente (índices/roles/constraints)
 
 3. **Problemas de Performance**
   - Cálculos optimizados en endpoints críticos (clientes/balance) usando agregaciones SQL
@@ -706,17 +720,17 @@ El requerimiento especifica:
 5. **Seguridad Mejorable**
   - Recuperación de contraseña implementada
    - Sin 2FA
-   - Contraseñas débiles permitidas (6 caracteres)
+  - 2FA no implementado (recomendación). Política de contraseña fortalecida en registro/cambio/reset
 
 ### 📊 **Evaluación Final**
 
-**Cumplimiento Global: 82%**
+**Cumplimiento Global: 86% (aprox.)**
 
 El sistema APL presenta una **implementación mayormente completa** de los requerimientos funcionales. Cuenta con una base sólida en términos de arquitectura y funcionalidades core. Los principales **incumplimientos críticos** son:
 
 - ❌ **Aplicación mobile inexistente** (RNF-02)
 - ⚠️ **Scripts SQL incompletos** (RBD-02)
-- ⚠️ **Brecha técnica de BD**: scripts SQL/triggers/usuarios/permisos para PostgreSQL (RBD-02)
+- ⚠️ **Brecha técnica de BD**: completar triggers (PostgreSQL) + confirmar aplicación de scripts por ambiente (RBD-02)
 
 **Recomendación:** Priorizar (1) desarrollo de la aplicación mobile y (2) entregar scripts SQL (PostgreSQL) según RBD-02. En paralelo, aplicar los índices declarados en la BD real y evaluar métricas/latencias con datos representativos.
 

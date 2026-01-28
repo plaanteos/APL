@@ -1,0 +1,91 @@
+/* ================================================================
+   APL - PostgreSQL
+   Script 02: Consultas de validación (RBD-02)
+   Motor: PostgreSQL 14+
+
+   Objetivo:
+   - Verificar existencia de tablas y registros
+   - Verificar constraints e índices básicos
+   - Verificar permisos por rol
+
+   Nota:
+   - Ejecutar en la base apl_dental_lab.
+   - Solo lectura.
+   ================================================================ */
+
+/* 1) Verificar motor y base actual */
+SELECT version();
+SELECT 'apl_dental_lab' AS db_name, 'public' AS schema_name;
+
+/* 2) Verificar tablas esperadas (modelo Prisma) */
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_type = 'BASE TABLE'
+ORDER BY table_name;
+
+/* 3) Conteos rápidos (si las tablas no existen aún, este bloque fallará)
+   Ejecutar luego de `npm run db:migrate` */
+SELECT
+  (SELECT COUNT(*) FROM administrador) AS administradores,
+  (SELECT COUNT(*) FROM cliente)        AS clientes,
+  (SELECT COUNT(*) FROM pedidos)        AS pedidos,
+  (SELECT COUNT(*) FROM detalle_pedidos) AS detalle_pedidos,
+  (SELECT COUNT(*) FROM producto)       AS productos,
+  (SELECT COUNT(*) FROM estado)         AS estados,
+  (SELECT COUNT(*) FROM pago)           AS pagos,
+  (SELECT COUNT(*) FROM detalle_pago)   AS detalle_pago,
+  (SELECT COUNT(*) FROM auditoria)      AS auditorias;
+
+/* 4) Validar constraints (PK/UK/FK) */
+SELECT
+  tc.table_name,
+  tc.constraint_name,
+  tc.constraint_type
+FROM information_schema.table_constraints tc
+WHERE tc.table_schema = 'public'
+  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY')
+ORDER BY tc.table_name, tc.constraint_type, tc.constraint_name;
+
+/* 5) Validar índices existentes */
+SELECT schemaname, tablename, indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
+ORDER BY tablename, indexname;
+
+/* 6) Validar permisos por rol (ejemplos)
+   Nota: requiere que los roles existan. Si no existen, devuelve false. */
+SELECT
+  has_table_privilege('consultas_apl', 'public.cliente', 'SELECT')  AS consultas_cliente_select,
+  has_table_privilege('consultas_apl', 'public.cliente', 'INSERT')  AS consultas_cliente_insert,
+  has_table_privilege('editor_apl',    'public.cliente', 'UPDATE')  AS editor_cliente_update,
+  has_table_privilege('lector_apl',    'public.pedidos', 'SELECT')  AS lector_pedidos_select,
+  has_table_privilege('lector_apl',    'public.pedidos', 'DELETE')  AS lector_pedidos_delete,
+  has_table_privilege('admin_apl',     'public.producto', 'DELETE') AS admin_producto_delete;
+
+/* 7) Pruebas de integridad referencial (FKs)
+   Buscar registros huérfanos (deberían devolver 0) */
+SELECT COUNT(*) AS pedidos_sin_cliente
+FROM pedidos p
+LEFT JOIN cliente c ON c.id = p.id_cliente
+WHERE c.id IS NULL;
+
+SELECT COUNT(*) AS detalle_pedido_sin_pedido
+FROM detalle_pedidos dp
+LEFT JOIN pedidos p ON p.id = dp.id_pedido
+WHERE p.id IS NULL;
+
+SELECT COUNT(*) AS detalle_pedido_sin_producto
+FROM detalle_pedidos dp
+LEFT JOIN producto pr ON pr.id = dp.id_producto
+WHERE pr.id IS NULL;
+
+SELECT COUNT(*) AS detalle_pago_sin_pago
+FROM detalle_pago dpa
+LEFT JOIN pago pa ON pa.id = dpa.id_pago
+WHERE pa.id IS NULL;
+
+SELECT COUNT(*) AS detalle_pago_sin_pedido
+FROM detalle_pago dpa
+LEFT JOIN pedidos p ON p.id = dpa.id_pedido
+WHERE p.id IS NULL;

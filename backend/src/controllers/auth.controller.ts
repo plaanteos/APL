@@ -4,19 +4,24 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
+import { passwordSchema } from '../utils/passwordPolicy';
 
 const prisma = new PrismaClient();
 
 // Schemas de validación
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(6, 'Contraseña debe tener al menos 6 caracteres'),
+  // No aplicar política estricta en login para no bloquear usuarios legacy.
+  password: z.string().min(1, 'Contraseña requerida'),
+  // 2FA (opcional). Solo aplica si el usuario lo tiene habilitado.
+  otp: z.string().min(6).max(10).optional(),
+  backupCode: z.string().min(6).max(32).optional(),
 });
 
 const registerSchema = z.object({
   email: z.string().email('Email inválido'),
   usuario: z.string().min(3, 'Usuario debe tener al menos 3 caracteres'),
-  password: z.string().min(6, 'Contraseña debe tener al menos 6 caracteres'),
+  password: passwordSchema('Contraseña'),
   nombre: z.string().min(2, 'Nombre requerido'),
   telefono: z.string().optional(),
   super_usuario: z.boolean().default(false),
@@ -276,11 +281,17 @@ export class AuthController {
         });
       }
 
-      if (newPassword.length < 6) {
-        return res.status(400).json({
-          success: false,
-          error: 'La nueva contraseña debe tener al menos 6 caracteres',
-        });
+      // Validar política de contraseña
+      try {
+        passwordSchema('La nueva contraseña').parse(newPassword);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          return res.status(400).json({
+            success: false,
+            error: e.issues[0]?.message || 'La nueva contraseña no cumple la política de seguridad',
+          });
+        }
+        throw e;
       }
 
       // Buscar usuario
@@ -553,7 +564,7 @@ export class AuthController {
     try {
       const { token, newPassword } = z.object({
         token: z.string().min(1, 'Token requerido'),
-        newPassword: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+        newPassword: passwordSchema('La contraseña'),
       }).parse(req.body);
 
       // Verificar token

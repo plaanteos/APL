@@ -288,7 +288,8 @@ export class AuditService {
    */
   static async getLogsByUsuario(
     usuario: string,
-    limit: number = 50
+    limit: number = 50,
+    skip: number = 0
   ): Promise<any[]> {
     return await prisma.auditoria.findMany({
       where: {
@@ -297,6 +298,7 @@ export class AuditService {
         },
       },
       take: limit,
+      skip,
       orderBy: {
         fecha_accion: 'desc',
       },
@@ -308,7 +310,8 @@ export class AuditService {
    */
   static async getLogsByAccion(
     accionPattern: string,
-    limit: number = 50
+    limit: number = 50,
+    skip: number = 0
   ): Promise<any[]> {
     return await prisma.auditoria.findMany({
       where: {
@@ -317,6 +320,7 @@ export class AuditService {
         },
       },
       take: limit,
+      skip,
       orderBy: {
         fecha_accion: 'desc',
       },
