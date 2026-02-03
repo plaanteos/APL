@@ -1,0 +1,140 @@
+-- Trigger 1 – Auditoría automática en UPDATE de clientes
+-- Va a registrar quién modificó, cuándo y qué cliente se modificó.
+
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_update_cliente
+AFTER UPDATE ON cliente
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria (usuario, accion)
+    VALUES (
+        CURRENT_USER(),
+        CONCAT('UPDATE en cliente ID: ', OLD.id,
+               ' - Nombre anterior: ', OLD.nombre,
+               ' - Nombre nuevo: ', NEW.nombre)
+    );
+END$$
+
+DELIMITER ;
+
+----------------------------------------------------------
+
+-- Trigger 2 – Auditoría automática en UPDATE de pedidos
+
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_update_pedidos
+AFTER UPDATE ON pedidos
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria (usuario, accion)
+    VALUES (
+        CURRENT_USER(),
+        CONCAT('UPDATE en pedido ID: ', OLD.id,
+               ' - Fecha pedido anterior: ', OLD.fecha_pedido,
+               ' - Fecha pedido nueva: ', NEW.fecha_pedido)
+    );
+END$$
+
+DELIMITER ;
+
+--------------------------------------------------------------
+Trigger 3 – Validar fechas antes de INSERT / UPDATE en pedidos
+
+Validaciones:
+
+fecha_entrega NO puede ser menor a fecha_pedido
+fecha_delete NO puede ser menor a fecha_pedido
+
+------------------ BEFORE INSERT
+
+DELIMITER $$
+
+CREATE TRIGGER trg_validar_fechas_pedidos_insert
+BEFORE INSERT ON pedidos
+FOR EACH ROW
+BEGIN
+    IF NEW.fecha_entrega IS NOT NULL 
+       AND NEW.fecha_entrega < NEW.fecha_pedido THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La fecha de entrega no puede ser menor a la fecha de pedido';
+    END IF;
+
+    IF NEW.fecha_delete IS NOT NULL 
+       AND NEW.fecha_delete < NEW.fecha_pedido THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La fecha delete no puede ser menor a la fecha de pedido';
+    END IF;
+END$$
+
+DELIMITER ;
+
+--------------------- BEFORE UPDATE
+
+DELIMITER $$
+
+CREATE TRIGGER trg_validar_fechas_pedidos_update
+BEFORE UPDATE ON pedidos
+FOR EACH ROW
+BEGIN
+    IF NEW.fecha_entrega IS NOT NULL 
+       AND NEW.fecha_entrega < NEW.fecha_pedido THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La fecha de entrega no puede ser menor a la fecha de pedido';
+    END IF;
+
+    IF NEW.fecha_delete IS NOT NULL 
+       AND NEW.fecha_delete < NEW.fecha_pedido THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La fecha delete no puede ser menor a la fecha de pedido';
+    END IF;
+END$$
+
+DELIMITER ;
+
+------------------------------------------------------------
+Trigger 4 – Actualizar montoPagado automáticamente
+
+El campo pago.valor debe ser la suma de los valores en detalle_pago:
+
+-------------------------- Trigger al INSERT de detalle_pago:
+
+DELIMITER $$
+
+CREATE TRIGGER trg_actualizar_monto_pago_insert
+AFTER INSERT ON detalle_pago
+FOR EACH ROW
+BEGIN
+    UPDATE pago p
+    SET p.valor = (
+        SELECT SUM(valor)
+        FROM detalle_pago
+        WHERE id_pago = NEW.id_pago
+    )
+    WHERE p.id = NEW.id_pago;
+END$$
+
+DELIMITER ;
+
+------------------------------ Trigger al UPDATE de detalle_pago
+
+DELIMITER $$
+
+CREATE TRIGGER trg_actualizar_monto_pago_update
+AFTER UPDATE ON detalle_pago
+FOR EACH ROW
+BEGIN
+    UPDATE pago p
+    SET p.valor = (
+        SELECT SUM(valor)
+        FROM detalle_pago
+        WHERE id_pago = NEW.id_pago
+    )
+    WHERE p.id = NEW.id_pago;
+END$$
+
+DELIMITER ;
+
+
+
