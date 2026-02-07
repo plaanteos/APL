@@ -220,6 +220,25 @@ export function Balance({ selectedClientId }: BalanceProps) {
     );
   };
 
+  const formatCurrency = (value: number) => {
+    const n = Number(value ?? 0);
+    return `$${n.toLocaleString('es-ES')}`;
+  };
+
+  const formatDate = (value: any) => {
+    try {
+      return new Date(value).toLocaleDateString('es-ES');
+    } catch {
+      return '';
+    }
+  };
+
+  const getTrabajoTitle = (productos: string) => {
+    const first = String(productos ?? '').split(',')[0]?.trim() || '';
+    // Ej: "Corona x2" => "Corona" / "Puente 3 piezas x1" => "Puente 3 piezas"
+    return first.replace(/\s+x\d+\s*$/i, '').trim() || first;
+  };
+
   if (isLoadingClients) {
     return (
       <div className="p-4 flex items-center justify-center h-96">
@@ -242,78 +261,27 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2>Balance</h2>
-        <Button
-          onClick={() => setShowNewOrderDialog(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-          size="sm"
-          disabled={!currentClientId}
-        >
-          <Plus size={16} className="mr-1" />
-          Nuevo Pedido
-        </Button>
-      </div>
-
-      {/* Client Selector */}
-      <Card className="p-4">
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-700">Cliente</label>
-          <Select
-            value={currentClientId?.toString() || ""}
-            onValueChange={(val) => setCurrentClientId(Number(val))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Seleccionar cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              {clients.map((client) => (
-                <SelectItem key={client.id} value={client.id.toString()}>
-                  {client.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
-
-      {/* Client Info & Actions */}
-      {selectedClient && (
+      {/* Selector de cliente (solo si no viene preseleccionado) */}
+      {!selectedClientId && (
         <Card className="p-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-medium">{selectedClient.nombre}</h3>
-              <p className="text-sm text-gray-600">{selectedClient.email}</p>
-              <p className="text-sm text-gray-600">{selectedClient.telefono}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleSendEmail}
-                variant="outline"
-                size="sm"
-              >
-                <Mail size={16} className="mr-1" />
-                Email
-              </Button>
-              <Button
-                onClick={handleSendWhatsApp}
-                variant="outline"
-                size="sm"
-              >
-                <MessageCircle size={16} className="mr-1" />
-                WhatsApp
-              </Button>
-              <Button
-                onClick={handleDownloadExcel}
-                variant="outline"
-                size="sm"
-                disabled={!balanceData || balanceData.pedidos.length === 0}
-              >
-                <Download size={16} className="mr-1" />
-                Excel
-              </Button>
-            </div>
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-700">Cliente</label>
+            <Select
+              value={currentClientId?.toString() || ""}
+              onValueChange={(val) => setCurrentClientId(Number(val))}
+              name="clientId"
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleccionar cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </Card>
       )}
@@ -336,127 +304,152 @@ export function Balance({ selectedClientId }: BalanceProps) {
           {/* Summary Cards */}
           <div className="grid grid-cols-3 gap-3">
             <Card className="p-4">
-              <p className="text-sm text-gray-500">Total</p>
-              <p className="text-2xl font-semibold text-[#033f63]">
-                ${(balanceData.totalGeneral ?? 0).toLocaleString()}
+              <p className="text-xs text-gray-500">Total</p>
+              <p className="text-xl font-semibold text-[#033f63]">
+                {formatCurrency(balanceData.totalGeneral ?? 0)}
               </p>
             </Card>
             <Card className="p-4">
-              <p className="text-sm text-gray-500">Pagado</p>
-              <p className="text-2xl font-semibold text-[#7c9885]">
-                ${(balanceData.totalPagado ?? 0).toLocaleString()}
+              <p className="text-xs text-gray-500">Pagado</p>
+              <p className="text-xl font-semibold text-[#7c9885]">
+                {formatCurrency(balanceData.totalPagado ?? 0)}
               </p>
             </Card>
             <Card className="p-4">
-              <p className="text-sm text-gray-500">Pendiente</p>
-              <p className="text-2xl font-semibold text-[#b5b682]">
-                ${(balanceData.totalPendiente ?? 0).toLocaleString()}
+              <p className="text-xs text-gray-500">Falta</p>
+              <p className="text-xl font-semibold text-[#b5b682]">
+                {formatCurrency(balanceData.totalPendiente ?? 0)}
               </p>
             </Card>
           </div>
 
-          {/* Orders List */}
+          {/* Actions */}
+          <div className="grid grid-cols-3 gap-3">
+            <Button
+              onClick={handleSendEmail}
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center gap-1"
+              disabled={!selectedClient?.email}
+            >
+              <Mail className="h-5 w-5" />
+              <span className="text-xs">Email</span>
+            </Button>
+            <Button
+              onClick={handleSendWhatsApp}
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center gap-1"
+              disabled={!selectedClient?.telefono}
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span className="text-xs">WhatsApp</span>
+            </Button>
+            <Button
+              onClick={handleDownloadExcel}
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center gap-1"
+              disabled={!balanceData || balanceData.pedidos.length === 0}
+            >
+              <Download className="h-5 w-5" />
+              <span className="text-xs">Excel</span>
+            </Button>
+          </div>
+
+          {/* Detalle de pedidos (tabla) */}
           <Card className="p-4">
-            <h3 className="font-medium mb-4">Pedidos del Cliente</h3>
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Detalle de Pedidos</h3>
+            </div>
 
             {balanceData.pedidos.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-10 text-gray-500">
                 No hay pedidos registrados para este cliente
               </div>
             ) : (
-              <div className="space-y-3">
-                {balanceData.pedidos.map((item) => {
-                  const isExpanded = expandedOrders.has(item.pedidoId);
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-[12%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[30%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b-2 border-[#033f63] text-left">
+                      <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Fecha</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Paciente</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63]">Trabajo</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] text-right whitespace-nowrap">Total</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] text-right whitespace-nowrap">Pagado</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] text-right whitespace-nowrap">Falta</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Estado</th>
+                      <th className="py-3 px-3 font-semibold text-[#033f63] text-center whitespace-nowrap">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balanceData.pedidos.map((item) => {
+                      const trabajoTitle = getTrabajoTitle(item.productos);
+                      const trabajoSubtitle = item.productos;
+                      const isDelivered = !!item.entregado;
+                      const hasDebt = Number(item.montoPendiente ?? 0) > 0;
 
-                  return (
-                    <div
-                      key={item.pedidoId}
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className="font-medium">Pedido #{item.pedidoId}</p>
-                            {item.entregado ? (
-                              <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                      return (
+                        <tr key={item.pedidoId} className="border-b last:border-b-0">
+                          <td className="py-4 px-3 text-gray-700 whitespace-nowrap align-top">{formatDate(item.fecha)}</td>
+                          <td className="py-4 px-3 text-gray-700 whitespace-nowrap align-top">{item.paciente || '-'}</td>
+                          <td className="py-4 px-3 align-top">
+                            <div className="font-medium text-gray-900 truncate">{trabajoTitle || '-'}</div>
+                            {trabajoSubtitle ? (
+                              <div className="text-xs text-gray-500 truncate">{trabajoSubtitle}</div>
+                            ) : null}
+                          </td>
+                          <td className="py-4 px-3 text-right text-[#033f63] whitespace-nowrap align-top">{formatCurrency(item.montoTotal ?? 0)}</td>
+                          <td className="py-4 px-3 text-right text-[#7c9885] whitespace-nowrap align-top">{formatCurrency(item.montoPagado ?? 0)}</td>
+                          <td className="py-4 px-3 text-right text-[#b5b682] whitespace-nowrap align-top">{formatCurrency(item.montoPendiente ?? 0)}</td>
+                          <td className="py-4 px-3 align-top">
+                            {isDelivered ? (
+                              <span className="inline-flex items-center rounded-full bg-[#28666e]/20 px-3 py-1 text-xs text-[#28666e]">
                                 Entregado
                               </span>
                             ) : (
-                              <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                              <span className="inline-flex items-center rounded-full bg-[#fedc97]/60 px-3 py-1 text-xs text-[#b5b682]">
                                 Pendiente
                               </span>
                             )}
-                            {item.montoPendiente > 0 && (
-                              <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800">
-                                Con deuda
-                              </span>
+                          </td>
+                          <td className="py-4 px-3 text-center align-top">
+                            {hasDebt ? (
+                              <Button
+                                type="button"
+                                onClick={() => openPaymentFor(item)}
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9"
+                                title="Registrar pago"
+                              >
+                                <DollarSign className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <span className="text-gray-300">—</span>
                             )}
-                          </div>
-
-                          <p className="text-sm text-gray-600">
-                            {new Date(item.fecha).toLocaleDateString('es-ES')}
-                          </p>
-                          <p className="text-sm text-gray-600">Paciente: {item.paciente}</p>
-
-                          <button
-                            onClick={() => toggleOrderExpanded(item.pedidoId)}
-                            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mt-2"
-                          >
-                            <Package size={14} />
-                            <span>{item.productos}</span>
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                        </div>
-
-                        <div className="text-right space-y-2">
-                          <div>
-                            <p className="text-xs text-gray-500">Total</p>
-                            <p className="text-lg font-semibold text-[#033f63]">
-                              ${(item.montoTotal ?? 0).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="flex gap-3">
-                            <div>
-                              <p className="text-xs text-gray-500">Pagado</p>
-                              <p className="text-sm text-[#7c9885]">
-                                ${(item.montoPagado ?? 0).toLocaleString()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Pendiente</p>
-                              <p className="text-sm text-[#b5b682]">
-                                ${(item.montoPendiente ?? 0).toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-
-                          {item.montoPendiente > 0 && (
-                            <Button
-                              onClick={() => openPaymentFor(item)}
-                              size="sm"
-                              className="mt-2 w-full bg-blue-600 hover:bg-blue-700"
-                            >
-                              <DollarSign size={14} className="mr-1" />
-                              Registrar Pago
-                            </Button>
-                          )}
-
-                          {!item.entregado && (
-                            <Button
-                              onClick={() => handleMarkAsDelivered(item.pedidoId)}
-                              size="sm"
-                              variant="outline"
-                              className="mt-2 w-full text-green-600 border-green-600 hover:bg-green-50"
-                            >
-                              <CheckCircle size={14} className="mr-1" />
-                              Marcar Entregado
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-[#033f63] bg-gray-50">
+                      <td colSpan={3} className="py-3 px-3 text-right font-semibold text-[#033f63]">TOTAL:</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#033f63] whitespace-nowrap">{formatCurrency(balanceData.totalGeneral ?? 0)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#7c9885] whitespace-nowrap">{formatCurrency(balanceData.totalPagado ?? 0)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#b5b682] whitespace-nowrap">{formatCurrency(balanceData.totalPendiente ?? 0)}</td>
+                      <td colSpan={2} className="py-3 px-3" />
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             )}
           </Card>

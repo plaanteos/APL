@@ -160,16 +160,16 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                     </div>
                     <div className="flex items-center gap-2">
                       {order.fecha_entrega ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                        <span className="text-xs px-2 py-1 rounded-full bg-[#7c9885]/15 text-[#28666e] border border-[#7c9885]/40">
                           Entregado
                         </span>
                       ) : (
-                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                        <span className="text-xs px-2 py-1 rounded-full bg-[#fedc97]/60 text-[#033f63] border border-[#b5b682]/50">
                           Pendiente
                         </span>
                       )}
                       {order.montoPendiente > 0 && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-800">
+                        <span className="text-xs px-2 py-1 rounded-full bg-[#f7c6c7]/60 text-[#7a1f23] border border-[#f7c6c7]/70">
                           Con deuda
                         </span>
                       )}
@@ -254,12 +254,12 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                     </div>
                     <div className="text-right">
                       <p className="text-gray-500 text-xs">Pagado</p>
-                      <p className="text-sm text-green-600">${Number(order.montoPagado ?? 0).toLocaleString()}</p>
+                      <p className="text-sm text-[#28666e]">${Number(order.montoPagado ?? 0).toLocaleString()}</p>
                     </div>
                     {order.montoPendiente > 0 && (
                       <div className="text-right ml-4">
                         <p className="text-gray-500 text-xs">Pendiente</p>
-                        <p className="text-sm text-red-600">${Number(order.montoPendiente ?? 0).toLocaleString()}</p>
+                        <p className="text-sm text-[#b05b5d]">${Number(order.montoPendiente ?? 0).toLocaleString()}</p>
                       </div>
                     )}
                   </div>

@@ -44,34 +44,103 @@ export function DayOrdersDialog({
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
 
-  const getStatusColor = (status: string) => {
+  const normalizeStatus = (status: string) => {
+    return String(status ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+  };
+
+  const getStatusColor = (rawStatus: string) => {
+    const status = normalizeStatus(rawStatus);
     switch (status) {
       case "PENDIENTE":
-        return "bg-[#fedc97]/80 text-[#b5b682] border-l-4 border-[#b5b682]";
+        // Cremita + texto verde oliva
+        return "bg-[#fedc97]/60 text-[#b5b682] border-l-4 border-[#b5b682]";
       case "EN_PROCESO":
-        return "bg-blue-50 text-blue-700 border-l-4 border-blue-500";
-      case "PAGADO":
-        return "bg-[#7c9885]/40 text-[#28666e] border-l-4 border-[#28666e]";
+        // El cliente lo quiere en cremita
+        return "bg-[#fedc97]/60 text-[#b5b682] border-l-4 border-[#b5b682]";
+      case "LISTO_PARA_ENTREGA":
+        // Azul primario
+        return "bg-[#033f63]/10 text-[#033f63] border-l-4 border-[#033f63]";
       case "ENTREGADO":
-        return "bg-[#7c9885]/60 text-[#033f63] border-l-4 border-[#033f63]";
+        // Verde pastel: fondo apenas verdoso + texto con más contraste
+        return "bg-[#7c9885]/10 text-[#28666e] border-l-4 border-[#7c9885]";
+      case "PAGADO":
+        return "bg-[#28666e]/10 text-[#28666e] border-l-4 border-[#28666e]";
       default:
         return "bg-gray-100 text-gray-800 border-l-4 border-gray-400";
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (rawStatus: string) => {
+    const status = normalizeStatus(rawStatus);
     switch (status) {
       case "PENDIENTE":
         return "Pendiente";
+      case "LISTO_PARA_ENTREGA":
+        return "Listo para entrega";
       case "EN_PROCESO":
-        return "En Proceso";
+        return "En proceso";
       case "PAGADO":
         return "Pagado";
       case "ENTREGADO":
         return "Entregado";
       default:
-        return status;
+        return rawStatus;
     }
+  };
+
+  const getStatusPill = (rawStatus: string) => {
+    const status = normalizeStatus(rawStatus);
+    switch (status) {
+      case "PENDIENTE":
+        return "bg-[#b5b682]/20 text-[#b5b682]";
+      case "EN_PROCESO":
+        // En fondo cremita, el texto oliva se pierde: usar texto azul y borde suave.
+        return "bg-[#b5b682]/25 text-[#033f63] border border-[#b5b682]/60";
+      case "LISTO_PARA_ENTREGA":
+        return "bg-[#033f63]/15 text-[#033f63]";
+      case "ENTREGADO":
+        return "bg-[#7c9885]/15 text-[#28666e]";
+      case "PAGADO":
+        return "bg-[#28666e]/15 text-[#28666e]";
+      default:
+        return "bg-gray-200 text-gray-700";
+    }
+  };
+
+  const getTextClasses = (rawStatus: string) => {
+    const status = normalizeStatus(rawStatus);
+    // En fondos claros (cremita) necesitamos mayor contraste.
+    if (status === 'PENDIENTE' || status === 'EN_PROCESO') {
+      return {
+        primary: 'text-[#033f63]',
+        muted: 'text-[#033f63]/75',
+        divider: 'border-[#033f63]/10',
+      };
+    }
+    if (status === 'ENTREGADO') {
+      return {
+        primary: 'text-[#28666e]',
+        muted: 'text-[#28666e]/75',
+        divider: 'border-[#28666e]/10',
+      };
+    }
+    if (status === 'LISTO_PARA_ENTREGA') {
+      return {
+        primary: 'text-[#033f63]',
+        muted: 'text-[#033f63]/75',
+        divider: 'border-[#033f63]/10',
+      };
+    }
+    return {
+      primary: 'text-current',
+      muted: 'text-current/75',
+      divider: 'border-current/10',
+    };
   };
 
   return (
@@ -91,66 +160,68 @@ export function DayOrdersDialog({
               <p>No hay entregas para esta fecha</p>
             </div>
           ) : (
-            orders.map((order) => (
-              <Card
-                key={order.id}
-                className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${getStatusColor(order.estado)}`}
-                onClick={() => {
-                  const parsed = Number(order.clienteId);
-                  if (!Number.isNaN(parsed)) onNavigateToBalance?.(parsed);
-                }}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <User size={16} className="text-current" />
-                        <span className="font-semibold">{order.cliente?.nombre || "Cliente"}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <FileText size={14} className="text-current opacity-70" />
-                        <span className="opacity-90">{order.nombrePaciente}</span>
-                      </div>
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      order.estado === "PENDIENTE" ? "bg-[#b5b682]/20 text-[#b5b682]" :
-                      order.estado === "EN_PROCESO" ? "bg-blue-100 text-blue-700" :
-                      order.estado === "PAGADO" ? "bg-[#28666e]/20 text-[#28666e]" :
-                      "bg-[#033f63]/20 text-[#033f63]"
-                    }`}>
-                      {getStatusText(order.estado)}
-                    </span>
-                  </div>
+            orders.map((order) => {
+              const text = getTextClasses(order.estado);
 
-                  <div className="grid grid-cols-2 gap-2 text-sm pt-2 border-t border-current/10">
-                    <div>
-                      <p className="opacity-70 text-xs mb-0.5">Tipo de Trabajo:</p>
-                      <p className="font-medium">{order.tipoPedido}</p>
-                    </div>
-                    <div>
-                      <p className="opacity-70 text-xs mb-0.5">Descripción:</p>
-                      <p className="font-medium truncate" title={order.descripcion}>
-                        {order.descripcion}
-                      </p>
-                    </div>
-                  </div>
+              return (
+                <Card
+                  key={order.id}
+                  className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${getStatusColor(order.estado)} ${text.primary}`}
+                  onClick={() => {
+                    const parsed = Number(order.clienteId);
+                    if (!Number.isNaN(parsed)) onNavigateToBalance?.(parsed);
+                  }}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <User size={16} className="text-current" />
+                          <span className="font-semibold">{order.cliente?.nombre || "Cliente"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileText size={14} className={text.muted} />
+                          <span className={text.muted}>{order.nombrePaciente}</span>
+                        </div>
+                      </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-current/10">
-                    <div className="flex items-center gap-1 text-sm">
-                      <DollarSign size={14} className="text-current" />
-                      <span className="font-semibold">
-                        ${Number(order.montoTotal || 0).toLocaleString()}
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusPill(order.estado)}`}
+                      >
+                        {getStatusText(order.estado)}
                       </span>
                     </div>
-                    {Number(order.montoPagado || 0) > 0 && (
-                      <div className="text-xs opacity-70">
-                        Pagado: ${Number(order.montoPagado || 0).toLocaleString()}
+
+                    <div className={`grid grid-cols-2 gap-2 text-sm pt-2 border-t ${text.divider}`}>
+                      <div>
+                        <p className={`${text.muted} text-xs mb-0.5`}>Tipo de Trabajo:</p>
+                        <p className="font-medium">{order.tipoPedido}</p>
                       </div>
-                    )}
+                      <div>
+                        <p className={`${text.muted} text-xs mb-0.5`}>Descripción:</p>
+                        <p className="font-medium truncate" title={order.descripcion}>
+                          {order.descripcion}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={`flex items-center justify-between pt-2 border-t ${text.divider}`}>
+                      <div className="flex items-center gap-1 text-sm">
+                        <DollarSign size={14} className="text-current" />
+                        <span className="font-semibold">
+                          ${Number(order.montoTotal || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {Number(order.montoPagado || 0) > 0 && (
+                        <div className={`text-xs ${text.muted}`}>
+                          Pagado: ${Number(order.montoPagado || 0).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
         </div>
       </DialogContent>

@@ -135,6 +135,47 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     );
   };
 
+  const normalizeStatus = (status: string) => {
+    return String(status ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+  };
+
+  const getDayStatus = (dayOrders: CalendarOrder[]) => {
+    const normalized = dayOrders.map((o) => normalizeStatus(o.estado));
+
+    // Prioridad visual: si hay algo pendiente, se ve como pendiente.
+    if (normalized.some((s) => s === 'PENDIENTE' || s === 'EN_PROCESO')) return 'PENDIENTE';
+    if (normalized.some((s) => s === 'LISTO_PARA_ENTREGA')) return 'LISTO_PARA_ENTREGA';
+    if (normalized.some((s) => s === 'ENTREGADO')) return 'ENTREGADO';
+
+    return normalized[0] || '';
+  };
+
+  const getDayColors = (status: string) => {
+    switch (status) {
+      case 'ENTREGADO':
+        return {
+          bg: 'bg-[#7c9885]/25 hover:bg-[#7c9885]/35',
+          indicator: 'bg-[#7c9885]',
+        };
+      case 'LISTO_PARA_ENTREGA':
+        return {
+          bg: 'bg-[#033f63]/10 hover:bg-[#033f63]/15',
+          indicator: 'bg-[#033f63]',
+        };
+      case 'PENDIENTE':
+      default:
+        return {
+          bg: 'bg-[#fedc97]/40 hover:bg-[#fedc97]/60',
+          indicator: 'bg-[#b5b682]',
+        };
+    }
+  };
+
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     const dayOrders = getOrdersForDate(date);
@@ -229,6 +270,8 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
               const isSelected = isSameDay(day, selectedDate);
               const isTodayDate = isToday(day);
               const firstOrder = dayOrders[0];
+              const dayStatus = hasOrders ? getDayStatus(dayOrders) : '';
+              const dayColors = hasOrders ? getDayColors(dayStatus) : null;
 
               return (
                 <button
@@ -238,7 +281,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
                     relative p-3 rounded-lg text-sm transition-all aspect-square
                     ${isSelected ? 'bg-[#033f63] text-white ring-2 ring-[#033f63] ring-offset-2' : ''}
                     ${!isSelected && isTodayDate ? 'bg-[#7c9885]/30 text-[#033f63] font-semibold ring-2 ring-[#7c9885]' : ''}
-                    ${!isSelected && !isTodayDate && hasOrders ? 'bg-[#fedc97]/40 hover:bg-[#fedc97]/60' : ''}
+                    ${!isSelected && !isTodayDate && hasOrders ? `${dayColors?.bg ?? ''}` : ''}
                     ${!isSelected && !isTodayDate && !hasOrders ? 'hover:bg-gray-100' : ''}
                   `}
                   title={hasOrders ? `${ordersCount} ${ordersCount === 1 ? 'pedido' : 'pedidos'}` : ''}
@@ -247,6 +290,15 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
                     <span className={`mb-1 ${hasOrders ? 'font-semibold' : ''}`}>
                       {day.getDate()}
                     </span>
+
+                    {hasOrders && (
+                      <div
+                        className={`h-[3px] w-full rounded-full ${
+                          isSelected ? 'bg-white/70' : (dayColors?.indicator ?? 'bg-[#b5b682]')
+                        }`}
+                        aria-hidden="true"
+                      />
+                    )}
                     
                     {hasOrders && firstOrder && (
                       <div className="w-full text-left space-y-1 mt-auto">
