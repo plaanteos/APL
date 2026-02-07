@@ -1,5 +1,7 @@
 import api from './api';
 import { IClient, IClientFormData, IClientStats, IClientBalance } from '../app/types';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -13,6 +15,9 @@ class ClientService {
    * Obtener todos los clientes
    */
   async getAll(): Promise<IClient[]> {
+    if (isDemoMode()) {
+      return demoStore.getClients();
+    }
     const response = await api.get<ApiEnvelope<IClient[]>>('/clients', {
       params: { page: 1, limit: 1000 },
     });
@@ -31,6 +36,9 @@ class ClientService {
    * Crear nuevo cliente
    */
   async create(data: IClientFormData): Promise<IClient> {
+    if (isDemoMode()) {
+      return demoStore.createClient(data);
+    }
     const response = await api.post<ApiEnvelope<IClient>>('/clients', data);
     return response.data.data;
   }
@@ -63,6 +71,9 @@ class ClientService {
    * Obtener balance del cliente (pedidos con detalles de pagos)
    */
   async getBalance(id: number): Promise<IClientBalance> {
+    if (isDemoMode()) {
+      return demoStore.getClientBalance(id);
+    }
     const response = await api.get<ApiEnvelope<any>>(`/clients/${id}/balance`);
     const raw = response.data.data;
 
@@ -114,6 +125,47 @@ class ClientService {
    * Exportar balance del cliente a Excel (descarga desde backend)
    */
   async exportBalance(id: number, clientName: string): Promise<void> {
+    if (isDemoMode()) {
+      // En demo, exportar CSV local (sin backend) para evitar dependencias pesadas/vulnerables.
+      const balance = await demoStore.getClientBalance(id);
+
+      const headers = ['Pedido', 'Fecha', 'Paciente', 'Productos', 'Total', 'Pagado', 'Pendiente', 'Entregado'];
+      const lines = [
+        headers.join(','),
+        ...balance.pedidos.map((p) => {
+          const values = [
+            p.pedidoId,
+            new Date(p.fecha).toLocaleDateString('es-ES'),
+            p.paciente,
+            p.productos,
+            p.montoTotal,
+            p.montoPagado,
+            p.montoPendiente,
+            p.entregado ? 'Sí' : 'No',
+          ].map((v) => {
+            const s = String(v ?? '');
+            // CSV escaping mínimo
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          });
+          return values.join(',');
+        }),
+      ];
+
+      const csv = lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const date = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `Balance_${clientName.replace(/\s+/g, '_')}_${date}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      return;
+    }
+
     const response = await api.get(`/clients/${id}/balance/export`, {
       responseType: 'blob',
     });

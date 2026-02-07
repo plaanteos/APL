@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService, User } from '../services/auth.service';
+import { isDemoMode } from '../services/demoMode';
+import { demoStore } from '../services/demoStore';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean, otp?: string, backupCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -19,6 +21,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if user is already logged in on mount
   useEffect(() => {
     const initAuth = async () => {
+      if (isDemoMode()) {
+        // Para demo visual, entrar directo con usuario de muestra.
+        const storedUser = authService.getStoredUser();
+        setUser(storedUser ?? (demoStore.getDemoUser() as any));
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const storedUser = authService.getStoredUser();
         const token = authService.getToken();
@@ -46,9 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  const login = async (email: string, password: string, rememberMe: boolean = false) => {
+  const login = async (email: string, password: string, rememberMe: boolean = false, otp?: string, backupCode?: string) => {
     try {
-      const response = await authService.login({ email, password }, rememberMe);
+      const response = await authService.login({ email, password, otp, backupCode }, rememberMe);
       setUser(response.user);
     } catch (error) {
       console.error('Login error:', error);

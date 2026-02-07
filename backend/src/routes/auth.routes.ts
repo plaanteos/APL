@@ -28,4 +28,9 @@ router.post('/forgot-password', AuthController.forgotPassword);
 // POST /api/auth/reset-password
 router.post('/reset-password', AuthController.resetPassword);
 
+// 2FA (requiere autenticación)
+router.post('/2fa/setup', authenticate, AuthController.setupTwoFactor);
+router.post('/2fa/enable', authenticate, AuthController.enableTwoFactor);
+router.post('/2fa/disable', authenticate, AuthController.disableTwoFactor);
+
 export default router;

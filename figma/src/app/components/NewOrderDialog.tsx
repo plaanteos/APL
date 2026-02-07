@@ -190,7 +190,9 @@ export function NewOrderDialog({
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        setErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+        const issues = (error as any).issues ?? (error as any).errors ?? [];
+        const message = issues?.[0]?.message || 'Valor inválido';
+        setErrors(prev => ({ ...prev, [field]: message }));
       }
       return false;
     }
@@ -206,9 +208,10 @@ export function NewOrderDialog({
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach(err => {
-          if (err.path[0]) {
-            fieldErrors[err.path[0] as string] = err.message;
+        const issues = (error as any).issues ?? (error as any).errors ?? [];
+        issues.forEach((issue: any) => {
+          if (issue?.path?.[0]) {
+            fieldErrors[String(issue.path[0])] = issue.message;
           }
         });
         setErrors(fieldErrors);
@@ -299,6 +302,7 @@ export function NewOrderDialog({
                   <Label htmlFor="newClientName">Nombre</Label>
                   <Input
                     id="newClientName"
+                    name="newClientName"
                     type="text"
                     value={newClientData.nombre}
                     onChange={(e) =>
@@ -311,6 +315,7 @@ export function NewOrderDialog({
                   <Label htmlFor="newClientEmail">Email</Label>
                   <Input
                     id="newClientEmail"
+                    name="newClientEmail"
                     type="email"
                     value={newClientData.email}
                     onChange={(e) =>
@@ -323,6 +328,7 @@ export function NewOrderDialog({
                   <Label htmlFor="newClientPhone">Teléfono</Label>
                   <Input
                     id="newClientPhone"
+                    name="newClientPhone"
                     type="tel"
                     value={newClientData.telefono}
                     onChange={(e) =>
@@ -346,6 +352,7 @@ export function NewOrderDialog({
                 onValueChange={(value) =>
                   setFormData({ ...formData, clientId: value })
                 }
+                name="clientId"
                 disabled={isLoadingClients || clients.length === 0}
               >
                 <SelectTrigger id="client">
@@ -372,6 +379,7 @@ export function NewOrderDialog({
             <Label htmlFor="patientName">Nombre del Paciente *</Label>
             <Input
               id="patientName"
+              name="patientName"
               type="text"
               value={formData.patientName}
               onChange={(e) => {
@@ -394,6 +402,7 @@ export function NewOrderDialog({
                 setFormData({ ...formData, productId: value });
                 validateField("productId", value);
               }}
+              name="productId"
               disabled={isLoadingCatalogs || productos.length === 0}
             >
               <SelectTrigger id="product" className={errors.productId ? "border-red-500" : ""}>
@@ -426,6 +435,7 @@ export function NewOrderDialog({
                 setFormData({ ...formData, estadoId: value });
                 validateField("estadoId", value);
               }}
+              name="estadoId"
               disabled={isLoadingCatalogs || estados.length === 0}
             >
               <SelectTrigger id="estado" className={errors.estadoId ? "border-red-500" : ""}>
@@ -454,6 +464,7 @@ export function NewOrderDialog({
             <Label htmlFor="description">Descripción</Label>
             <Textarea
               id="description"
+              name="description"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
@@ -468,6 +479,7 @@ export function NewOrderDialog({
               <Label htmlFor="quantity">Cantidad *</Label>
               <Input
                 id="quantity"
+                name="quantity"
                 type="number"
                 min="1"
                 value={formData.quantity}
@@ -485,6 +497,7 @@ export function NewOrderDialog({
               <Label htmlFor="unitPrice">Precio Unitario *</Label>
               <Input
                 id="unitPrice"
+                name="unitPrice"
                 type="number"
                 min="0"
                 step="0.01"
@@ -506,6 +519,7 @@ export function NewOrderDialog({
             <Label htmlFor="dueDate">Fecha de Entrega *</Label>
             <Input
               id="dueDate"
+              name="dueDate"
               type="date"
               value={formData.dueDate}
               onChange={(e) => {

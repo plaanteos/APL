@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import {
   Dialog,
@@ -12,33 +12,42 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "sonner";
+import paymentService from "../../services/payment.service";
 
 interface PaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  orderId: string;
-  patientName: string;
-  total: number;
-  amountPaid: number;
-  onPayment: (orderId: string, amount: number) => void;
+  pedidoId: number | null;
+  paciente: string;
+  montoTotal: number;
+  montoPagado: number;
+  onPaymentCreated?: () => void;
 }
 
 export function PaymentDialog({
   open,
   onOpenChange,
-  orderId,
-  patientName,
-  total,
-  amountPaid,
-  onPayment,
+  pedidoId,
+  paciente,
+  montoTotal,
+  montoPagado,
+  onPaymentCreated,
 }: PaymentDialogProps) {
-  const safeTotal = Number(total ?? 0);
-  const safeAmountPaid = Number(amountPaid ?? 0);
-  const remaining = Math.max(0, safeTotal - safeAmountPaid);
+  const safeTotal = Number(montoTotal ?? 0);
+  const safeAmountPaid = Number(montoPagado ?? 0);
+  const remaining = useMemo(() => Math.max(0, safeTotal - safeAmountPaid), [safeTotal, safeAmountPaid]);
   const formatMoney = (value: unknown) => Number(value ?? 0).toLocaleString();
 
-  const [paymentAmount, setPaymentAmount] = useState(remaining.toString());
+  const [paymentAmount, setPaymentAmount] = useState("0");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPaymentAmount(String(remaining || 0));
+      setError("");
+    }
+  }, [open, remaining]);
 
   const paymentSchema = z.object({
     amount: z.string()
@@ -67,17 +76,38 @@ export function PaymentDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (!pedidoId) {
+      toast.error("Selecciona un pedido para pagar");
+      return;
+    }
+
     if (!validateAmount(paymentAmount)) {
       toast.error(error || "Por favor ingresa un monto válido");
       return;
     }
 
     const amount = Number(paymentAmount);
-    onPayment(orderId, amount);
-    onOpenChange(false);
-    setPaymentAmount("");
-    setError("");
+    setIsSubmitting(true);
+
+    toast
+      .promise(
+        paymentService.create({
+          valor: amount,
+          detalles: [{ id_pedido: pedidoId, valor: amount }],
+        }),
+        {
+          loading: "Registrando pago...",
+          success: "Pago registrado",
+          error: (e: any) => e?.response?.data?.error || e?.message || "Error al registrar pago",
+        }
+      )
+      .then(() => {
+        onOpenChange(false);
+        onPaymentCreated?.();
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
   };
 
   return (
@@ -94,7 +124,7 @@ export function PaymentDialog({
           <div className="bg-[#033f63]/5 p-4 rounded-lg space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Paciente:</span>
-              <span className="text-[#033f63] font-medium">{patientName}</span>
+              <span className="text-[#033f63] font-medium">{paciente}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total del trabajo:</span>
@@ -153,12 +183,13 @@ export function PaymentDialog({
               type="submit"
               className="bg-[#033f63] hover:bg-[#28666e]"
               disabled={
+                isSubmitting ||
                 !paymentAmount ||
                 Number(paymentAmount) <= 0 ||
                 Number(paymentAmount) > remaining
               }
             >
-              Registrar Pago
+              {isSubmitting ? "Registrando..." : "Registrar Pago"}
             </Button>
           </DialogFooter>
         </form>

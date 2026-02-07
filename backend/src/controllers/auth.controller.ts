@@ -2,9 +2,18 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
 import { passwordSchema } from '../utils/passwordPolicy';
+import { authenticator } from 'otplib';
+import {
+  consumeBackupCode,
+  generateBackupCodes,
+  getTwoFactorIssuer,
+  hashBackupCodes,
+  normalizeOtp,
+  verifyTotp,
+} from '../utils/twoFactor';
 
 const prisma = new PrismaClient();
 
@@ -58,7 +67,7 @@ export class AuthController {
   static async login(req: Request, res: Response) {
     try {
       // Validar entrada
-      const { email, password } = loginSchema.parse(req.body);
+      const { email, password, otp, backupCode } = loginSchema.parse(req.body);
 
       // Buscar usuario
       const user = await prisma.administrador.findUnique({
@@ -72,6 +81,9 @@ export class AuthController {
           telefono: true,
           super_usuario: true,
           activo: true,
+          twoFactorEnabled: true,
+          twoFactorSecret: true,
+          twoFactorBackupCodes: true,
         },
       });
 
@@ -101,6 +113,68 @@ export class AuthController {
           success: false,
           error: 'Credenciales inválidas',
         });
+      }
+
+      // 2FA: si el usuario lo tiene habilitado, requerir OTP o backup code
+      if (user.twoFactorEnabled) {
+        if (!user.twoFactorSecret) {
+          await AuditService.log(
+            user.usuario,
+            `2FA_INCONSISTENT - Usuario con 2FA habilitado pero sin secreto (id=${user.id})`
+          );
+
+          return res.status(500).json({
+            success: false,
+            error: 'Configuración 2FA inválida. Contacte al administrador.',
+          });
+        }
+
+        const hasOtp = typeof otp === 'string' && otp.trim().length > 0;
+        const hasBackup = typeof backupCode === 'string' && backupCode.trim().length > 0;
+
+        if (!hasOtp && !hasBackup) {
+          return res.status(401).json({
+            success: false,
+            error: 'Se requiere código 2FA',
+            requires2fa: true,
+          });
+        }
+
+        if (hasOtp) {
+          const ok = verifyTotp(user.twoFactorSecret, otp!);
+          if (!ok) {
+            await AuditService.log(
+              user.usuario,
+              `2FA_LOGIN_FAILED - OTP inválido para ${email} desde ${req.ip || 'IP desconocida'}`
+            );
+            return res.status(401).json({
+              success: false,
+              error: 'Código 2FA inválido',
+              requires2fa: true,
+            });
+          }
+        } else {
+          const stored = user.twoFactorBackupCodes as any;
+          const hashedCodes: string[] = Array.isArray(stored) ? stored : Array.isArray(stored?.codes) ? stored.codes : [];
+
+          const { ok, remaining } = await consumeBackupCode(backupCode!.trim(), hashedCodes);
+          if (!ok) {
+            await AuditService.log(
+              user.usuario,
+              `2FA_LOGIN_FAILED - Backup code inválido para ${email} desde ${req.ip || 'IP desconocida'}`
+            );
+            return res.status(401).json({
+              success: false,
+              error: 'Código de respaldo inválido',
+              requires2fa: true,
+            });
+          }
+
+          await prisma.administrador.update({
+            where: { id: user.id },
+            data: { twoFactorBackupCodes: remaining as any },
+          });
+        }
       }
 
       // Generar token
@@ -143,6 +217,190 @@ export class AuthController {
         success: false,
         error: 'Error interno del servidor',
       });
+    }
+  }
+
+  // POST /api/auth/2fa/setup (requiere autenticación)
+  static async setupTwoFactor(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'No autenticado' });
+      }
+
+      const user = await prisma.administrador.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, usuario: true, activo: true, twoFactorEnabled: true },
+      });
+
+      if (!user || !user.activo) {
+        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+
+      // Generar secreto TOTP
+      const secret = authenticator.generateSecret();
+      const issuer = getTwoFactorIssuer();
+      const label = user.email || user.usuario;
+      const otpauthUrl = authenticator.keyuri(label, issuer, secret);
+
+      await prisma.administrador.update({
+        where: { id: userId },
+        data: {
+          twoFactorSecret: secret,
+          twoFactorEnabled: false,
+          twoFactorBackupCodes: Prisma.DbNull,
+        },
+      });
+
+      await AuditService.log(user.usuario, '2FA_SETUP_CREATED - Se generó secreto 2FA (pendiente habilitar)');
+
+      return res.json({
+        success: true,
+        data: {
+          issuer,
+          label,
+          secret,
+          otpauthUrl,
+        },
+      });
+    } catch (error) {
+      console.error('2FA setup error:', error);
+      return res.status(500).json({ success: false, error: 'Error al iniciar configuración 2FA' });
+    }
+  }
+
+  // POST /api/auth/2fa/enable (requiere autenticación)
+  static async enableTwoFactor(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'No autenticado' });
+      }
+
+      const { otp } = z.object({ otp: z.string().min(6).max(10) }).parse(req.body);
+
+      const user = await prisma.administrador.findUnique({
+        where: { id: userId },
+        select: { id: true, usuario: true, activo: true, twoFactorSecret: true },
+      });
+
+      if (!user || !user.activo) {
+        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+      if (!user.twoFactorSecret) {
+        return res.status(400).json({ success: false, error: 'Primero ejecutá el setup de 2FA' });
+      }
+
+      const ok = verifyTotp(user.twoFactorSecret, otp);
+      if (!ok) {
+        return res.status(400).json({ success: false, error: 'Código 2FA inválido' });
+      }
+
+      const backupCodes = generateBackupCodes(10);
+      const hashed = await hashBackupCodes(backupCodes);
+
+      await prisma.administrador.update({
+        where: { id: userId },
+        data: {
+          twoFactorEnabled: true,
+          twoFactorBackupCodes: hashed as any,
+        },
+      });
+
+      await AuditService.log(user.usuario, '2FA_ENABLED - 2FA habilitado');
+
+      return res.json({
+        success: true,
+        message: '2FA habilitado correctamente',
+        data: {
+          backupCodes,
+        },
+      });
+    } catch (error: any) {
+      console.error('2FA enable error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, error: error.issues[0]?.message || 'Datos inválidos' });
+      }
+      return res.status(500).json({ success: false, error: 'Error al habilitar 2FA' });
+    }
+  }
+
+  // POST /api/auth/2fa/disable (requiere autenticación)
+  static async disableTwoFactor(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'No autenticado' });
+      }
+
+      const { password, otp, backupCode } = z
+        .object({
+          password: z.string().min(1, 'Contraseña requerida'),
+          otp: z.string().min(6).max(10).optional(),
+          backupCode: z.string().min(6).max(32).optional(),
+        })
+        .parse(req.body);
+
+      const user = await prisma.administrador.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          usuario: true,
+          activo: true,
+          password: true,
+          twoFactorEnabled: true,
+          twoFactorSecret: true,
+          twoFactorBackupCodes: true,
+        },
+      });
+
+      if (!user || !user.activo) {
+        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+      if (!user.twoFactorEnabled || !user.twoFactorSecret) {
+        return res.status(400).json({ success: false, error: '2FA no está habilitado' });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ success: false, error: 'Contraseña incorrecta' });
+      }
+
+      const hasOtp = typeof otp === 'string' && otp.trim().length > 0;
+      const hasBackup = typeof backupCode === 'string' && backupCode.trim().length > 0;
+
+      if (!hasOtp && !hasBackup) {
+        return res.status(400).json({ success: false, error: 'Debés proveer OTP o un código de respaldo' });
+      }
+
+      if (hasOtp) {
+        const ok = verifyTotp(user.twoFactorSecret, otp!);
+        if (!ok) return res.status(400).json({ success: false, error: 'Código 2FA inválido' });
+      } else {
+        const stored = user.twoFactorBackupCodes as any;
+        const hashedCodes: string[] = Array.isArray(stored) ? stored : Array.isArray(stored?.codes) ? stored.codes : [];
+        const { ok } = await consumeBackupCode(backupCode!.trim(), hashedCodes);
+        if (!ok) return res.status(400).json({ success: false, error: 'Código de respaldo inválido' });
+      }
+
+      await prisma.administrador.update({
+        where: { id: userId },
+        data: {
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          twoFactorBackupCodes: Prisma.DbNull,
+        },
+      });
+
+      await AuditService.log(user.usuario, '2FA_DISABLED - 2FA deshabilitado');
+
+      return res.json({ success: true, message: '2FA deshabilitado' });
+    } catch (error: any) {
+      console.error('2FA disable error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, error: error.issues[0]?.message || 'Datos inválidos' });
+      }
+      return res.status(500).json({ success: false, error: 'Error al deshabilitar 2FA' });
     }
   }
 

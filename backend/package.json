@@ -7,11 +7,14 @@
     "dev": "nodemon src/index.ts",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true});\" && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx prisma/seed.ts",
+    "db:evidence": "tsx src/scripts/db-evidence.ts",
     "create-admin": "tsx src/scripts/create-admin.ts"
   },
   "keywords": [
@@ -38,6 +41,7 @@
     "morgan": "^1.10.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.12",
+    "otplib": "^12.0.1",
     "typescript": "^5.3.3",
     "winston": "^3.19.0",
     "zod": "^3.22.4"
@@ -53,6 +57,7 @@
     "@types/nodemailer": "^7.0.5",
     "nodemon": "^3.0.2",
     "prisma": "^5.7.1",
-    "tsx": "^4.6.2"
+    "tsx": "^4.6.2",
+    "vitest": "^2.1.9"
   }
 }

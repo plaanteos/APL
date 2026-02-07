@@ -1,203 +1,40 @@
-# ✅ Resumen de Implementación - Backend APL
+# ✅ Resumen de Implementación - Backend APL (estado real)
 
-## 🎯 Funcionalidades Completadas
+Este documento describe lo que **existe hoy en el repositorio** (rutas montadas en `src/index.ts`, controladores y schemas Zod). Si encontrás otro documento que menciona módulos como “search” o “recordatorios”, tomalo como **legacy**: hoy **no hay rutas montadas** para eso.
 
-### 1. ✅ Sistema de Auditoría Completo
+## 🎯 Funcionalidades implementadas
 
-**Archivos Creados/Modificados:**
-- ✅ `src/services/audit.service.ts` - Ampliado con nuevas funcionalidades
-- ✅ `src/controllers/audit.controller.ts` - Agregado dashboard y endpoints avanzados
-- ✅ `src/middleware/auditLogger.ts` - Nuevo middleware para auditoría automática
-- ✅ `src/routes/audit.routes.ts` - Nuevas rutas de auditoría
+### 1) Auth + Seguridad
+- JWT con access token (15m) y refresh token (7d) usando `JWT_SECRET`.
+- Recuperación de contraseña (`/forgot-password`, `/reset-password`) con envío por Email SMTP y WhatsApp opcional.
+- Política de contraseña (mínimo configurable y evitar solo numérica) aplicada en register/cambio/reset.
+- 2FA TOTP + backup codes (setup/enable/disable + enforcement en login cuando está habilitado).
 
-**Nuevas Características:**
-- Dashboard de auditoría con métricas en tiempo real
-- Detección de actividad sospechosa
-- Timeline de actividades con agrupación configurable
-- Historial completo de cambios por entidad
-- Métricas de rendimiento del sistema
-- Comparación de actividad entre usuarios
-- Middleware reutilizable para auditar automáticamente
-- Exportación de logs en JSON/CSV
+### 2) Módulos CRUD principales (API)
+- Clientes: CRUD + stats + balance + export a Excel.
+- Pedidos: CRUD + detalles (alta/edición/baja) + stats + marcar entregado.
+- Pagos: CRUD + stats + aplicación de un pago a uno o más pedidos (detallePago N:M).
+- Catálogos: productos y estados (CRUD + stats).
 
-**Endpoints Nuevos:**
-```
-GET /api/audit/dashboard
-GET /api/audit/suspicious
-GET /api/audit/timeline
-GET /api/audit/entity-history/:type/:id
-```
+### 3) Auditoría y logging
+- Logs de auditoría para acciones relevantes.
+- Endpoints activos: listar logs, stats y cleanup (cleanup solo super usuario).
 
----
+### 4) Notificaciones
+- Endpoint `/api/notifications/send`.
+- Envío directo o en cola si Redis/BullMQ está configurado.
 
-### 2. ✅ Búsqueda Avanzada con Filtros Combinados
+## 🗄️ Base de datos
+- ORM: Prisma + PostgreSQL.
+- Scripts SQL entregables en `prisma/scripts/`.
+- Evidencia reproducible de BD por script Node/Prisma (genera JSON en `logs/`).
 
-**Archivos Creados:**
-- ✅ `src/services/search.service.ts` - Servicio completo de búsqueda avanzada
-- ✅ `src/controllers/search.controller.ts` - Controlador de búsqueda
-- ✅ `src/routes/search.routes.ts` - Rutas de búsqueda
+## 🧪 Tests
+- Unit tests básicos con Vitest (backend).
 
-**Características:**
-- Búsqueda global en todas las entidades
-- Filtros combinados (múltiples criterios simultáneos)
-- Búsqueda con estadísticas agregadas
-- Búsquedas predefinidas útiles:
-  - Pedidos próximos a vencer
-  - Clientes con deuda
-- Soporte para paginación y ordenamiento
-- Búsqueda por texto en múltiples campos
-- Filtros por rangos de fecha y monto
-
-**Endpoints:**
-```
-GET /api/search/global
-GET /api/search/clientes
-GET /api/search/pedidos
-GET /api/search/pagos
-GET /api/search/pedidos-with-stats
-GET /api/search/pedidos-proximos-vencer
-GET /api/search/clientes-con-deuda
-```
-
----
-
-### 3. ✅ Sistema de Recordatorios Automáticos
-
-**Archivos Creados/Modificados:**
-- ✅ `prisma/schema.prisma` - Nuevo modelo Recordatorio
-- ✅ `src/services/reminder.service.ts` - Servicio completo de recordatorios
-- ✅ `src/controllers/reminder.controller.ts` - Controlador de recordatorios
-- ✅ `src/routes/reminder.routes.ts` - Rutas de recordatorios
-- ✅ `src/index.ts` - Inicialización del sistema de recordatorios
-
-**Características:**
-- Sistema automatizado con Cron Jobs:
-  - Verificación de recordatorios cada hora
-  - Creación automática para pedidos por vencer (diario 8am)
-  - Marcado de recordatorios vencidos (cada 6 horas)
-- Recordatorios repetitivos (diario, semanal, mensual)
-- Tipos de recordatorio configurables
-- Estados: PENDIENTE, COMPLETADO, CANCELADO, VENCIDO
-- Prioridades configurables
-- Asignación a usuarios específicos
-- Base para futuras notificaciones
-
-**Modelo de Datos:**
-```typescript
-- Tipos: VENCIMIENTO_PEDIDO, SEGUIMIENTO_CLIENTE, PAGO_PENDIENTE, 
-         REUNION, LLAMADA, OTRO
-- Estados: PENDIENTE, COMPLETADO, CANCELADO, VENCIDO
-- Campos: título, descripción, fecha, prioridad, repetir, frecuencia
-```
-
-**Endpoints:**
-```
-GET /api/reminders
-GET /api/reminders/pending
-GET /api/reminders/today
-GET /api/reminders/stats
-POST /api/reminders
-PUT /api/reminders/:id
-PATCH /api/reminders/:id/complete
-PATCH /api/reminders/:id/cancel
-DELETE /api/reminders/:id
-POST /api/reminders/auto/due-pedidos
-POST /api/reminders/auto/pending-payments
-```
-
----
-
-## 📦 Dependencias Agregadas
-
-```json
-{
-  "dependencies": {
-    "node-cron": "^3.0.3"
-  },
-  "devDependencies": {
-    "@types/node-cron": "^3.0.11"
-  }
-}
-```
-
----
-
-## 🗄️ Cambios en Base de Datos
-
-### Nueva Tabla: `recordatorios`
-
-```sql
-CREATE TABLE recordatorios (
-  id VARCHAR(191) PRIMARY KEY,
-  titulo VARCHAR(255) NOT NULL,
-  descripcion TEXT,
-  tipo ENUM('VENCIMIENTO_PEDIDO', 'SEGUIMIENTO_CLIENTE', 'PAGO_PENDIENTE', 
-           'REUNION', 'LLAMADA', 'OTRO'),
-  tipoEntidad VARCHAR(50),
-  entidadId VARCHAR(191),
-  fechaRecordatorio DATETIME,
-  fechaCreacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-  estado ENUM('PENDIENTE', 'COMPLETADO', 'CANCELADO', 'VENCIDO'),
-  prioridad ENUM('BAJA', 'NORMAL', 'ALTA', 'URGENTE'),
-  notificado BOOLEAN DEFAULT FALSE,
-  fechaNotificacion DATETIME,
-  administradorId VARCHAR(191),
-  repetir BOOLEAN DEFAULT FALSE,
-  frecuencia VARCHAR(20),
-  observaciones TEXT,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_fecha (fechaRecordatorio),
-  INDEX idx_estado (estado),
-  INDEX idx_entidad (tipoEntidad, entidadId)
-);
-```
-
----
-
-## 📝 Documentación Creada
-
-- ✅ `NUEVAS_FUNCIONALIDADES.md` - Documentación completa de features
-- ✅ `GUIA_MIGRACION_AUDITORIA.md` - Guía para implementar auditoría en rutas
-
----
-
-## 🚀 Próximos Pasos
-
-### Para Poner en Producción:
-
-1. **Instalar dependencias:**
-   ```bash
-   cd backend
-   npm install
-   ```
-
-2. **Ejecutar migración de base de datos:**
-   ```bash
-   npm run db:generate
-   npm run db:migrate
-   ```
-
-3. **Reiniciar el servidor:**
-   ```bash
-   npm run dev  # desarrollo
-   npm run build && npm start  # producción
-   ```
-
-4. **Verificar que todo funciona:**
-   ```bash
-   # Health check
-   curl http://localhost:3001/health
-   
-   # Verificar recordatorios
-   curl -H "Authorization: Bearer TOKEN" \
-     http://localhost:3001/api/reminders/pending
-   ```
-
-### Tareas Opcionales:
-
-- [ ] Aplicar middleware de auditoría a rutas existentes (ver GUIA_MIGRACION_AUDITORIA.md)
-- [ ] Configurar notificaciones por email/SMS para recordatorios
+## 🚀 Deploy (nota)
+- En producción, **evitar cualquier comando que resetee la BD** (no usar `--force-reset`).
+- Seed / create-admin deben ejecutarse de forma controlada (manual o por job idempotente).
 - [ ] Implementar exportación de reportes a PDF
 - [ ] Crear dashboard frontend para visualizar auditoría y recordatorios
 - [ ] Configurar backup automático de base de datos

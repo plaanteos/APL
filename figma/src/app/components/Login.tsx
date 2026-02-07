@@ -5,6 +5,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { useAuth } from "../../hooks/useAuth";
 import { toast } from "sonner";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 
 // Schema de validación con Zod
 const loginSchema = z.object({
@@ -13,6 +14,8 @@ const loginSchema = z.object({
     .email("Email inválido"),
   password: z.string()
     .min(6, "La contraseña debe tener al menos 6 caracteres"),
+  otp: z.string().optional(),
+  backupCode: z.string().optional(),
 });
 
 export function Login() {
@@ -22,6 +25,9 @@ export function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [show2FA, setShow2FA] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [backupCode, setBackupCode] = useState("");
 
   const validateField = (field: "email" | "password", value: string) => {
     try {
@@ -41,7 +47,7 @@ export function Login() {
 
     // Validar todo el formulario
     try {
-      loginSchema.parse({ email, password });
+      loginSchema.parse({ email, password, otp, backupCode });
       setErrors({});
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -60,11 +66,13 @@ export function Login() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe, otp || undefined, backupCode || undefined);
       toast.success("Sesión iniciada correctamente");
     } catch (error: any) {
       console.error("Login error:", error);
+      const requires2fa = !!error.response?.data?.requires2fa;
       const errorMessage = error.response?.data?.error || "Error al iniciar sesión";
+      if (requires2fa) setShow2FA(true);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -148,6 +156,55 @@ export function Login() {
             >
               Recordar sesión
             </label>
+          </div>
+
+          {/* 2FA (opcional) */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="text-sm text-[#033f63] hover:text-[#28666e] hover:underline"
+              onClick={() => setShow2FA((v) => !v)}
+            >
+              {show2FA ? "Ocultar 2FA" : "¿Tenés 2FA? Ingresar código"}
+            </button>
+
+            {show2FA && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm mb-2 text-[#033f63]">Código 2FA (OTP)</label>
+                  <div className="flex justify-center">
+                    <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Si no tenés OTP, podés usar un código de respaldo.</p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="backupCode"
+                    className="block text-sm mb-2 text-[#033f63]"
+                  >
+                    Código de respaldo
+                  </label>
+                  <input
+                    id="backupCode"
+                    type="text"
+                    value={backupCode}
+                    onChange={(e) => setBackupCode(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] border-gray-300"
+                    placeholder="ABCDE-FGHIJ"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <Button

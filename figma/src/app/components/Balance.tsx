@@ -16,7 +16,6 @@ import {
 import { toast } from "sonner";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { PaymentDialog } from "./PaymentDialog";
-import * as XLSX from "xlsx";
 import { notificationService } from "../../services/notification.service";
 
 interface BalanceProps {
@@ -32,6 +31,12 @@ export function Balance({ selectedClientId }: BalanceProps) {
   const [error, setError] = useState<string | null>(null);
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<{
+    pedidoId: number;
+    paciente: string;
+    montoTotal: number;
+    montoPagado: number;
+  } | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
 
   // Cargar clientes al montar
@@ -95,6 +100,16 @@ export function Balance({ selectedClientId }: BalanceProps) {
     fetchBalance();
   };
 
+  const openPaymentFor = (item: { pedidoId: number; paciente: string; montoTotal: number; montoPagado: number }) => {
+    setPaymentTarget({
+      pedidoId: item.pedidoId,
+      paciente: item.paciente,
+      montoTotal: item.montoTotal ?? 0,
+      montoPagado: item.montoPagado ?? 0,
+    });
+    setShowPaymentDialog(true);
+  };
+
   const toggleOrderExpanded = (pedidoId: number) => {
     setExpandedOrders(prev => {
       const newSet = new Set(prev);
@@ -140,8 +155,11 @@ export function Balance({ selectedClientId }: BalanceProps) {
     const total = (balanceData.totalGeneral ?? 0).toLocaleString();
     const pagado = (balanceData.totalPagado ?? 0).toLocaleString();
     const pendiente = (balanceData.totalPendiente ?? 0).toLocaleString();
+    const labName = "APL Laboratorio Dental";
 
     return [
+      `Resumen - ${labName}`,
+      "",
       `Hola ${selectedClient.nombre},`,
       `Resumen de balance:`,
       `Total: $${total}`,
@@ -414,7 +432,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
                           {item.montoPendiente > 0 && (
                             <Button
-                              onClick={() => setShowPaymentDialog(true)}
+                              onClick={() => openPaymentFor(item)}
                               size="sm"
                               className="mt-2 w-full bg-blue-600 hover:bg-blue-700"
                             >
@@ -454,8 +472,14 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
       <PaymentDialog
         open={showPaymentDialog}
-        onOpenChange={setShowPaymentDialog}
-        clientId={currentClientId}
+        onOpenChange={(open) => {
+          setShowPaymentDialog(open);
+          if (!open) setPaymentTarget(null);
+        }}
+        pedidoId={paymentTarget?.pedidoId ?? null}
+        paciente={paymentTarget?.paciente ?? ''}
+        montoTotal={paymentTarget?.montoTotal ?? 0}
+        montoPagado={paymentTarget?.montoPagado ?? 0}
         onPaymentCreated={handlePaymentCreated}
       />
     </div>

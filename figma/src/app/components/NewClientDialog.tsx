@@ -51,7 +51,9 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        setErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+        const issues = (error as any).issues ?? (error as any).errors ?? [];
+        const message = issues?.[0]?.message || "Valor inválido";
+        setErrors(prev => ({ ...prev, [field]: message }));
       }
       return false;
     }
@@ -67,10 +69,10 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
     } catch (error) {
       if (error instanceof z.ZodError) {
         const fieldErrors: Record<string, string> = {};
-        error.errors.forEach(err => {
-          if (err.path[0]) {
-            fieldErrors[err.path[0] as string] = err.message;
-          }
+        const issues = (error as any).issues ?? (error as any).errors ?? [];
+        issues.forEach((issue: any) => {
+          const key = issue?.path?.[0];
+          if (key) fieldErrors[String(key)] = issue.message;
         });
         setErrors(fieldErrors);
         toast.error("Por favor corrige los errores en el formulario");
@@ -113,9 +115,11 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="name">Nombre *</Label>
+            <Label htmlFor="nombre">Nombre *</Label>
             <Input
-              id="name"
+              id="nombre"
+              name="nombre"
+              autoComplete="name"
               value={formData.nombre}
               onChange={(e) => {
                 setFormData({ ...formData, nombre: e.target.value });
@@ -133,7 +137,9 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
             <Label htmlFor="email">Email *</Label>
             <Input
               id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               value={formData.email}
               onChange={(e) => {
                 setFormData({ ...formData, email: e.target.value });
@@ -148,10 +154,12 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
           </div>
 
           <div>
-            <Label htmlFor="phone">Teléfono *</Label>
+            <Label htmlFor="telefono">Teléfono *</Label>
             <Input
-              id="phone"
+              id="telefono"
+              name="telefono"
               type="tel"
+              autoComplete="tel"
               value={formData.telefono}
               onChange={(e) => {
                 setFormData({ ...formData, telefono: e.target.value });

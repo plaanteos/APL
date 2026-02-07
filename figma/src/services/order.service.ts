@@ -8,6 +8,8 @@ import {
   IOrderStats,
   ID
 } from '../app/types';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -21,6 +23,24 @@ class OrderService {
    * Obtener todos los pedidos con filtros opcionales
    */
   async getAll(filters?: IOrderFilters): Promise<IOrderWithCalculations[]> {
+    if (isDemoMode()) {
+      const data = await demoStore.getOrders({
+        id_cliente: filters?.clienteId,
+      });
+      // Aplicar filtros client-side que el demo soporta
+      let out = data;
+      if (filters?.eliminado != null) {
+        out = out.filter((o) => (filters.eliminado ? !!o.fecha_delete : !o.fecha_delete));
+      }
+      if (filters?.entregado != null) {
+        out = out.filter((o) => (filters.entregado ? !!o.fecha_entrega : !o.fecha_entrega));
+      }
+      if (filters?.conDeuda) {
+        out = out.filter((o) => (o.montoPendiente ?? 0) > 0);
+      }
+      return out;
+    }
+
     const params: Record<string, any> = {
       page: 1,
       limit: 1000,
@@ -47,6 +67,9 @@ class OrderService {
    * Crear nuevo pedido con detalles
    */
   async create(data: IOrderFormData): Promise<IOrder> {
+    if (isDemoMode()) {
+      return demoStore.createOrder(data);
+    }
     const response = await api.post<ApiEnvelope<IOrder>>('/orders', data);
     return response.data.data;
   }
@@ -71,6 +94,9 @@ class OrderService {
    * Marcar pedido como entregado
    */
   async markAsDelivered(id: ID): Promise<IOrderWithCalculations> {
+    if (isDemoMode()) {
+      return demoStore.markOrderAsDelivered(id);
+    }
     const response = await api.patch<ApiEnvelope<IOrderWithCalculations>>(`/orders/${id}/deliver`);
     return response.data.data;
   }

@@ -1,0 +1,80 @@
+/* ================================================================
+   APL - PostgreSQL
+   Script 08: Reporte de evidencia (RBD-02)
+   Motor: PostgreSQL 14+
+
+   Objetivo:
+   - Emitir un reporte legible para auditoría con:
+     - versión del servidor
+     - existencia de tablas
+     - índices
+     - triggers
+     - constraints CHECK
+     - columnas 2FA
+     - roles (si hay permisos)
+
+   Uso sugerido:
+     psql -U postgres -d apl_dental_lab -f prisma/scripts/08_evidence_report_postgres.psql > logs/db-evidence-psql.txt
+   ================================================================ */
+
+\echo '=== APL DB Evidence Report (PostgreSQL) ==='
+\echo 'Timestamp:'
+SELECT now() AS generated_at;
+
+\echo '\n-- Server / Context'
+SELECT version() AS server_version;
+SELECT current_database() AS current_database, current_user AS current_user;
+
+\echo '\n-- Tables (public)'
+SELECT tablename
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY tablename;
+
+\echo '\n-- Expected core tables existence'
+SELECT
+  to_regclass('public.administrador') AS administrador,
+  to_regclass('public.cliente') AS cliente,
+  to_regclass('public.pedidos') AS pedidos,
+  to_regclass('public.producto') AS producto,
+  to_regclass('public.detalle_pedidos') AS detalle_pedidos,
+  to_regclass('public.estado') AS estado,
+  to_regclass('public.pago') AS pago,
+  to_regclass('public.detalle_pago') AS detalle_pago,
+  to_regclass('public.auditoria') AS auditoria;
+
+\echo '\n-- Indexes (public)'
+SELECT tablename, indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
+ORDER BY tablename, indexname;
+
+\echo '\n-- Triggers (public)'
+SELECT event_object_table, trigger_name, action_timing, event_manipulation
+FROM information_schema.triggers
+WHERE trigger_schema = 'public'
+ORDER BY event_object_table, trigger_name;
+
+\echo '\n-- CHECK constraints'
+SELECT conrelid::regclass::text AS table_name,
+       conname AS constraint_name,
+       pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE contype = 'c'
+ORDER BY conrelid::regclass::text, conname;
+
+\echo '\n-- 2FA columns in administrador'
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'administrador'
+  AND column_name IN ('two_factor_enabled','two_factor_secret','two_factor_backup_codes')
+ORDER BY column_name;
+
+\echo '\n-- Roles (may require permissions)'
+\echo 'If this query errors, run as a role with catalog access.'
+SELECT rolname
+FROM pg_roles
+ORDER BY rolname;
+
+\echo '\n=== End report ==='

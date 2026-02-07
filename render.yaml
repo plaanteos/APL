@@ -6,7 +6,7 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm ci --include=dev && npm run build && ls -la && npx prisma generate && npx prisma db push --force-reset --skip-generate && npm run create-admin && npm run db:seed
+    buildCommand: npm ci --include=dev && npm run build && npx prisma generate && npx prisma db push --skip-generate
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -14,18 +14,16 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: FRONTEND_URL
+        value: https://administracionapl.netlify.app
+      - key: CORS_ORIGIN
+        value: https://administracionapl.netlify.app
       - key: DATABASE_URL
         fromDatabase:
           name: apl-database
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
-      - key: JWT_EXPIRES_IN
-        value: 15m
-      - key: JWT_REFRESH_EXPIRES_IN
-        value: 7d
 
   # Frontend (Netlify maneja esto, pero aquí está la configuración si quieres migrar a Render)
   # - type: web

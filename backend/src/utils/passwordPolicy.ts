@@ -2,10 +2,7 @@ import { z } from 'zod';
 
 export type PasswordPolicyOptions = {
   minLength: number;
-  requireUpper: boolean;
-  requireLower: boolean;
-  requireNumber: boolean;
-  requireSymbol: boolean;
+  disallowNumericOnly: boolean;
 };
 
 const toBool = (value: string | undefined, defaultValue: boolean) => {
@@ -17,15 +14,12 @@ const toBool = (value: string | undefined, defaultValue: boolean) => {
 };
 
 export const getPasswordPolicy = (): PasswordPolicyOptions => {
-  const minLength = Number(process.env.PASSWORD_MIN_LENGTH ?? 8);
-  const requireComplexity = toBool(process.env.PASSWORD_REQUIRE_COMPLEXITY, true);
+  const minLength = Number(process.env.PASSWORD_MIN_LENGTH ?? 6);
+  const disallowNumericOnly = toBool(process.env.PASSWORD_DISALLOW_NUMERIC_ONLY, true);
 
   return {
-    minLength: Number.isFinite(minLength) && minLength > 0 ? minLength : 8,
-    requireUpper: requireComplexity,
-    requireLower: requireComplexity,
-    requireNumber: requireComplexity,
-    requireSymbol: requireComplexity,
+    minLength: Number.isFinite(minLength) && minLength > 0 ? minLength : 6,
+    disallowNumericOnly,
   };
 };
 
@@ -36,17 +30,8 @@ export const passwordSchema = (fieldLabel: string = 'Contraseña') => {
     .string()
     .min(policy.minLength, `${fieldLabel} debe tener al menos ${policy.minLength} caracteres`);
 
-  if (policy.requireUpper) {
-    schema = schema.regex(/[A-Z]/, `${fieldLabel} debe incluir al menos una letra mayúscula`);
-  }
-  if (policy.requireLower) {
-    schema = schema.regex(/[a-z]/, `${fieldLabel} debe incluir al menos una letra minúscula`);
-  }
-  if (policy.requireNumber) {
-    schema = schema.regex(/[0-9]/, `${fieldLabel} debe incluir al menos un número`);
-  }
-  if (policy.requireSymbol) {
-    schema = schema.regex(/[^A-Za-z0-9]/, `${fieldLabel} debe incluir al menos un símbolo`);
+  if (policy.disallowNumericOnly) {
+    schema = schema.regex(/[^0-9]/, `${fieldLabel} no puede ser solo numérica`);
   }
 
   return schema;

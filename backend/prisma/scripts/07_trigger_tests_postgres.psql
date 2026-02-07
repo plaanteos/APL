@@ -1,0 +1,75 @@
+/* ================================================================
+   APL - PostgreSQL
+   Script 07: Pruebas de triggers (RBD-02)
+   Motor: PostgreSQL 14+
+
+   Objetivo:
+   - Proveer casos reproducibles para validar que los triggers del
+     script 04_triggers_postgres.sql funcionan como se espera.
+
+   Notas:
+   - Este script corre en una transacción y hace ROLLBACK al final.
+   - Requiere que existan tablas y triggers.
+   - Se recomienda ejecutarlo en un ambiente de prueba.
+   ================================================================ */
+
+BEGIN;
+
+DO $$
+DECLARE
+  admin_id INT;
+  client_id INT;
+  pedido_id INT;
+  pago_id INT;
+  auditoria_before INT;
+  auditoria_after INT;
+  pago_valor NUMERIC;
+BEGIN
+  /* Preparar datos mínimos */
+  INSERT INTO administrador (nombre, telefono, email, usuario, super_usuario, password)
+  VALUES ('Admin Trigger Test', '000', 'trigger.test@apl.local', 'trigger_test', false, 'HASH_NO_REAL')
+  RETURNING id INTO admin_id;
+
+  INSERT INTO cliente (nombre, telefono, email, id_administrador)
+  VALUES ('Cliente Trigger Test', '000', 'cliente.trigger@apl.local', admin_id)
+  RETURNING id INTO client_id;
+
+  INSERT INTO pedidos (id_cliente, fecha_pedido, fecha_entrega, fecha_delete, id_administrador)
+  VALUES (client_id, NOW(), NOW() + INTERVAL '1 day', NULL, admin_id)
+  RETURNING id INTO pedido_id;
+
+  /* 1) Trigger auditoría en cliente (AFTER UPDATE) */
+  SELECT COUNT(*) INTO auditoria_before FROM auditoria;
+  UPDATE cliente SET nombre = 'Cliente Trigger Test (upd)' WHERE id = client_id;
+  SELECT COUNT(*) INTO auditoria_after FROM auditoria;
+  RAISE NOTICE 'AUDITORIA cliente: delta=%', (auditoria_after - auditoria_before);
+
+  /* 2) Trigger auditoría en pedidos (AFTER UPDATE) */
+  SELECT COUNT(*) INTO auditoria_before FROM auditoria;
+  UPDATE pedidos SET fecha_pedido = fecha_pedido + INTERVAL '1 hour' WHERE id = pedido_id;
+  SELECT COUNT(*) INTO auditoria_after FROM auditoria;
+  RAISE NOTICE 'AUDITORIA pedidos: delta=%', (auditoria_after - auditoria_before);
+
+  /* 3) Trigger validación de fechas (BEFORE INSERT/UPDATE) - caso esperado: error */
+  BEGIN
+    INSERT INTO pedidos (id_cliente, fecha_pedido, fecha_entrega, fecha_delete, id_administrador)
+    VALUES (client_id, NOW(), NOW() - INTERVAL '1 day', NULL, admin_id);
+    RAISE EXCEPTION 'ERROR: se esperaba excepción por fecha_entrega < fecha_pedido y no ocurrió';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'VALIDACION fechas (OK): %', SQLERRM;
+  END;
+
+  /* 4) Trigger detalle_pago -> actualiza pago.valor (AFTER I/U/D en detalle_pago) */
+  INSERT INTO pago (valor, id_administrador)
+  VALUES (0, admin_id)
+  RETURNING id INTO pago_id;
+
+  INSERT INTO detalle_pago (id_pago, id_pedido, valor, fecha_pago)
+  VALUES (pago_id, pedido_id, 123.45, NOW());
+
+  SELECT valor INTO pago_valor FROM pago WHERE id = pago_id;
+  RAISE NOTICE 'PAGO.valor esperado=123.45, actual=%', pago_valor;
+END
+$$;
+
+ROLLBACK;

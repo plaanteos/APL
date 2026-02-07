@@ -1,5 +1,7 @@
 import api from './api';
 import { IEstado, IEstadoFormData, ID } from '../app/types';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -13,6 +15,9 @@ class EstadoService {
    * Obtener catálogo de estados activos
    */
   async getAll(): Promise<IEstado[]> {
+    if (isDemoMode()) {
+      return demoStore.getEstados();
+    }
     const response = await api.get<ApiEnvelope<IEstado[]>>('/estados');
     return response.data.data;
   }

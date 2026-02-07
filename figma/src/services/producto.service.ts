@@ -1,5 +1,7 @@
 import api from './api';
 import { IProducto, IProductoFormData, IProductoStats, ID } from '../app/types';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -13,6 +15,9 @@ class ProductoService {
    * Obtener todos los productos
    */
   async getAll(params?: { page?: number; limit?: number; search?: string; id_administrador?: ID }): Promise<IProducto[]> {
+    if (isDemoMode()) {
+      return demoStore.getProductos();
+    }
     const response = await api.get<ApiEnvelope<IProducto[]>>('/productos', {
       params: { page: 1, limit: 1000, ...(params || {}) },
     });

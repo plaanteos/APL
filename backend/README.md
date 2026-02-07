@@ -73,8 +73,17 @@ npm start
 ### Autenticación
 - `POST /api/auth/login` - Iniciar sesión
 - `POST /api/auth/register` - Registrar usuario
-- `GET /api/auth/me` - Obtener usuario actual
+- `POST /api/auth/refresh` - Renovar access token
 - `POST /api/auth/logout` - Cerrar sesión
+- `GET /api/auth/me` - Obtener usuario actual
+- `PUT /api/auth/change-password` - Cambiar contraseña
+- `POST /api/auth/forgot-password` - Solicitar recuperación
+- `POST /api/auth/reset-password` - Resetear contraseña
+
+#### 2FA (cuentas administrativas)
+- `POST /api/auth/2fa/setup` - Iniciar setup (otpauthUrl)
+- `POST /api/auth/2fa/enable` - Habilitar (requiere OTP)
+- `POST /api/auth/2fa/disable` - Deshabilitar (requiere password + OTP o backup)
 
 ### Clientes
 - `GET /api/clients` - Listar clientes
@@ -88,19 +97,18 @@ npm start
 - `POST /api/orders` - Crear pedido
 - `GET /api/orders/:id` - Obtener pedido
 - `PUT /api/orders/:id` - Actualizar pedido
-- `PATCH /api/orders/:id/status` - Cambiar estado
+- `PATCH /api/orders/:id/status` - Cambiar estado (detalle)
+- `PATCH /api/orders/:id/deliver` - Marcar como entregado
 - `DELETE /api/orders/:id` - Eliminar pedido
 
 ### Pagos
 - `GET /api/payments` - Listar pagos
 - `POST /api/payments` - Registrar pago
-- `GET /api/payments/order/:orderId` - Pagos por pedido
-- `GET /api/payments/balance` - Balance general
+- `GET /api/payments/order/:orderId` - Pagos por pedido (si aplica)
 
 ### Auditoría
 - `GET /api/audit` - Logs de auditoría
-- `GET /api/audit/user/:userId` - Logs por usuario
-- `GET /api/audit/entity/:type/:id` - Logs por entidad
+- `GET /api/audit/stats` - Estadísticas de auditoría
 
 ## 🔐 Autenticación
 
@@ -113,10 +121,34 @@ Authorization: Bearer <token>
 ## 📊 Estado del Desarrollo
 
 - ✅ Estructura del proyecto configurada
-- ⏳ Esquema de base de datos (en progreso)
-- ⏳ Controladores (pendiente)
-- ⏳ Servicios (pendiente)
-- ⏳ Testing (pendiente)
+- ✅ Esquema de base de datos modelado en Prisma
+- ✅ Controladores y servicios implementados
+- ✅ Scripts de soporte (seed, utilidades, evidencia)
+- ✅ Testing base (unit tests de utilidades)
+
+## 🧪 Testing
+
+Ejecutar tests unitarios:
+
+```bash
+npm test
+```
+
+Modo watch:
+
+```bash
+npm run test:watch
+```
+
+## 🗄️ Evidencia / Verificación de BD (RBD-02)
+
+Para obtener un reporte reproducible del estado de la BD (tablas, índices, triggers, constraints, columnas 2FA), ejecutar:
+
+```bash
+npm run db:evidence
+```
+
+El script genera un archivo en `backend/logs/` con el resultado.
 
 ## 🔧 Scripts Disponibles
 
@@ -127,3 +159,5 @@ Authorization: Bearer <token>
 - `npm run db:migrate` - Ejecutar migraciones
 - `npm run db:reset` - Resetear base de datos
 - `npm run db:seed` - Poblar con datos de prueba
+- `npm run db:evidence` - Reporte de evidencia de BD (tablas/índices/triggers/constraints)
+- `npm test` - Ejecutar tests unitarios

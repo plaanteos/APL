@@ -86,7 +86,21 @@ CREATE DATABASE apl_dental_lab;
 \q
 ```
 
-### 4.1 (Opcional) Crear roles/usuarios y permisos (PostgreSQL)
+### 4.1 (Opcional) Script SQL de creación de tablas (PostgreSQL)
+
+Además de `npm run db:migrate`, se incluye un script SQL **generado desde Prisma** para evidenciar el DDL de tablas/índices/constraints del modelo:
+
+- `backend/prisma/scripts/06_create_tables_postgres.psql`
+
+Se puede ejecutar (en una DB vacía) así:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/06_create_tables_postgres.psql
+```
+
+> Recomendación: en proyectos con Prisma, preferir `npm run db:migrate` para mantener el historial de cambios.
+
+### 4.2 (Opcional) Crear roles/usuarios y permisos (PostgreSQL)
 
 Si necesitás cumplir la parte de **usuarios/permisos** del requerimiento de BD (RBD-02), hay un script listo en:
 
@@ -100,7 +114,7 @@ psql -U postgres -d apl_dental_lab -f prisma/scripts/01_roles_permissions_postgr
 
 > Nota: el script trae placeholders `CHANGE_ME_*` para contraseñas. Reemplazalos antes de ejecutar.
 
-### 4.2 (Opcional) Aplicar índices recomendados (PostgreSQL)
+### 4.3 (Opcional) Aplicar índices recomendados (PostgreSQL)
 
 Si no usás migraciones Prisma (o querés aplicarlos manualmente), podés ejecutar:
 
@@ -108,7 +122,7 @@ Si no usás migraciones Prisma (o querés aplicarlos manualmente), podés ejecut
 psql -U postgres -d apl_dental_lab -f prisma/scripts/add_indexes_postgres.sql
 ```
 
-### 4.3 (Opcional) Consultas de validación (PostgreSQL)
+### 4.4 (Opcional) Consultas de validación (PostgreSQL)
 
 Para validar tablas/índices/permisos y checks básicos (RBD-02):
 
@@ -116,19 +130,54 @@ Para validar tablas/índices/permisos y checks básicos (RBD-02):
 psql -U postgres -d apl_dental_lab -f prisma/scripts/02_validation_queries_postgres.psql
 ```
 
-### 4.4 (Opcional) Aplicar constraints CHECK (PostgreSQL)
+### 4.4.1 (Opcional) Reporte de evidencia (RBD-02)
+
+Para recolectar evidencia reproducible (tablas/índices/triggers/constraints/2FA) tenés dos opciones:
+
+1) **Vía Prisma (recomendado si no tenés `psql`)**
+
+```bash
+cd backend
+npm run db:evidence
+```
+
+Esto genera un archivo `db-evidence-*.json` en `backend/logs/`.
+
+2) **Vía `psql` (si lo tenés instalado)**
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/08_evidence_report_postgres.psql > logs/db-evidence-psql.txt
+```
+
+### 4.5 (Opcional) Aplicar constraints CHECK (PostgreSQL)
 
 Para reforzar integridad **sin triggers**, existe este script:
 
-- `backend/prisma/scripts/03_add_constraints_postgres.sql`
+- `backend/prisma/scripts/03_add_constraints_postgres.psql`
 
 Ejecutalo así:
 
 ```bash
-psql -U postgres -d apl_dental_lab -f prisma/scripts/03_add_constraints_postgres.sql
+psql -U postgres -d apl_dental_lab -f prisma/scripts/03_add_constraints_postgres.psql
 ```
 
 > Nota: las constraints se crean como `NOT VALID` para no romper datos legacy. Si querés validarlas para datos existentes, seguí las instrucciones al final del script.
+
+### 4.6 (Opcional) Habilitar columnas para 2FA (PostgreSQL)
+
+Si vas a usar 2FA (TOTP + códigos de respaldo) en el backend, ejecutá:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/05_add_2fa_columns_postgres.psql
+```
+
+### 4.7 (Opcional) Pruebas de triggers (PostgreSQL)
+
+Para validar rápidamente los triggers del script `04_triggers_postgres.sql` (auditoría, validación de fechas y actualización de montos), existe:
+
+```bash
+psql -U postgres -d apl_dental_lab -f prisma/scripts/07_trigger_tests_postgres.psql
+```
 
 **Alternativa con pgAdmin:**
 1. Abrir pgAdmin 4

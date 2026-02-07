@@ -7,6 +7,8 @@ import {
   IPaymentStats,
   ID
 } from '../app/types';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -20,6 +22,9 @@ class PaymentService {
    * Obtener todos los pagos
    */
   async getAll(): Promise<IPagoWithDetails[]> {
+    if (isDemoMode()) {
+      return demoStore.getPagos();
+    }
     const response = await api.get<ApiEnvelope<IPagoWithDetails[]>>('/payments', {
       params: { page: 1, limit: 1000 },
     });
@@ -45,6 +50,10 @@ class PaymentService {
       throw new Error(
         `La suma de los detalles (${sumaDetalles}) debe ser igual al valor del pago (${data.valor})`
       );
+    }
+
+    if (isDemoMode()) {
+      return demoStore.createPago(data);
     }
 
     const response = await api.post<ApiEnvelope<IPago>>('/payments', data);

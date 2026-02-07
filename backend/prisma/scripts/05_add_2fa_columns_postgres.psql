@@ -1,0 +1,21 @@
+-- ================================================================
+-- APL - PostgreSQL
+-- Script 05: Campos para 2FA (TOTP + backup codes)
+-- Motor: PostgreSQL 14+
+--
+-- Agrega columnas a la tabla administrador para soportar 2FA.
+-- Nota: Este script NO crea triggers.
+-- ================================================================
+
+ALTER TABLE administrador
+  ADD COLUMN IF NOT EXISTS two_factor_enabled boolean NOT NULL DEFAULT false;
+
+ALTER TABLE administrador
+  ADD COLUMN IF NOT EXISTS two_factor_secret text;
+
+ALTER TABLE administrador
+  ADD COLUMN IF NOT EXISTS two_factor_backup_codes jsonb;
+
+-- Índice opcional para filtrar rápido por habilitación 2FA
+CREATE INDEX IF NOT EXISTS idx_administrador_two_factor_enabled
+  ON administrador(two_factor_enabled);

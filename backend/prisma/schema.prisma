@@ -26,6 +26,11 @@ model Administrador {
   usuario       String    @db.VarChar(50) @unique
   super_usuario Boolean   @default(false)
   password      String    // Hash con bcryptjs
+
+  // 2FA (TOTP + backup codes)
+  twoFactorEnabled     Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String? @db.Text @map("two_factor_secret")
+  twoFactorBackupCodes Json?   @map("two_factor_backup_codes")
   
   // Timestamps (agregados para funcionalidad, no en diccionario)
   createdAt     DateTime  @default(now())

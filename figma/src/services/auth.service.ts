@@ -1,8 +1,12 @@
 import apiClient from './api';
+import { isDemoMode } from './demoMode';
+import { demoStore } from './demoStore';
 
 export interface LoginCredentials {
   email: string;
   password: string;
+  otp?: string;
+  backupCode?: string;
 }
 
 export interface RegisterData {
@@ -35,6 +39,19 @@ export interface AuthResponse {
 export const authService = {
   // Login
   login: async (credentials: LoginCredentials, rememberMe: boolean = false): Promise<AuthResponse> => {
+    // Modo demo: no depender del backend
+    if (isDemoMode()) {
+      const user = demoStore.getDemoUser();
+      const token = 'demo-token';
+      const refreshToken = 'demo-refresh-token';
+
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem('authToken', token);
+      storage.setItem('refreshToken', refreshToken);
+      storage.setItem('user', JSON.stringify(user));
+      return { token, refreshToken, user };
+    }
+
     const response = await apiClient.post('/auth/login', credentials);
     const { token, refreshToken, user } = response.data.data; // Backend devuelve data.data
 
@@ -65,6 +82,11 @@ export const authService = {
 
   // Get current user
   getCurrentUser: async (): Promise<User> => {
+    if (isDemoMode()) {
+      const stored = authService.getStoredUser();
+      return stored ?? demoStore.getDemoUser();
+    }
+
     const response = await apiClient.get('/auth/me');
     const user = response.data.data; // Backend devuelve data.data
 
@@ -78,7 +100,9 @@ export const authService = {
   // Logout
   logout: async (): Promise<void> => {
     try {
-      await apiClient.post('/auth/logout');
+      if (!isDemoMode()) {
+        await apiClient.post('/auth/logout');
+      }
     } catch {
       // Si no hay conexión o el backend no responde, igual se debe limpiar la sesión local.
     } finally {
@@ -124,6 +148,7 @@ export const authService = {
 
   // Check if authenticated (check both storages)
   isAuthenticated: (): boolean => {
+    if (isDemoMode()) return true;
     return !!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken'));
   },
 };
