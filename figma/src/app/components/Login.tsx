@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { z } from "zod";
-import { LogIn } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { useAuth } from "../../hooks/useAuth";
@@ -82,13 +81,25 @@ export function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#033f63] to-[#28666e] flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-6 space-y-6">
-        <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-[#7c9885]/20 rounded-full flex items-center justify-center mx-auto">
-            <LogIn size={32} className="text-[#033f63]" />
-          </div>
-          <h1 className="text-2xl text-[#033f63]">Laboratorio Dental</h1>
-          <p className="text-sm text-gray-500">
-            Ingresa tus credenciales para continuar
+        <div className="text-center">
+          <img
+            src="/apl-logo.png"
+            alt="APL Dental"
+            className="w-48 h-auto mx-auto"
+          />
+        </div>
+
+        <div className="bg-amber-50 rounded-xl p-6 text-center">
+          <p className="text-[#033f63] font-bold text-xl">
+            ¡Bienvenidos a nuestra nueva herramienta
+            <br />
+            de gestión administrativa!
+          </p>
+          <p className="text-sm text-gray-700 mt-4 leading-relaxed">
+            Nuestro objetivo es agilizar al máximo los tiempos administrativos para poder dedicarnos por completo a nuestro valioso trabajo manual. Al optimizar la gestión podemos concentrarnos en lo que más nos apasiona,
+          </p>
+          <p className="text-sm font-semibold text-[#033f63] mt-3">
+            Crear Sonrisas.
           </p>
         </div>
 

@@ -94,7 +94,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-[#033f63] border-b border-[#28666e] px-4 py-3 shadow-sm">
+      <header className="bg-[#033f63] px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {canGoBack && (
@@ -106,15 +106,27 @@ export default function App() {
                 <ArrowLeft size={20} className="text-white" />
               </button>
             )}
-            <h1 className="text-white">Laboratorio Dental</h1>
+            <div className="bg-white px-3 py-1.5 rounded-lg">
+              <img
+                src="/apl-logo.png"
+                alt="APL Dental"
+                className="h-7 w-auto"
+              />
+            </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 hover:bg-red-500/20 rounded-full transition-colors group"
-            aria-label="Cerrar sesión"
-          >
-            <LogOut size={20} className="text-white group-hover:text-red-300" />
-          </button>
+          <div className="flex items-center bg-white/10 rounded-full px-4 py-2">
+            <span className="text-white text-base font-semibold whitespace-nowrap">
+              Admin
+            </span>
+            <span className="mx-3 h-5 w-px bg-white/30" aria-hidden="true" />
+            <button
+              onClick={handleLogout}
+              className="p-1 hover:bg-white/10 rounded-full transition-colors"
+              aria-label="Cerrar sesión"
+            >
+              <LogOut size={20} className="text-white" />
+            </button>
+          </div>
         </div>
       </header>
 

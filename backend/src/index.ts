@@ -181,6 +181,12 @@ app.use(errorHandler);
 
 // Database connection check
 async function connectDatabase() {
+  const skipDbConnect = (process.env.SKIP_DB_CONNECT || '').toLowerCase() === 'true';
+  if (skipDbConnect) {
+    logger.warn('⚠️ SKIP_DB_CONNECT=true: iniciando API sin conexión a la base de datos (solo para pruebas locales).');
+    return;
+  }
+
   try {
     await prisma.$connect();
     logger.info('✅ Connected to PostgreSQL database');
