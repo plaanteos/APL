@@ -5,19 +5,27 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
+type AuthUser = {
+  id: number;
+  email: string;
+  super_usuario: boolean;
+};
+
+type AuthRequest = Request & {
+  user?: AuthUser;
+};
+
 // Schemas de validación - Modelo Oficial APL
 const createClientSchema = z.object({
-  nombre: z.string().min(2, 'Nombre debe tener al menos 2 caracteres'),
-  email: z.string().email('Email inválido'),
-  telefono: z.string().min(8, 'Teléfono debe tener al menos 8 caracteres'),
-  id_administrador: z.number().int().positive('ID de administrador inválido'),
+  nombre: z.coerce.string().trim().min(2, 'Nombre debe tener al menos 2 caracteres'),
+  email: z.coerce.string().trim().email('Email inválido'),
+  telefono: z.coerce.string().trim().min(8, 'Teléfono debe tener al menos 8 caracteres'),
 });
 
 const updateClientSchema = z.object({
-  nombre: z.string().min(2, 'Nombre debe tener al menos 2 caracteres').optional(),
-  email: z.string().email('Email inválido').optional(),
-  telefono: z.string().min(8, 'Teléfono debe tener al menos 8 caracteres').optional(),
-  id_administrador: z.number().int().positive().optional(),
+  nombre: z.coerce.string().trim().min(2, 'Nombre debe tener al menos 2 caracteres').optional(),
+  email: z.coerce.string().trim().email('Email inválido').optional(),
+  telefono: z.coerce.string().trim().min(8, 'Teléfono debe tener al menos 8 caracteres').optional(),
 });
 
 export class ClientController {
@@ -220,6 +228,15 @@ export class ClientController {
     try {
       const clientData = createClientSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar si el email ya existe
       const existingClient = await prisma.cliente.findUnique({
         where: { email: clientData.email },
@@ -234,7 +251,10 @@ export class ClientController {
 
       // Crear cliente
       const newClient = await prisma.cliente.create({
-        data: clientData,
+        data: {
+          ...clientData,
+          id_administrador: adminId,
+        },
       });
 
       res.status(201).json({
