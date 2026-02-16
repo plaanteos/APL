@@ -8,32 +8,36 @@ interface EmailOptions {
 }
 
 class EmailService {
-    private transporter: nodemailer.Transporter;
-
-    constructor() {
+  private createTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587');
     const secure = port === 465;
 
-    // Configurar transporte de email (Gmail recomendado vía App Password)
-    this.transporter = nodemailer.createTransport({
+    const user = process.env.SMTP_USER;
+    const passRaw = process.env.SMTP_PASS;
+    const pass = (passRaw || '').replace(/\s+/g, '');
+
+    if (!user || !pass) {
+      throw new Error('SMTP_USER/SMTP_PASS no están configurados');
+    }
+
+    if (passRaw && passRaw !== pass) {
+      logger.warn('⚠️ SMTP_PASS contenía espacios; se normalizó automáticamente.');
+    }
+
+    return nodemailer.createTransport({
       host,
       port,
       secure,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
+      auth: { user, pass },
     });
-    }
+  }
 
     async sendEmail(options: EmailOptions): Promise<void> {
         try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        throw new Error('SMTP_USER/SMTP_PASS no están configurados');
-      }
+      const transporter = this.createTransporter();
 
-            const info = await this.transporter.sendMail({
+            const info = await transporter.sendMail({
                 from: `"APL Laboratorio Dental" <${process.env.SMTP_USER}>`,
                 to: options.to,
                 subject: options.subject,
@@ -42,9 +46,13 @@ class EmailService {
       const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
       const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';
       logger.info(`📧 Email enviado a ${options.to} (messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`);
-        } catch (error) {
+        } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
-      throw new Error('No se pudo enviar el email');
+      const baseMsg = 'No se pudo enviar el email';
+      if (process.env.NODE_ENV === 'development') {
+        throw new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
+      }
+      throw new Error(baseMsg);
         }
     }
 

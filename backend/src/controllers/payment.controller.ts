@@ -5,27 +5,43 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
+type AuthUser = {
+  id: number;
+  email: string;
+  super_usuario: boolean;
+};
+
+type AuthRequest = Request & {
+  user?: AuthUser;
+};
+
 // ============================================
 // SCHEMAS DE VALIDACIÓN - MODELO OFICIAL APL
 // ============================================
 
 // Detalle de pago: relación N:M entre pago y pedido
 const detallePagoSchema = z.object({
-  id_pedido: z.number().int().positive('ID de pedido inválido'),
-  valor: z.number().positive('El valor debe ser mayor a 0'),
+  id_pedido: z.coerce.number().int().positive('ID de pedido inválido'),
+  valor: z.coerce.number().positive('El valor debe ser mayor a 0'),
 });
 
 const createPaymentSchema = z.object({
-  valor: z.number().positive('El valor total debe ser mayor a 0'),
-  id_administrador: z.number().int().positive('ID de administrador inválido'),
-  fecha_pago: z.string().transform((str) => new Date(str)),
+  valor: z.coerce.number().positive('El valor total debe ser mayor a 0'),
+  // id_administrador se toma del JWT (req.user)
+  // fecha_pago es opcional; si no viene, se usa la fecha actual
+  fecha_pago: z.union([
+    z.string().min(1).transform((str) => new Date(str)),
+    z.date(),
+  ]).optional(),
   detalles: z.array(detallePagoSchema).min(1, 'Debe incluir al menos un pedido para aplicar el pago'),
 });
 
 const updatePaymentSchema = z.object({
-  valor: z.number().positive().optional(),
-  id_administrador: z.number().int().positive().optional(),
-  fecha_pago: z.string().transform((str) => new Date(str)).optional(),
+  valor: z.coerce.number().positive().optional(),
+  fecha_pago: z.union([
+    z.string().min(1).transform((str) => new Date(str)),
+    z.date(),
+  ]).optional(),
 });
 
 // ============================================
@@ -33,6 +49,14 @@ const updatePaymentSchema = z.object({
 // ============================================
 
 export class PaymentController {
+  private static logError(context: string, error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(context, message);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+  }
+
   // GET /api/payments - Listar pagos
   static async getPayments(req: Request, res: Response) {
     try {
@@ -141,7 +165,7 @@ export class PaymentController {
         },
       });
     } catch (error) {
-      console.error('Get payments error:', error);
+      PaymentController.logError('Get payments error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
@@ -224,7 +248,7 @@ export class PaymentController {
         },
       });
     } catch (error) {
-      console.error('Get payment by id error:', error);
+      PaymentController.logError('Get payment by id error:', error);
       return res.status(500).json({
         success: false,
         error: 'Error interno del servidor',
@@ -237,9 +261,20 @@ export class PaymentController {
     try {
       const paymentData = createPaymentSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const fechaPago = paymentData.fecha_pago ? new Date(paymentData.fecha_pago as any) : new Date();
+
       // Verificar que el administrador existe
       const admin = await prisma.administrador.findUnique({
-        where: { id: paymentData.id_administrador },
+        where: { id: adminId },
       });
 
       if (!admin) {
@@ -307,7 +342,7 @@ export class PaymentController {
         const pago = await tx.pago.create({
           data: {
             valor: paymentData.valor,
-            id_administrador: paymentData.id_administrador,
+            id_administrador: adminId,
           },
         });
 
@@ -317,7 +352,7 @@ export class PaymentController {
             id_pago: pago.id,
             id_pedido: detalle.id_pedido,
             valor: detalle.valor,
-            fecha_pago: paymentData.fecha_pago,
+            fecha_pago: fechaPago,
           })),
         });
 
@@ -366,7 +401,7 @@ export class PaymentController {
         },
       });
     } catch (error) {
-      console.error('Create payment error:', error);
+      PaymentController.logError('Create payment error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -440,7 +475,7 @@ export class PaymentController {
         },
       });
     } catch (error) {
-      console.error('Update payment error:', error);
+      PaymentController.logError('Update payment error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({

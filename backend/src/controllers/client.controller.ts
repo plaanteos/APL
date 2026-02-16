@@ -494,6 +494,7 @@ export class ClientController {
         id: number;
         fecha_pedido: Date;
         fecha_entrega: Date;
+        entregado: boolean | null;
         cantidad_productos: bigint | number | null;
         monto_total: any;
         monto_pagado: any;
@@ -507,6 +508,7 @@ export class ClientController {
           p.id,
           p.fecha_pedido,
           p.fecha_entrega,
+          COALESCE(st_agg.entregado, false) AS entregado,
           COALESCE(dp_agg.cantidad_productos, 0) AS cantidad_productos,
           COALESCE(dp_agg.monto_total, 0) AS monto_total,
           COALESCE(pg_agg.monto_pagado, 0) AS monto_pagado,
@@ -514,6 +516,14 @@ export class ClientController {
           lastp.fecha_pago AS ultimo_pago_fecha,
           lastp.valor AS ultimo_pago_valor
         FROM pedidos p
+        LEFT JOIN (
+          SELECT
+            dp.id_pedido,
+            BOOL_AND(LOWER(e.descripcion) = 'entregado') AS entregado
+          FROM detalle_pedidos dp
+          INNER JOIN estado e ON e.id = dp.id_estado
+          GROUP BY dp.id_pedido
+        ) st_agg ON st_agg.id_pedido = p.id
         LEFT JOIN (
           SELECT
             id_pedido,
@@ -549,6 +559,7 @@ export class ClientController {
           id: Number(r.id),
           fecha_pedido: r.fecha_pedido,
           fecha_entrega: r.fecha_entrega,
+          entregado: Boolean(r.entregado),
           cantidadProductos: Number(r.cantidad_productos ?? 0),
           montoTotal,
           montoPagado,

@@ -1,6 +1,7 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { PaymentController } from '../controllers/payment.controller';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = express.Router();
 
@@ -8,21 +9,21 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // GET /api/payments/stats - Estadísticas de pagos
-router.get('/stats', PaymentController.getPaymentsStats);
+router.get('/stats', asyncHandler(PaymentController.getPaymentsStats));
 
 // GET /api/payments - Listar pagos
-router.get('/', PaymentController.getPayments);
+router.get('/', asyncHandler(PaymentController.getPayments));
 
 // POST /api/payments - Crear pago y aplicar a pedidos
-router.post('/', PaymentController.createPayment);
+router.post('/', asyncHandler(PaymentController.createPayment));
 
 // GET /api/payments/:id - Obtener pago por ID
-router.get('/:id', PaymentController.getPaymentById);
+router.get('/:id', asyncHandler(PaymentController.getPaymentById));
 
 // PUT /api/payments/:id - Actualizar pago
-router.put('/:id', PaymentController.updatePayment);
+router.put('/:id', asyncHandler(PaymentController.updatePayment));
 
 // DELETE /api/payments/:id - Eliminar pago
-router.delete('/:id', PaymentController.deletePayment);
+router.delete('/:id', asyncHandler(PaymentController.deletePayment));
 
 export default router;

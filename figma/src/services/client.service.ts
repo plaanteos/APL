@@ -108,7 +108,7 @@ class ClientService {
             montoTotal,
             montoPagado,
             montoPendiente,
-            entregado: !!p.fecha_entrega,
+            entregado: Boolean(p.entregado),
           };
         }),
         totalGeneral: Number(resumen.montoTotal ?? resumen.totalGeneral ?? 0),

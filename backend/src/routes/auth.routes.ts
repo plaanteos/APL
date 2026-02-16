@@ -1,36 +1,37 @@
 import express from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = express.Router();
 
 // POST /api/auth/login
-router.post('/login', AuthController.login);
+router.post('/login', asyncHandler(AuthController.login));
 
 // POST /api/auth/register
-router.post('/register', AuthController.register);
+router.post('/register', asyncHandler(AuthController.register));
 
 // POST /api/auth/refresh - Renovar access token
-router.post('/refresh', AuthController.refresh);
+router.post('/refresh', asyncHandler(AuthController.refresh));
 
 // POST /api/auth/logout (requiere autenticación)
-router.post('/logout', authenticate, AuthController.logout);
+router.post('/logout', authenticate, asyncHandler(AuthController.logout));
 
 // GET /api/auth/me (requiere autenticación)
-router.get('/me', authenticate, AuthController.me);
+router.get('/me', authenticate, asyncHandler(AuthController.me));
 
 // PUT /api/auth/change-password (requiere autenticación)
-router.put('/change-password', authenticate, AuthController.changePassword);
+router.put('/change-password', authenticate, asyncHandler(AuthController.changePassword));
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/forgot-password', asyncHandler(AuthController.forgotPassword));
 
 // POST /api/auth/reset-password
-router.post('/reset-password', AuthController.resetPassword);
+router.post('/reset-password', asyncHandler(AuthController.resetPassword));
 
 // 2FA (requiere autenticación)
-router.post('/2fa/setup', authenticate, AuthController.setupTwoFactor);
-router.post('/2fa/enable', authenticate, AuthController.enableTwoFactor);
-router.post('/2fa/disable', authenticate, AuthController.disableTwoFactor);
+router.post('/2fa/setup', authenticate, asyncHandler(AuthController.setupTwoFactor));
+router.post('/2fa/enable', authenticate, asyncHandler(AuthController.enableTwoFactor));
+router.post('/2fa/disable', authenticate, asyncHandler(AuthController.disableTwoFactor));
 
 export default router;
