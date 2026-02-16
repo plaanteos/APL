@@ -35,6 +35,31 @@ npm install
 DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/apl_dental_lab?schema=public"
 ```
 
+#### Troubleshooting: "Authentication failed" en local
+
+Si al correr `npm run dev` ves un error de autenticación contra `localhost`, casi siempre es porque:
+
+1) `DATABASE_URL` tiene una contraseña incorrecta, o
+2) Estás usando un usuario distinto al que tiene password configurado.
+
+Soluciones rápidas:
+
+- Verificá que el usuario/contraseña del URL sean los reales de tu instalación.
+- Si necesitás resetear el password del usuario `postgres`:
+
+```sql
+-- Entrá a psql como superusuario (según tu instalación) y ejecutá:
+ALTER USER postgres WITH PASSWORD 'TU_PASSWORD';
+```
+
+> Alternativa: crear un usuario nuevo y usarlo en `DATABASE_URL`.
+
+Si querés iniciar la API sin DB (solo para probar que levante el server), podés usar:
+
+```bash
+SKIP_DB_CONNECT=true
+```
+
 ### 3.1 Configurar Gmail (SMTP) y URL del frontend (recuperar contraseña)
 
 En tu `.env` agrega (ejemplo):
@@ -49,6 +74,29 @@ SMTP_PORT="587"
 SMTP_USER="tu-cuenta@gmail.com"
 SMTP_PASS="TU_APP_PASSWORD"
 ```
+
+**Pasos para Gmail (App Password):**
+
+1) En tu cuenta de Google activá **Verificación en 2 pasos**.
+2) Creá una **Contraseña de aplicación** (App Password) para "Mail".
+3) Usá esa App Password (16 caracteres aprox.) en `SMTP_PASS`.
+
+> Nota: Gmail ya no permite "Less secure apps". Si ponés tu contraseña normal, suele fallar.
+
+**Probar envío (endpoint):**
+
+- Endpoint: `POST /api/notifications/send`
+
+Ejemplo con `curl`:
+
+```bash
+curl -X POST http://localhost:3001/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d "{\"channel\":\"email\",\"to\":\"destino@ejemplo.com\",\"subject\":\"Prueba APL\",\"message\":\"Hola desde APL\"}"
+```
+
+Si lo vas a correr en **Render**, agregá `SMTP_PASS` como **Environment Variable** en el dashboard (no en el repo).
 
 ### 3.2 Configurar WhatsApp (Cloud API de Meta)
 

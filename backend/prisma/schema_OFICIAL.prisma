@@ -69,6 +69,7 @@ model Pedido {
   fecha_entrega     DateTime      @db.Date
   fecha_delete      DateTime?     @db.Date
   id_administrador  Int
+  descripcion       String?       @db.Text
   
   // Relaciones
   cliente           Cliente       @relation(fields: [id_cliente], references: [id], onDelete: Cascade)

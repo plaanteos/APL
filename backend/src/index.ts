@@ -187,12 +187,49 @@ async function connectDatabase() {
     return;
   }
 
-  try {
-    await prisma.$connect();
-    logger.info('✅ Connected to PostgreSQL database');
-  } catch (error) {
-    logger.error('❌ Failed to connect to database:', error);
-    process.exit(1);
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl) {
+    try {
+      const parsed = new URL(databaseUrl);
+      const safeUser = decodeURIComponent(parsed.username || '');
+      const host = parsed.hostname;
+      const port = parsed.port || '5432';
+      const dbName = (parsed.pathname || '').replace(/^\//, '') || '(sin db)';
+      logger.info(`🗄️  DB target: ${safeUser ? safeUser + '@' : ''}${host}:${port}/${dbName}`);
+    } catch {
+      logger.warn('⚠️ DATABASE_URL no es un URL válido (no se pudo parsear).');
+    }
+  }
+
+  const maxAttempts = Number(process.env.DB_CONNECT_MAX_ATTEMPTS || 12); // ~5-10 min según backoff
+  const baseDelayMs = Number(process.env.DB_CONNECT_BASE_DELAY_MS || 1000);
+  const maxDelayMs = Number(process.env.DB_CONNECT_MAX_DELAY_MS || 30000);
+
+  let attempt = 0;
+  // Reintenta para tolerar latencias/cortes momentáneos del proveedor externo.
+  while (true) {
+    attempt += 1;
+    try {
+      await prisma.$connect();
+      logger.info('✅ Connected to PostgreSQL database');
+      return;
+    } catch (error) {
+      logger.error(`❌ Failed to connect to database (attempt ${attempt}/${maxAttempts}):`, error);
+      logger.error('💡 Si estás en producción, verificá que DATABASE_URL apunte a una Postgres externa activa (con SSL si aplica).');
+      logger.error('💡 Para local: DATABASE_URL="postgresql://postgres:TU_PASSWORD@localhost:5432/apl_dental_lab?schema=public"');
+      logger.error('   (o usar SKIP_DB_CONNECT=true para iniciar sin DB)');
+
+      if (attempt >= maxAttempts) {
+        logger.error('🛑 Se agotaron los reintentos de conexión a la DB. Cerrando proceso para que Render lo reinicie.');
+        process.exit(1);
+      }
+
+      const exp = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt - 1));
+      const jitter = Math.floor(Math.random() * 250);
+      const waitMs = exp + jitter;
+      logger.warn(`⏳ Reintentando conexión a la DB en ${waitMs}ms...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
   }
 }
 

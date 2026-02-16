@@ -10,12 +10,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push --skip-generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx prisma/seed.ts",
     "db:evidence": "tsx src/scripts/db-evidence.ts",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "db:init": "npm run db:push && npm run create-admin && npm run db:seed"
   },
   "keywords": [
     "dental",

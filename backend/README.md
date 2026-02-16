@@ -45,6 +45,8 @@ cp .env.example .env
 # Editar .env con tus configuraciones
 ```
 
+Tip (local): también tenés un ejemplo listo en `backend/.env.local.example`.
+
 ### 3. Configurar base de datos
 ```bash
 # Generar cliente Prisma

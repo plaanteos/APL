@@ -265,13 +265,13 @@ export function Balance({ selectedClientId }: BalanceProps) {
       {!selectedClientId && (
         <Card className="p-4">
           <div className="space-y-3">
-            <label className="text-sm font-medium text-gray-700">Cliente</label>
+            <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">Cliente</label>
             <Select
               value={currentClientId?.toString() || ""}
               onValueChange={(val) => setCurrentClientId(Number(val))}
               name="clientId"
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="balanceClient" className="w-full">
                 <SelectValue placeholder="Seleccionar cliente" />
               </SelectTrigger>
               <SelectContent>

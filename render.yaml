@@ -6,7 +6,10 @@ services:
     region: oregon
     plan: free
     rootDir: backend
-    buildCommand: npm ci --include=dev && npm run build && npx prisma generate && npx prisma db push --skip-generate
+    # Nota: NO corremos comandos que requieran conectividad a la DB durante el build,
+    # porque si la base está suspendida/caída el deploy falla con P1001.
+    # Inicializa la DB (db push + seed + admin) manualmente desde tu PC cuando tengas un DATABASE_URL válido.
+    buildCommand: npm ci --include=dev && npm run build && npx prisma generate
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -18,12 +21,19 @@ services:
         value: https://administracionapl.netlify.app
       - key: CORS_ORIGIN
         value: https://administracionapl.netlify.app
-      - key: DATABASE_URL
-        fromDatabase:
-          name: apl-database
-          property: connectionString
+      # Configurar en Render Dashboard como "Environment Variable" apuntando a tu Postgres externa
+      # (Neon/Supabase/etc). No usar fromDatabase porque la DB gratis de Render expira/suspende.
+      # - key: DATABASE_URL
+      #   value: postgresql://USER:PASS@HOST:5432/DB?sslmode=require
       - key: JWT_SECRET
         generateValue: true
+      # Email (Gmail/SMTP). IMPORTANTE: configurar SMTP_PASS como variable secreta en Render Dashboard.
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: jesusjcopes@gmail.com
 
   # Frontend (Netlify maneja esto, pero aquí está la configuración si quieres migrar a Render)
   # - type: web
@@ -36,9 +46,5 @@ services:
   #       source: /*
   #       destination: /index.html
 
-databases:
-  - name: apl-database
-    databaseName: apl_database
-    plan: free
-    region: oregon
-    postgresMajorVersion: 16
+# Nota: se quitó la sección `databases:` porque el plan free de Render expira/suspende.
+# Usar una DB externa y setear `DATABASE_URL` en el dashboard del servicio.

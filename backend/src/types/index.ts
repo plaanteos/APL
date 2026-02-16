@@ -89,6 +89,7 @@ export interface Pedido {
   fecha_entrega: Date;
   fecha_delete: Date | null;
   id_administrador: number;
+  descripcion?: string | null;
   cliente?: Cliente;
   administrador?: Administrador;
   detalles?: DetallePedido[];
@@ -102,6 +103,7 @@ export interface PedidoDTO {
   fecha_pedido: Date;
   fecha_entrega: Date;
   id_administrador: number;
+  descripcion?: string;
   detalles: DetallePedidoDTO[];
   montoTotal: number;
   montoPagado: number;

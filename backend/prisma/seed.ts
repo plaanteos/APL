@@ -37,10 +37,10 @@ async function main() {
   const estados = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
   
   for (const estado of estados) {
-    await prisma.estado.create({
-      data: {
-        descripcion: estado,
-      },
+    await prisma.estado.upsert({
+      where: { descripcion: estado },
+      update: { fecha_delete: null },
+      create: { descripcion: estado },
     });
   }
   
@@ -56,20 +56,36 @@ async function main() {
   ];
 
   for (const prod of productosTipo) {
-    await prisma.producto.create({
-      data: {
+    const existingProducto = await prisma.producto.findFirst({
+      where: {
         tipo: prod.tipo,
-        precio: prod.valor,
         id_administrador: admin.id,
       },
+      select: { id: true },
     });
+
+    if (!existingProducto) {
+      await prisma.producto.create({
+        data: {
+          tipo: prod.tipo,
+          precio: prod.valor,
+          id_administrador: admin.id,
+        },
+      });
+    }
   }
   
   console.log('✅ Productos creados:', productosTipo.length);
 
   // 4. Crear cliente de ejemplo
-  const cliente = await prisma.cliente.create({
-    data: {
+  const cliente = await prisma.cliente.upsert({
+    where: { email: 'contacto@dentaleste.com' },
+    update: {
+      nombre: 'Clínica Dental del Este',
+      telefono: '+598 99 234 567',
+      id_administrador: admin.id,
+    },
+    create: {
       nombre: 'Clínica Dental del Este',
       telefono: '+598 99 234 567',
       email: 'contacto@dentaleste.com',

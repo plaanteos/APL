@@ -233,6 +233,7 @@ export function NewOrderDialog({
         id_cliente: Number(formData.clientId),
         fecha_entrega: formData.dueDate,
         id_administrador: adminId,
+        descripcion: formData.description?.trim() ? formData.description.trim() : undefined,
         detalles: [
           {
             id_producto: Number(formData.productId),

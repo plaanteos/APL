@@ -7,14 +7,12 @@ import logger from './logger';
 
 interface EnvConfig {
   PORT: string;
-  DATABASE_URL: string;
   JWT_SECRET: string;
   NODE_ENV: string;
 }
 
 const requiredEnvVars: Array<keyof EnvConfig> = [
   'PORT',
-  'DATABASE_URL',
   'JWT_SECRET',
   'NODE_ENV'
 ];
@@ -23,12 +21,23 @@ export const validateEnv = (): void => {
   const missingVars: string[] = [];
   const warnings: string[] = [];
 
+  const skipDbConnect = (process.env.SKIP_DB_CONNECT || '').toLowerCase() === 'true';
+
   // Verificar variables requeridas
   requiredEnvVars.forEach((varName) => {
     if (!process.env[varName]) {
       missingVars.push(varName);
     }
   });
+
+  // DATABASE_URL solo es requerida si se va a conectar a DB
+  if (!skipDbConnect && !process.env.DATABASE_URL) {
+    missingVars.push('DATABASE_URL');
+  }
+
+  if (skipDbConnect) {
+    warnings.push('SKIP_DB_CONNECT=true: la API iniciará sin conexión a la base de datos (solo para pruebas locales).');
+  }
 
   // Verificar valores específicos
   if (process.env.NODE_ENV && !['development', 'production', 'test'].includes(process.env.NODE_ENV)) {

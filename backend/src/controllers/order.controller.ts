@@ -21,6 +21,7 @@ const createOrderSchema = z.object({
   id_cliente: z.number().int().positive('ID de cliente inválido'),
   fecha_entrega: z.string().transform((str) => new Date(str)),
   id_administrador: z.number().int().positive('ID de administrador inválido'),
+  descripcion: z.string().max(2000, 'Descripción demasiado larga').optional(),
   detalles: z.array(detalleSchema).min(1, 'Debe incluir al menos un detalle de pedido'),
 });
 
@@ -69,6 +70,7 @@ const formatOrderWithCalculations = (pedido: any) => {
     fecha_pedido: pedido.fecha_pedido,
     fecha_entrega: pedido.fecha_entrega,
     id_administrador: pedido.id_administrador,
+    descripcion: pedido.descripcion ?? '',
     detalles: (pedido.detalles || []).map((det: any) => ({
       id: det.id,
       id_producto: det.id_producto,
@@ -325,6 +327,7 @@ export class OrderController {
             id_cliente: orderData.id_cliente,
             fecha_entrega: orderData.fecha_entrega,
             id_administrador: orderData.id_administrador,
+            descripcion: orderData.descripcion,
           },
         });
 

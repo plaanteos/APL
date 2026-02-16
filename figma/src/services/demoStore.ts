@@ -331,6 +331,7 @@ export const demoStore = {
       fecha_entrega: data.fecha_entrega,
       fecha_delete: null,
       id_administrador: data.id_administrador,
+      descripcion: data.descripcion ?? null,
       detalles,
       cliente: db.clients.find((c) => c.id === data.id_cliente),
     };

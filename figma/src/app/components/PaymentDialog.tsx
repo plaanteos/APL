@@ -74,7 +74,7 @@ export function PaymentDialog({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pedidoId) {
       toast.error("Selecciona un pedido para pagar");
@@ -89,25 +89,24 @@ export function PaymentDialog({
     const amount = Number(paymentAmount);
     setIsSubmitting(true);
 
-    toast
-      .promise(
-        paymentService.create({
-          valor: amount,
-          detalles: [{ id_pedido: pedidoId, valor: amount }],
-        }),
-        {
-          loading: "Registrando pago...",
-          success: "Pago registrado",
-          error: (e: any) => e?.response?.data?.error || e?.message || "Error al registrar pago",
-        }
-      )
-      .then(() => {
-        onOpenChange(false);
-        onPaymentCreated?.();
-      })
-      .finally(() => {
-        setIsSubmitting(false);
-      });
+    const createPromise = paymentService.create({
+      valor: amount,
+      detalles: [{ id_pedido: pedidoId, valor: amount }],
+    });
+
+    toast.promise(createPromise, {
+      loading: "Registrando pago...",
+      success: "Pago registrado",
+      error: (e: any) => e?.response?.data?.error || e?.message || "Error al registrar pago",
+    });
+
+    try {
+      await createPromise;
+      onOpenChange(false);
+      onPaymentCreated?.();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

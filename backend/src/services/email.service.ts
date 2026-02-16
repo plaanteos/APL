@@ -33,13 +33,15 @@ class EmailService {
         throw new Error('SMTP_USER/SMTP_PASS no están configurados');
       }
 
-            await this.transporter.sendMail({
+            const info = await this.transporter.sendMail({
                 from: `"APL Laboratorio Dental" <${process.env.SMTP_USER}>`,
                 to: options.to,
                 subject: options.subject,
                 html: options.html,
             });
-      logger.info(`📧 Email enviado a ${options.to}`);
+      const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
+      const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';
+      logger.info(`📧 Email enviado a ${options.to} (messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`);
         } catch (error) {
       logger.error('❌ Error enviando email:', error);
       throw new Error('No se pudo enviar el email');

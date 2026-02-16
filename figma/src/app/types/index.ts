@@ -87,6 +87,7 @@ export interface IOrder {
   fecha_entrega?: Date | string | null;
   fecha_delete?: Date | string | null;
   id_administrador: ID;
+  descripcion?: string | null;
   // Relaciones
   cliente?: IClient;
   detalles?: IDetallePedido[];
@@ -278,6 +279,7 @@ export interface IOrderFormData {
   id_cliente: ID;
   fecha_entrega: string;
   id_administrador: ID;
+  descripcion?: string;
   detalles: IDetallePedidoFormData[];
 }
 

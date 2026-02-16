@@ -113,7 +113,9 @@ export function Login() {
             </label>
             <input
               id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -137,7 +139,9 @@ export function Login() {
             </label>
             <input
               id="password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -156,6 +160,7 @@ export function Login() {
           <div className="flex items-center gap-2">
             <input
               id="rememberMe"
+              name="rememberMe"
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
@@ -182,9 +187,17 @@ export function Login() {
             {show2FA && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm mb-2 text-[#033f63]">Código 2FA (OTP)</label>
+                  <label htmlFor="otp" className="block text-sm mb-2 text-[#033f63]">Código 2FA (OTP)</label>
                   <div className="flex justify-center">
-                    <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                    <InputOTP
+                      id="otp"
+                      name="otp"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={otp}
+                      onChange={setOtp}
+                    >
                       <InputOTPGroup>
                         <InputOTPSlot index={0} />
                         <InputOTPSlot index={1} />
@@ -207,7 +220,9 @@ export function Login() {
                   </label>
                   <input
                     id="backupCode"
+                    name="backupCode"
                     type="text"
+                    autoComplete="one-time-code"
                     value={backupCode}
                     onChange={(e) => setBackupCode(e.target.value)}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#28666e] border-gray-300"
