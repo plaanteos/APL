@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { DayOrdersDialog } from "./DayOrdersDialog";
 import orderService from "../../services/order.service";
+import estadoService from "../../services/estado.service";
 import { toast } from "sonner";
 
 type CalendarOrder = {
@@ -16,6 +17,7 @@ type CalendarOrder = {
   montoTotal: number;
   montoPagado: number;
   estado: string;
+  estadoId?: number;
   cliente?: {
     nombre: string;
   };
@@ -66,10 +68,25 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const fetchedOrders = await orderService.getAll();
+      const [fetchedOrders, estadosCatalog] = await Promise.all([
+        orderService.getAll(),
+        estadoService.getAll().catch(() => []),
+      ]);
+
+      const estadoById = new Map<number, string>(
+        (estadosCatalog || [])
+          .filter((e: any) => e?.id != null)
+          .map((e: any) => [Number(e.id), String(e.descripcion ?? '')] as const)
+      );
+
       const mappedOrders: CalendarOrder[] = (fetchedOrders || []).map((order: any) => {
         const firstDetalle = order?.detalles?.[0];
         const dueDate = order?.fecha_entrega ?? order?.fecha_pedido;
+        const estadoId = firstDetalle?.id_estado != null ? Number(firstDetalle.id_estado) : undefined;
+        const estadoDescripcion =
+          String(firstDetalle?.estado?.descripcion ?? '').trim() ||
+          (estadoId != null ? String(estadoById.get(estadoId) ?? '').trim() : '') ||
+          'Pendiente';
 
         return {
           id: String(order?.id ?? ""),
@@ -80,7 +97,8 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
           tipoPedido: String(firstDetalle?.producto?.tipo ?? "Pedido"),
           montoTotal: Number(order?.montoTotal ?? 0),
           montoPagado: Number(order?.montoPagado ?? 0),
-          estado: String(firstDetalle?.estado?.descripcion ?? ""),
+          estado: estadoDescripcion,
+          estadoId,
           cliente: { nombre: String(order?.cliente?.nombre ?? "") },
         };
       });
