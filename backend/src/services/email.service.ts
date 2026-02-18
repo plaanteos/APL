@@ -8,6 +8,10 @@ interface EmailOptions {
 }
 
 class EmailService {
+  private isResendEnabled() {
+    return !!process.env.RESEND_API_KEY;
+  }
+
   private createTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587');
@@ -30,22 +34,81 @@ class EmailService {
       port,
       secure,
       auth: { user, pass },
+      // Evitar que el request quede colgado indefinidamente si el proveedor bloquea SMTP
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
+  }
+
+  private async sendEmailViaResend(options: EmailOptions): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY no está configurado');
+    }
+
+    const from = process.env.EMAIL_FROM;
+    if (!from) {
+      throw new Error('EMAIL_FROM no está configurado (requerido para Resend)');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: [options.to],
+          subject: options.subject,
+          html: options.html,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Resend error (${res.status}): ${text || res.statusText}`);
+      }
+
+      const data: any = await res.json().catch(() => ({}));
+      logger.info(`📧 Email enviado a ${options.to} (provider=resend id=${data?.id || 'n/a'})`);
+    } catch (error: any) {
+      // AbortController lanza AbortError
+      if (error?.name === 'AbortError') {
+        throw new Error('Resend request timeout');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
     async sendEmail(options: EmailOptions): Promise<void> {
         try {
+      if (this.isResendEnabled()) {
+        await this.sendEmailViaResend(options);
+        return;
+      }
+
       const transporter = this.createTransporter();
 
-            const info = await transporter.sendMail({
-                from: `"APL Laboratorio Dental" <${process.env.SMTP_USER}>`,
-                to: options.to,
-                subject: options.subject,
-                html: options.html,
-            });
+      const from = process.env.EMAIL_FROM || (process.env.SMTP_USER ? `"APL Laboratorio Dental" <${process.env.SMTP_USER}>` : 'APL Laboratorio Dental');
+
+      const info = await transporter.sendMail({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+      });
       const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
       const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';
-      logger.info(`📧 Email enviado a ${options.to} (messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`);
+      logger.info(`📧 Email enviado a ${options.to} (provider=smtp messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`);
         } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
       const baseMsg = 'No se pudo enviar el email';

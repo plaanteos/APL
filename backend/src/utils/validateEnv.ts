@@ -53,11 +53,18 @@ export const validateEnv = (): void => {
   }
 
   // Configuración de Email (Gmail/SMTP) - warning si falta
-  if (process.env.SMTP_USER && !process.env.SMTP_PASS) {
-    warnings.push('SMTP_USER está definido pero falta SMTP_PASS. Para Gmail usa App Password.');
-  }
-  if (!process.env.SMTP_USER && process.env.SMTP_PASS) {
-    warnings.push('SMTP_PASS está definido pero falta SMTP_USER.');
+  const isResend = !!process.env.RESEND_API_KEY;
+  if (isResend) {
+    if (!process.env.EMAIL_FROM) {
+      warnings.push('RESEND_API_KEY está definido pero falta EMAIL_FROM (ej: "APL <no-reply@tu-dominio>").');
+    }
+  } else {
+    if (process.env.SMTP_USER && !process.env.SMTP_PASS) {
+      warnings.push('SMTP_USER está definido pero falta SMTP_PASS. Para Gmail usa App Password.');
+    }
+    if (!process.env.SMTP_USER && process.env.SMTP_PASS) {
+      warnings.push('SMTP_PASS está definido pero falta SMTP_USER.');
+    }
   }
   if (!process.env.FRONTEND_URL) {
     warnings.push('FRONTEND_URL no está definido. Solo es requerido si enviás links de recuperación (en vez de código).');

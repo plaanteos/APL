@@ -34,6 +34,10 @@ services:
         value: "587"
       - key: SMTP_USER
         value: jesusjcopes@gmail.com
+      # Alternativa recomendada en producción: Resend (HTTP) para evitar bloqueos SMTP.
+      # Configurar en Render Dashboard como variables secretas:
+      # - RESEND_API_KEY
+      # - EMAIL_FROM (ej: "APL <no-reply@tu-dominio>")
 
   # Frontend (Netlify maneja esto, pero aquí está la configuración si quieres migrar a Render)
   # - type: web
