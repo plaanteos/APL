@@ -13,6 +13,12 @@ interface EmailOptions {
 }
 
 class EmailService {
+  private createStatusError(message: string, statusCode: number) {
+    const err: any = new Error(message);
+    err.statusCode = statusCode;
+    return err as Error;
+  }
+
   private isResendEnabled() {
     return !!process.env.RESEND_API_KEY;
   }
@@ -116,10 +122,24 @@ class EmailService {
         }
 
         if (res.status === 401) {
-          throw new Error(`Resend: API key inválida (revisá RESEND_API_KEY). Detalle: ${detail}`);
+          throw this.createStatusError(
+            `Resend: API key inválida (revisá RESEND_API_KEY). Detalle: ${detail}`,
+            401
+          );
         }
 
-        throw new Error(`Resend: error (${res.status}). Detalle: ${detail}`);
+        // Resend en modo testing: solo permite enviar a tu propio email hasta verificar dominio.
+        if (
+          res.status === 403 &&
+          /only send testing emails to your own email address/i.test(detail)
+        ) {
+          throw this.createStatusError(
+            `Resend: error (403). Tu cuenta está en modo testing: solo podés enviar a tu propio email. Verificá un dominio en Resend y usá un EMAIL_FROM de ese dominio. Detalle: ${detail}`,
+            403
+          );
+        }
+
+        throw this.createStatusError(`Resend: error (${res.status}). Detalle: ${detail}`, res.status);
       }
 
       const data: any = await res.json().catch(() => ({}));
@@ -127,7 +147,7 @@ class EmailService {
     } catch (error: any) {
       // AbortController lanza AbortError
       if (error?.name === 'AbortError') {
-        throw new Error('Resend request timeout');
+        throw this.createStatusError('Resend request timeout', 504);
       }
       throw error;
     } finally {
@@ -168,13 +188,18 @@ class EmailService {
       logger.error('❌ Error enviando email:', error);
       const baseMsg = 'No se pudo enviar el email';
       const msg = String(error?.message || '');
+      const statusCode = error?.statusCode || error?.status;
       // Mensajes "seguros" para mostrar en producción cuando es un problema de configuración.
       const isSafeConfigError = msg.startsWith('Resend:') || msg === 'RESEND_API_KEY no está configurado' || msg.startsWith('EMAIL_FROM no está configurado');
 
       if (process.env.NODE_ENV === 'development' || isSafeConfigError) {
-        throw new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
+        const wrapped: any = new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
+        if (statusCode) wrapped.statusCode = statusCode;
+        throw wrapped;
       }
-      throw new Error(baseMsg);
+      const wrapped: any = new Error(baseMsg);
+      if (statusCode) wrapped.statusCode = statusCode;
+      throw wrapped;
         }
     }
 

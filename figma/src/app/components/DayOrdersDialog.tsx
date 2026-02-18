@@ -57,17 +57,13 @@ export function DayOrdersDialog({
     const status = normalizeStatus(rawStatus);
     switch (status) {
       case "PENDIENTE":
-        // Naranja
-        return "bg-amber-100/70 text-amber-900 border-l-4 border-amber-500";
+        return "bg-[#fedc97]/55 text-[#033f63] border-l-4 border-[#b5b682]";
       case "EN_PROCESO":
-        // Azul
-        return "bg-blue-100/70 text-blue-900 border-l-4 border-blue-600";
       case "LISTO_PARA_ENTREGA":
-        // Azul primario
-        return "bg-[#033f63]/10 text-[#033f63] border-l-4 border-[#033f63]";
+        // Mismo estilo para EN_PROCESO y LISTO_PARA_ENTREGA
+        return "bg-[#b5b682]/25 text-[#033f63] border-l-4 border-[#b5b682]";
       case "ENTREGADO":
-        // Verde
-        return "bg-green-100/70 text-green-900 border-l-4 border-green-600";
+        return "bg-[#7c9885]/25 text-[#033f63] border-l-4 border-[#7c9885]";
       case "PAGADO":
         return "bg-[#28666e]/10 text-[#28666e] border-l-4 border-[#28666e]";
       default:
@@ -97,15 +93,14 @@ export function DayOrdersDialog({
     const status = normalizeStatus(rawStatus);
     switch (status) {
       case "PENDIENTE":
-        return "bg-amber-200/60 text-amber-900 border border-amber-300";
       case "EN_PROCESO":
-        return "bg-blue-200/60 text-blue-900 border border-blue-300";
       case "LISTO_PARA_ENTREGA":
-        return "bg-[#033f63]/15 text-[#033f63]";
+        // Mismo estilo para EN_PROCESO y LISTO_PARA_ENTREGA
+        return "bg-[#b5b682]/30 text-[#033f63] border border-[#b5b682]/60";
       case "ENTREGADO":
-        return "bg-green-200/60 text-green-900 border border-green-300";
+        return "bg-[#7c9885]/30 text-[#033f63] border border-[#7c9885]/60";
       case "PAGADO":
-        return "bg-[#28666e]/15 text-[#28666e]";
+        return "bg-[#28666e]/15 text-[#28666e] border border-[#28666e]/20";
       default:
         return "bg-gray-200 text-gray-700";
     }
@@ -113,33 +108,18 @@ export function DayOrdersDialog({
 
   const getTextClasses = (rawStatus: string) => {
     const status = normalizeStatus(rawStatus);
-    // En fondos claros (naranja/azul) necesitamos mayor contraste.
-    if (status === 'PENDIENTE') {
-      return {
-        primary: 'text-amber-900',
-        muted: 'text-amber-900/75',
-        divider: 'border-amber-900/10',
-      };
-    }
-    if (status === 'EN_PROCESO') {
-      return {
-        primary: 'text-blue-900',
-        muted: 'text-blue-900/75',
-        divider: 'border-blue-900/10',
-      };
-    }
-    if (status === 'ENTREGADO') {
-      return {
-        primary: 'text-green-900',
-        muted: 'text-green-900/75',
-        divider: 'border-green-900/10',
-      };
-    }
-    if (status === 'LISTO_PARA_ENTREGA') {
+    if (status === 'PENDIENTE' || status === 'EN_PROCESO' || status === 'LISTO_PARA_ENTREGA' || status === 'ENTREGADO') {
       return {
         primary: 'text-[#033f63]',
         muted: 'text-[#033f63]/75',
         divider: 'border-[#033f63]/10',
+      };
+    }
+    if (status === 'PAGADO') {
+      return {
+        primary: 'text-[#28666e]',
+        muted: 'text-[#28666e]/75',
+        divider: 'border-[#28666e]/10',
       };
     }
     return {

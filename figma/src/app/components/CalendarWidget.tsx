@@ -38,6 +38,31 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     fetchOrders();
   }, []);
 
+  const toLocalDateKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const parseDateValueToLocalKey = (value: string) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+
+    // Si es YYYY-MM-DD, parsear como fecha local (evita corrimiento por UTC)
+    const m = raw.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/);
+    if (m) {
+      const y = Number(m[1]);
+      const month = Number(m[2]);
+      const day = Number(m[3]);
+      return toLocalDateKey(new Date(y, month - 1, day));
+    }
+
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return '';
+    return toLocalDateKey(date);
+  };
+
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
@@ -50,7 +75,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
           id: String(order?.id ?? ""),
           clienteId: String(order?.id_cliente ?? ""),
           nombrePaciente: String(firstDetalle?.paciente ?? ""),
-          fechaVencimiento: dueDate ? new Date(dueDate).toISOString() : new Date().toISOString(),
+          fechaVencimiento: dueDate ? String(dueDate) : '',
           descripcion: String(order?.descripcion ?? ""),
           tipoPedido: String(firstDetalle?.producto?.tipo ?? "Pedido"),
           montoTotal: Number(order?.montoTotal ?? 0),
@@ -60,7 +85,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
         };
       });
 
-      const validOrders = mappedOrders.filter(order => order.fechaVencimiento && order.tipoPedido);
+      const validOrders = mappedOrders.filter(order => !!order.fechaVencimiento && !!order.tipoPedido);
       setOrders(validOrders);
     } catch (error) {
       console.error("Error fetching orders:", error);
@@ -101,10 +126,10 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   };
 
   const getOrdersForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+    const dateString = toLocalDateKey(date);
     return orders.filter(order => {
-      const orderDate = new Date(order.fechaVencimiento).toISOString().split('T')[0];
-      return orderDate === dateString;
+      const orderKey = parseDateValueToLocalKey(order.fechaVencimiento);
+      return orderKey !== '' && orderKey === dateString;
     });
   };
 
@@ -160,24 +185,24 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     switch (status) {
       case 'ENTREGADO':
         return {
-          bg: 'bg-green-100/60 hover:bg-green-100/80',
-          indicator: 'bg-green-600',
+          bg: 'bg-[#7c9885]/25 hover:bg-[#7c9885]/35',
+          indicator: 'bg-[#7c9885]',
         };
       case 'EN_PROCESO':
         return {
-          bg: 'bg-blue-100/60 hover:bg-blue-100/80',
-          indicator: 'bg-blue-600',
+          bg: 'bg-[#28666e]/20 hover:bg-[#28666e]/30',
+          indicator: 'bg-[#28666e]',
         };
       case 'LISTO_PARA_ENTREGA':
         return {
-          bg: 'bg-blue-100/60 hover:bg-blue-100/80',
-          indicator: 'bg-blue-600',
+          bg: 'bg-[#b5b682]/25 hover:bg-[#b5b682]/35',
+          indicator: 'bg-[#b5b682]',
         };
       case 'PENDIENTE':
       default:
         return {
-          bg: 'bg-amber-100/60 hover:bg-amber-100/80',
-          indicator: 'bg-amber-500',
+          bg: 'bg-[#fedc97]/55 hover:bg-[#fedc97]/65',
+          indicator: 'bg-[#b5b682]',
         };
     }
   };
@@ -187,7 +212,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     const dayOrders = getOrdersForDate(date);
     if (dayOrders.length === 0) {
       // No orders for this date, open new order dialog
-      const dateString = date.toISOString().split('T')[0];
+      const dateString = toLocalDateKey(date);
       setPreselectedDate(dateString);
       setShowNewOrderDialog(true);
     } else {
@@ -198,8 +223,8 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
 
   const handleAddOrder = () => {
     const dateString = selectedDate 
-      ? selectedDate.toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
+      ? toLocalDateKey(selectedDate)
+      : toLocalDateKey(new Date());
     setPreselectedDate(dateString);
     setShowNewOrderDialog(true);
   };

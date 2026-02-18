@@ -11,15 +11,28 @@ type ApiEnvelope<T> = {
 };
 
 class EstadoService {
+  private normalizeEstadoDescripcion(raw: unknown) {
+    return String(raw ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+  }
+
+  private filterEstados(estados: IEstado[]) {
+    return (estados || []).filter((e) => this.normalizeEstadoDescripcion((e as any)?.descripcion) !== 'CANCELADO');
+  }
+
   /**
    * Obtener catálogo de estados activos
    */
   async getAll(): Promise<IEstado[]> {
     if (isDemoMode()) {
-      return demoStore.getEstados();
+      return this.filterEstados(demoStore.getEstados());
     }
     const response = await api.get<ApiEnvelope<IEstado[]>>('/estados');
-    return response.data.data;
+    return this.filterEstados(response.data.data);
   }
 
   /**
