@@ -174,6 +174,10 @@ export function Balance({ selectedClientId }: BalanceProps) {
       toast.error('El cliente no tiene email');
       return;
     }
+    if (!currentClientId) {
+      toast.error('No hay cliente seleccionado');
+      return;
+    }
     const msg = buildBalanceMessage();
     if (!msg) {
       toast.error('No hay datos de balance para enviar');
@@ -186,6 +190,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
         to: selectedClient.email,
         subject: `Resumen de balance - ${selectedClient.nombre}`,
         message: msg,
+        attachBalanceExcel: true,
+        balanceClientId: currentClientId,
+        balanceClientName: selectedClient.nombre,
       }),
       {
         loading: 'Enviando email...',

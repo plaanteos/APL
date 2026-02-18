@@ -8,6 +8,10 @@ export interface SendNotificationInput {
   to: string;
   subject?: string;
   message: string;
+  // Opcional: usado por Balance para adjuntar el Excel del balance.
+  attachBalanceExcel?: boolean;
+  balanceClientId?: number;
+  balanceClientName?: string;
 }
 
 export const notificationService = {

@@ -35,6 +35,24 @@ export const validateEnv = (): void => {
     missingVars.push('DATABASE_URL');
   }
 
+  // Log seguro para diagnosticar "se borra la DB" (sin filtrar credenciales)
+  if (!skipDbConnect && process.env.DATABASE_URL) {
+    try {
+      const url = new URL(process.env.DATABASE_URL);
+      const dbName = (url.pathname || '').replace(/^\//, '') || 'n/a';
+      const schema = url.searchParams.get('schema') || 'public';
+      const sslmode = url.searchParams.get('sslmode') || 'n/a';
+      logger.info(`🗄️ DB target: host=${url.host} db=${dbName} schema=${schema} sslmode=${sslmode}`);
+
+      const hostLower = (url.hostname || '').toLowerCase();
+      if (process.env.NODE_ENV === 'production' && (hostLower === 'localhost' || hostLower === '127.0.0.1')) {
+        warnings.push('DATABASE_URL en producción apunta a localhost/127.0.0.1. En Render eso implica DB inexistente o distinta y puede dar síntomas de "base vacía".');
+      }
+    } catch {
+      warnings.push('DATABASE_URL no tiene un formato válido (no se pudo parsear con URL).');
+    }
+  }
+
   if (skipDbConnect) {
     warnings.push('SKIP_DB_CONNECT=true: la API iniciará sin conexión a la base de datos (solo para pruebas locales).');
   }

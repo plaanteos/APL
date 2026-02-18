@@ -10,6 +10,9 @@ export type NotificationJobData = {
   to: string;
   subject?: string;
   message: string;
+  attachBalanceExcel?: boolean;
+  balanceClientId?: number;
+  balanceClientName?: string;
 };
 
 const QUEUE_NAME = 'apl:notifications';
@@ -69,14 +72,33 @@ export const initNotificationWorker = () => {
   worker = new Worker<NotificationJobData>(
     QUEUE_NAME,
     async (job) => {
-      const { channel, to, subject, message } = job.data;
+      const { channel, to, subject, message, attachBalanceExcel, balanceClientId, balanceClientName } = job.data;
 
       if (channel === 'email') {
         const finalSubject = subject || 'Mensaje desde APL';
+        let attachments: Array<{ filename: string; content: Buffer; contentType?: string }> | undefined;
+        if (attachBalanceExcel && balanceClientId) {
+          const { ExcelService } = await import('../services/excel.service');
+          const buffer = await ExcelService.generateBalanceExcel(balanceClientId);
+          const safeName = String(balanceClientName || `cliente_${balanceClientId}`)
+            .trim()
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z0-9_\-]/g, '');
+          const date = new Date().toISOString().split('T')[0];
+          const filename = `Balance_${safeName || `cliente_${balanceClientId}`}_${date}.xlsx`;
+          attachments = [
+            {
+              filename,
+              content: buffer,
+              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+          ];
+        }
         await emailService.sendEmail({
           to,
           subject: finalSubject,
           html: buildBasicEmailHtml(finalSubject, message),
+          ...(attachments ? { attachments } : {}),
         });
         return;
       }

@@ -147,8 +147,9 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const getDayStatus = (dayOrders: CalendarOrder[]) => {
     const normalized = dayOrders.map((o) => normalizeStatus(o.estado));
 
-    // Prioridad visual: si hay algo pendiente, se ve como pendiente.
-    if (normalized.some((s) => s === 'PENDIENTE' || s === 'EN_PROCESO')) return 'PENDIENTE';
+    // Prioridad visual: pendiente > en proceso > listo > entregado
+    if (normalized.some((s) => s === 'PENDIENTE')) return 'PENDIENTE';
+    if (normalized.some((s) => s === 'EN_PROCESO')) return 'EN_PROCESO';
     if (normalized.some((s) => s === 'LISTO_PARA_ENTREGA')) return 'LISTO_PARA_ENTREGA';
     if (normalized.some((s) => s === 'ENTREGADO')) return 'ENTREGADO';
 
@@ -159,19 +160,24 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
     switch (status) {
       case 'ENTREGADO':
         return {
-          bg: 'bg-[#7c9885]/25 hover:bg-[#7c9885]/35',
-          indicator: 'bg-[#7c9885]',
+          bg: 'bg-green-100/60 hover:bg-green-100/80',
+          indicator: 'bg-green-600',
+        };
+      case 'EN_PROCESO':
+        return {
+          bg: 'bg-blue-100/60 hover:bg-blue-100/80',
+          indicator: 'bg-blue-600',
         };
       case 'LISTO_PARA_ENTREGA':
         return {
-          bg: 'bg-[#033f63]/10 hover:bg-[#033f63]/15',
-          indicator: 'bg-[#033f63]',
+          bg: 'bg-blue-100/60 hover:bg-blue-100/80',
+          indicator: 'bg-blue-600',
         };
       case 'PENDIENTE':
       default:
         return {
-          bg: 'bg-[#fedc97]/40 hover:bg-[#fedc97]/60',
-          indicator: 'bg-[#b5b682]',
+          bg: 'bg-amber-100/60 hover:bg-amber-100/80',
+          indicator: 'bg-amber-500',
         };
     }
   };

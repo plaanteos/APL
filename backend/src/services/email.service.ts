@@ -5,6 +5,11 @@ interface EmailOptions {
     to: string;
     subject: string;
     html: string;
+    attachments?: Array<{
+      filename: string;
+      content: Buffer;
+      contentType?: string;
+    }>;
 }
 
 class EmailService {
@@ -87,6 +92,15 @@ class EmailService {
           to: [options.to],
           subject: options.subject,
           html: options.html,
+          ...(options.attachments?.length
+            ? {
+                attachments: options.attachments.map((a) => ({
+                  filename: a.filename,
+                  content: a.content.toString('base64'),
+                  ...(a.contentType ? { content_type: a.contentType } : {}),
+                })),
+              }
+            : {}),
         }),
         signal: controller.signal,
       });
@@ -137,6 +151,15 @@ class EmailService {
         to: options.to,
         subject: options.subject,
         html: options.html,
+        ...(options.attachments?.length
+          ? {
+              attachments: options.attachments.map((a) => ({
+                filename: a.filename,
+                content: a.content,
+                ...(a.contentType ? { contentType: a.contentType } : {}),
+              })),
+            }
+          : {}),
       });
       const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
       const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';

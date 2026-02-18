@@ -85,6 +85,64 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     });
   };
 
+  const normalizeStatus = (status: string) => {
+    return String(status ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+  };
+
+  type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO';
+
+  const getPedidoStatus = (order: IOrderWithCalculations): PedidoStatus => {
+    const detalles = order.detalles || [];
+    if (detalles.length > 0) {
+      const statuses = detalles
+        .map((d) => normalizeStatus(String(d.estado?.descripcion || '')))
+        .filter(Boolean);
+
+      if (statuses.length > 0 && statuses.every((s) => s === 'ENTREGADO')) return 'ENTREGADO';
+      if (statuses.some((s) => s === 'EN_PROCESO')) return 'EN_PROCESO';
+      return 'PENDIENTE';
+    }
+
+    // Fallback: si el backend marca entrega seteando fecha_entrega con la fecha actual,
+    // entonces una fecha_entrega pasada/presente indica entregado.
+    if (order.fecha_entrega) {
+      const deliveredAt = new Date(order.fecha_entrega);
+      if (!Number.isNaN(deliveredAt.getTime()) && deliveredAt <= new Date()) return 'ENTREGADO';
+    }
+    return 'PENDIENTE';
+  };
+
+  const getStatusPillClasses = (status: PedidoStatus) => {
+    switch (status) {
+      case 'PENDIENTE':
+        return 'bg-amber-100/70 text-amber-900 border border-amber-300';
+      case 'EN_PROCESO':
+        return 'bg-blue-100/70 text-blue-900 border border-blue-300';
+      case 'ENTREGADO':
+        return 'bg-green-100/70 text-green-900 border border-green-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border border-gray-200';
+    }
+  };
+
+  const getStatusLabel = (status: PedidoStatus) => {
+    switch (status) {
+      case 'PENDIENTE':
+        return 'Pendiente';
+      case 'EN_PROCESO':
+        return 'En proceso';
+      case 'ENTREGADO':
+        return 'Entregado';
+      default:
+        return 'Pendiente';
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 flex items-center justify-center h-96">
@@ -144,6 +202,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
           orders.map((order) => {
             const isExpanded = expandedOrders.has(order.id);
             const hasDetalles = order.detalles && order.detalles.length > 0;
+            const pedidoStatus = getPedidoStatus(order);
 
             return (
               <Card
@@ -159,15 +218,9 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                       <p className="text-sm text-gray-500">Pedido #{order.id}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {order.fecha_entrega ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-[#7c9885]/15 text-[#28666e] border border-[#7c9885]/40">
-                          Entregado
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-1 rounded-full bg-[#fedc97]/60 text-[#033f63] border border-[#b5b682]/50">
-                          Pendiente
-                        </span>
-                      )}
+                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusPillClasses(pedidoStatus)}`}>
+                        {getStatusLabel(pedidoStatus)}
+                      </span>
                       {order.montoPendiente > 0 && (
                         <span className="text-xs px-2 py-1 rounded-full bg-[#f7c6c7]/60 text-[#7a1f23] border border-[#f7c6c7]/70">
                           Con deuda
