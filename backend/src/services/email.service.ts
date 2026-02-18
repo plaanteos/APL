@@ -12,6 +12,16 @@ class EmailService {
     return !!process.env.RESEND_API_KEY;
   }
 
+  private normalizeEnvValue(raw: string | undefined) {
+    if (!raw) return { value: '', changed: false };
+    const trimmed = raw.trim();
+    const unquoted = trimmed
+      .replace(/^"(.+)"$/, '$1')
+      .replace(/^'(.+)'$/, '$1')
+      .trim();
+    return { value: unquoted, changed: unquoted !== raw };
+  }
+
   private createTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587');
@@ -42,14 +52,24 @@ class EmailService {
   }
 
   private async sendEmailViaResend(options: EmailOptions): Promise<void> {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKeyRaw = process.env.RESEND_API_KEY;
+    const apiKeyNorm = this.normalizeEnvValue(apiKeyRaw);
+    const apiKey = apiKeyNorm.value;
     if (!apiKey) {
       throw new Error('RESEND_API_KEY no está configurado');
     }
+    if (apiKeyNorm.changed) {
+      logger.warn('⚠️ RESEND_API_KEY contenía espacios/comillas; se normalizó automáticamente.');
+    }
 
-    const from = process.env.EMAIL_FROM;
+    const fromRaw = process.env.EMAIL_FROM;
+    const fromNorm = this.normalizeEnvValue(fromRaw);
+    const from = fromNorm.value;
     if (!from) {
       throw new Error('EMAIL_FROM no está configurado (requerido para Resend)');
+    }
+    if (fromNorm.changed) {
+      logger.warn('⚠️ EMAIL_FROM contenía espacios/comillas; se normalizó automáticamente.');
     }
 
     const controller = new AbortController();
@@ -73,7 +93,19 @@ class EmailService {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`Resend error (${res.status}): ${text || res.statusText}`);
+        let detail = text || res.statusText;
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.message) detail = parsed.message;
+        } catch {
+          // ignore
+        }
+
+        if (res.status === 401) {
+          throw new Error(`Resend: API key inválida (revisá RESEND_API_KEY). Detalle: ${detail}`);
+        }
+
+        throw new Error(`Resend: error (${res.status}). Detalle: ${detail}`);
       }
 
       const data: any = await res.json().catch(() => ({}));
@@ -112,7 +144,11 @@ class EmailService {
         } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
       const baseMsg = 'No se pudo enviar el email';
-      if (process.env.NODE_ENV === 'development') {
+      const msg = String(error?.message || '');
+      // Mensajes "seguros" para mostrar en producción cuando es un problema de configuración.
+      const isSafeConfigError = msg.startsWith('Resend:') || msg === 'RESEND_API_KEY no está configurado' || msg.startsWith('EMAIL_FROM no está configurado');
+
+      if (process.env.NODE_ENV === 'development' || isSafeConfigError) {
         throw new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
       }
       throw new Error(baseMsg);
