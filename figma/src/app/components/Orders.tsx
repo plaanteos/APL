@@ -129,11 +129,11 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const getStatusPillClasses = (status: PedidoStatus) => {
     switch (status) {
       case 'PENDIENTE':
-        return 'bg-amber-100/70 text-amber-900 border border-amber-300';
+        return 'bg-[#fedc97]/55 text-[#033f63] border border-[#b5b682]/70';
       case 'EN_PROCESO':
-        return 'bg-blue-100/70 text-blue-900 border border-blue-300';
+        return 'bg-[#033f63]/15 text-[#033f63] border border-[#033f63]/25';
       case 'ENTREGADO':
-        return 'bg-green-100/70 text-green-900 border border-green-300';
+        return 'bg-[#7c9885]/30 text-[#033f63] border border-[#7c9885]/60';
       default:
         return 'bg-gray-100 text-gray-800 border border-gray-200';
     }

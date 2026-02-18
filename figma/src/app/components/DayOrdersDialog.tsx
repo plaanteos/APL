@@ -59,8 +59,8 @@ export function DayOrdersDialog({
       case "PENDIENTE":
         return "bg-[#fedc97]/55 text-[#033f63] border-l-4 border-[#b5b682]";
       case "EN_PROCESO":
+        return "bg-[#033f63]/10 text-[#033f63] border-l-4 border-[#033f63]";
       case "LISTO_PARA_ENTREGA":
-        // Mismo estilo para EN_PROCESO y LISTO_PARA_ENTREGA
         return "bg-[#b5b682]/25 text-[#033f63] border-l-4 border-[#b5b682]";
       case "ENTREGADO":
         return "bg-[#7c9885]/25 text-[#033f63] border-l-4 border-[#7c9885]";
@@ -94,8 +94,8 @@ export function DayOrdersDialog({
     switch (status) {
       case "PENDIENTE":
       case "EN_PROCESO":
+        return "bg-[#033f63]/15 text-[#033f63] border border-[#033f63]/25";
       case "LISTO_PARA_ENTREGA":
-        // Mismo estilo para EN_PROCESO y LISTO_PARA_ENTREGA
         return "bg-[#b5b682]/30 text-[#033f63] border border-[#b5b682]/60";
       case "ENTREGADO":
         return "bg-[#7c9885]/30 text-[#033f63] border border-[#7c9885]/60";

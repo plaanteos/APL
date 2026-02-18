@@ -208,8 +208,8 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
         };
       case 'EN_PROCESO':
         return {
-          bg: 'bg-[#28666e]/20 hover:bg-[#28666e]/30',
-          indicator: 'bg-[#28666e]',
+          bg: 'bg-[#033f63]/12 hover:bg-[#033f63]/18',
+          indicator: 'bg-[#033f63]',
         };
       case 'LISTO_PARA_ENTREGA':
         return {
