@@ -94,17 +94,26 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       .replace(/[\s-]+/g, '_');
   };
 
+  const getDetalleEstadoDescripcion = (detalle: any) => {
+    return (
+      String(detalle?.estado?.descripcion ?? '').trim() ||
+      String(detalle?.estadoDescripcion ?? '').trim() ||
+      ''
+    );
+  };
+
   type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO';
 
   const getPedidoStatus = (order: IOrderWithCalculations): PedidoStatus => {
     const detalles = order.detalles || [];
     if (detalles.length > 0) {
       const statuses = detalles
-        .map((d) => normalizeStatus(String(d.estado?.descripcion || '')))
+        .map((d: any) => normalizeStatus(getDetalleEstadoDescripcion(d)))
         .filter(Boolean);
 
       if (statuses.length > 0 && statuses.every((s) => s === 'ENTREGADO')) return 'ENTREGADO';
-      if (statuses.some((s) => s === 'EN_PROCESO')) return 'EN_PROCESO';
+      // Tratamos LISTO_PARA_ENTREGA como EN_PROCESO para el pill de la lista.
+      if (statuses.some((s) => s === 'EN_PROCESO' || s === 'LISTO_PARA_ENTREGA')) return 'EN_PROCESO';
       return 'PENDIENTE';
     }
 
@@ -263,7 +272,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                                   <p className="font-medium">{detalle.producto?.tipo || 'Producto'}</p>
                                   <p className="text-gray-600">Paciente: {detalle.paciente}</p>
                                   <p className="text-gray-500 text-xs">
-                                    Estado: {detalle.estado?.descripcion || 'N/A'}
+                                    Estado: {getDetalleEstadoDescripcion(detalle) || 'N/A'}
                                   </p>
                                 </div>
                                 <div className="text-right">

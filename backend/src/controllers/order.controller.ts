@@ -15,6 +15,20 @@ type AuthRequest = Request & {
   user?: AuthUser;
 };
 
+const parseDateInput = (raw: string) => {
+  const value = String(raw ?? '').trim();
+  // Si viene como fecha simple (YYYY-MM-DD), guardamos como mediodía UTC para evitar
+  // corrimientos por zona horaria (ej: UTC-3 lo mostraría como el día anterior si fuera 00:00Z).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(`${value}T12:00:00.000Z`);
+    if (Number.isNaN(d.getTime())) throw new Error('Fecha inválida');
+    return d;
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error('Fecha inválida');
+  return d;
+};
+
 // ============================================
 // SCHEMAS DE VALIDACIÓN - MODELO OFICIAL APL
 // ============================================
@@ -30,7 +44,7 @@ const detalleSchema = z.object({
 const createOrderSchema = z.object({
   id_cliente: z.coerce.number().int().positive('ID de cliente inválido'),
   fecha_entrega: z.union([
-    z.string().min(1).transform((str) => new Date(str)),
+    z.string().min(1).transform((str) => parseDateInput(str)),
     z.date(),
   ]),
   // id_administrador se toma del JWT (req.user)
@@ -40,7 +54,7 @@ const createOrderSchema = z.object({
 
 const updateOrderSchema = z.object({
   fecha_entrega: z.union([
-    z.string().min(1).transform((str) => new Date(str)),
+    z.string().min(1).transform((str) => parseDateInput(str)),
     z.date(),
   ]).optional(),
   id_administrador: z.coerce.number().int().positive().optional(),
@@ -358,7 +372,7 @@ export class OrderController {
         const pedido = await tx.pedido.create({
           data: {
             id_cliente: orderData.id_cliente,
-            fecha_entrega: orderData.fecha_entrega as any,
+            fecha_entrega: orderData.fecha_entrega,
             id_administrador: adminId,
             descripcion: orderData.descripcion,
           },
