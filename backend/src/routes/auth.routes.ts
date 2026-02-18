@@ -26,6 +26,9 @@ router.put('/change-password', authenticate, asyncHandler(AuthController.changeP
 // POST /api/auth/forgot-password
 router.post('/forgot-password', asyncHandler(AuthController.forgotPassword));
 
+// POST /api/auth/verify-reset-code
+router.post('/verify-reset-code', asyncHandler(AuthController.verifyResetCode));
+
 // POST /api/auth/reset-password
 router.post('/reset-password', asyncHandler(AuthController.resetPassword));
 

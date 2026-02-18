@@ -138,6 +138,48 @@ class EmailService {
             html,
         });
     }
+
+    async sendPasswordResetCodeEmail(email: string, code: string, expiresInMinutes: number = 15): Promise<void> {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #033f63; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+            .code { font-size: 32px; letter-spacing: 6px; font-weight: bold; color: #033f63; text-align: center; padding: 14px 0; }
+            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Recuperación de Contraseña</h1>
+            </div>
+            <div class="content">
+              <p>Hola,</p>
+              <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en APL Laboratorio Dental.</p>
+              <p>Usá este código de verificación para continuar:</p>
+              <div class="code">${code}</div>
+              <p><strong>Este código expira en ${expiresInMinutes} minutos.</strong></p>
+              <p>Si no solicitaste restablecer tu contraseña, podés ignorar este correo de forma segura.</p>
+              <div class="footer">
+                <p>© ${new Date().getFullYear()} APL Laboratorio Dental. Todos los derechos reservados.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+        await this.sendEmail({
+            to: email,
+            subject: 'Código de recuperación de contraseña - APL Laboratorio Dental',
+            html,
+        });
+    }
 }
 
 export const emailService = new EmailService();

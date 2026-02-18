@@ -85,13 +85,18 @@ Requiere auth.
 ```
 
 ### POST /auth/forgot-password
-Solicita link de recuperación (siempre responde OK por seguridad).
+Solicita código de verificación (OTP) para recuperación (siempre responde OK por seguridad).
 ```json
 { "email": "admin@apl-dental.com" }
 ```
 
 ### POST /auth/reset-password
-Restablece contraseña con token.
+Restablece contraseña con código (recomendado) o token (compatibilidad).
+```json
+{ "email": "admin@apl-dental.com", "code": "123456", "newPassword": "NuevaPassword1" }
+```
+
+Compatibilidad (link/token):
 ```json
 { "token": "<token>", "newPassword": "NuevaPassword1" }
 ```

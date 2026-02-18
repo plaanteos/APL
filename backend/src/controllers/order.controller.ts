@@ -5,37 +5,61 @@ import { AuditService } from '../services/audit.service';
 
 const prisma = new PrismaClient();
 
+type AuthUser = {
+  id: number;
+  email: string;
+  super_usuario: boolean;
+};
+
+type AuthRequest = Request & {
+  user?: AuthUser;
+};
+
 // ============================================
 // SCHEMAS DE VALIDACIÓN - MODELO OFICIAL APL
 // ============================================
 
 const detalleSchema = z.object({
-  id_producto: z.number().int().positive('ID de producto inválido'),
-  cantidad: z.number().int().positive('Cantidad debe ser mayor a 0'),
-  precio_unitario: z.number().positive('Precio debe ser mayor a 0'),
-  paciente: z.string().min(2, 'Nombre del paciente requerido'),
-  id_estado: z.number().int().positive('ID de estado inválido'),
+  id_producto: z.coerce.number().int().positive('ID de producto inválido'),
+  cantidad: z.coerce.number().int().positive('Cantidad debe ser mayor a 0'),
+  precio_unitario: z.coerce.number().positive('Precio debe ser mayor a 0'),
+  paciente: z.coerce.string().trim().min(2, 'Nombre del paciente requerido'),
+  id_estado: z.coerce.number().int().positive('ID de estado inválido'),
 });
 
 const createOrderSchema = z.object({
-  id_cliente: z.number().int().positive('ID de cliente inválido'),
-  fecha_entrega: z.string().transform((str) => new Date(str)),
-  id_administrador: z.number().int().positive('ID de administrador inválido'),
-  descripcion: z.string().max(2000, 'Descripción demasiado larga').optional(),
+  id_cliente: z.coerce.number().int().positive('ID de cliente inválido'),
+  fecha_entrega: z.union([
+    z.string().min(1).transform((str) => new Date(str)),
+    z.date(),
+  ]),
+  // id_administrador se toma del JWT (req.user)
+  descripcion: z.coerce.string().trim().max(2000, 'Descripción demasiado larga').optional(),
   detalles: z.array(detalleSchema).min(1, 'Debe incluir al menos un detalle de pedido'),
 });
 
 const updateOrderSchema = z.object({
-  fecha_entrega: z.string().transform((str) => new Date(str)).optional(),
-  id_administrador: z.number().int().positive().optional(),
+  fecha_entrega: z.union([
+    z.string().min(1).transform((str) => new Date(str)),
+    z.date(),
+  ]).optional(),
+  id_administrador: z.coerce.number().int().positive().optional(),
 });
 
 const updateDetalleSchema = z.object({
-  cantidad: z.number().int().positive().optional(),
-  precio_unitario: z.number().positive().optional(),
-  paciente: z.string().min(2).optional(),
-  id_estado: z.number().int().positive().optional(),
+  cantidad: z.coerce.number().int().positive().optional(),
+  precio_unitario: z.coerce.number().positive().optional(),
+  paciente: z.coerce.string().trim().min(2).optional(),
+  id_estado: z.coerce.number().int().positive().optional(),
 });
+
+const logError = (context: string, error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(context, message);
+  if (error instanceof Error && error.stack) {
+    console.error(error.stack);
+  }
+};
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -266,6 +290,15 @@ export class OrderController {
     try {
       const orderData = createOrderSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el cliente existe
       const cliente = await prisma.cliente.findUnique({
         where: { id: orderData.id_cliente },
@@ -280,7 +313,7 @@ export class OrderController {
 
       // Verificar que el administrador existe
       const admin = await prisma.administrador.findUnique({
-        where: { id: orderData.id_administrador },
+        where: { id: adminId },
       });
 
       if (!admin) {
@@ -325,8 +358,8 @@ export class OrderController {
         const pedido = await tx.pedido.create({
           data: {
             id_cliente: orderData.id_cliente,
-            fecha_entrega: orderData.fecha_entrega,
-            id_administrador: orderData.id_administrador,
+            fecha_entrega: orderData.fecha_entrega as any,
+            id_administrador: adminId,
             descripcion: orderData.descripcion,
           },
         });
@@ -378,7 +411,7 @@ export class OrderController {
         data: formatted,
       });
     } catch (error) {
-      console.error('Create order error:', error);
+      logError('Create order error:', error);
 
       if (error instanceof z.ZodError) {
         return res.status(400).json({

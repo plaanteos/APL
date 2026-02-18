@@ -36,6 +36,11 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+}
+
 export const authService = {
   // Login
   login: async (credentials: LoginCredentials, rememberMe: boolean = false): Promise<AuthResponse> => {
@@ -133,6 +138,50 @@ export const authService = {
       oldPassword,
       newPassword,
     });
+  },
+
+  // Forgot password (envía código al email si existe)
+  forgotPassword: async (email: string): Promise<ForgotPasswordResponse> => {
+    // Modo demo: simular OK
+    if (isDemoMode()) {
+      return {
+        success: true,
+        message: 'Modo demo: se simuló el envío del código (usá 123456).',
+      };
+    }
+
+    const response = await apiClient.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  // Verificar código OTP antes de permitir cambiar contraseña
+  verifyResetCode: async (email: string, code: string): Promise<{ success: boolean; message: string }> => {
+    if (isDemoMode()) {
+      if (code !== '123456') {
+        throw new Error('Código inválido (demo: usá 123456)');
+      }
+      return { success: true, message: 'Código verificado (demo)' };
+    }
+
+    const response = await apiClient.post('/auth/verify-reset-code', { email, code });
+    return response.data;
+  },
+
+  // Reset password por código OTP
+  resetPasswordWithCode: async (email: string, code: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+    if (isDemoMode()) {
+      if (code !== '123456') {
+        throw new Error('Código inválido (demo: usá 123456)');
+      }
+      return { success: true, message: 'Contraseña actualizada (demo)' };
+    }
+
+    const response = await apiClient.post('/auth/reset-password', {
+      email,
+      code,
+      newPassword,
+    });
+    return response.data;
   },
 
   // Get stored token (check both storages)

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
@@ -739,32 +740,21 @@ export class AuthController {
       });
 
       // Por seguridad, siempre devolver el mismo mensaje
-      const successMessage = 'Si el email existe, recibirás un enlace de recuperación';
+      const successMessage = 'Si el email existe, recibirás un código de verificación';
 
       if (!user || !user.activo) {
         return res.status(200).json({ success: true, message: successMessage });
       }
 
-      // Generar token de reset (válido por 1 hora)
-      const secret = process.env.JWT_SECRET;
-      if (!secret) {
-        throw new Error('JWT_SECRET is not defined');
-      }
-
-      const resetToken = jwt.sign(
-        { id: user.id, email: user.email, type: 'password-reset' },
-        secret,
-        { expiresIn: '1h' }
-      );
-
-      // Guardar hash del token y fecha de expiración
-      const resetTokenHash = await bcrypt.hash(resetToken, 10);
-      const resetExpiry = new Date(Date.now() + 60 * 60 * 1000);
+      // Generar código OTP de 6 dígitos (válido por 15 minutos)
+      const resetCode = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+      const resetCodeHash = await bcrypt.hash(resetCode, 10);
+      const resetExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
       await prisma.administrador.update({
         where: { id: user.id },
         data: {
-          resetPasswordToken: resetTokenHash,
+          resetPasswordToken: resetCodeHash,
           resetPasswordExpiry: resetExpiry,
         },
       });
@@ -773,7 +763,7 @@ export class AuthController {
       // Email (Gmail/SMTP)
       try {
         const { emailService } = await import('../services/email.service');
-        await emailService.sendPasswordResetEmail(email, resetToken);
+        await emailService.sendPasswordResetCodeEmail(email, resetCode, 15);
       } catch (sendError) {
         console.error('Forgot password: error enviando email:', sendError);
       }
@@ -781,12 +771,11 @@ export class AuthController {
       // WhatsApp (opcional)
       try {
         const shouldSendWhatsApp = (process.env.PASSWORD_RESET_SEND_WHATSAPP || '').toLowerCase() === 'true';
-        if (shouldSendWhatsApp && user.telefono && process.env.FRONTEND_URL) {
-          const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+        if (shouldSendWhatsApp && user.telefono) {
           const { whatsappService } = await import('../services/whatsapp.service');
           await whatsappService.sendTextMessage({
             to: user.telefono,
-            body: `Recuperación de contraseña APL. Usá este enlace (expira en 1 hora): ${resetUrl}`,
+            body: `Recuperación de contraseña APL. Tu código de verificación es: ${resetCode}. Expira en 15 minutos.`,
           });
         }
       } catch (sendError) {
@@ -810,7 +799,7 @@ export class AuthController {
       }
 
       // Mantener respuesta consistente para evitar filtración de información
-      return res.status(200).json({ success: true, message: 'Si el email existe, recibirás un enlace de recuperación' });
+      return res.status(200).json({ success: true, message: 'Si el email existe, recibirás un código de verificación' });
     }
   }
 
@@ -820,47 +809,92 @@ export class AuthController {
    */
   static async resetPassword(req: Request, res: Response) {
     try {
-      const { token, newPassword } = z.object({
-        token: z.string().min(1, 'Token requerido'),
-        newPassword: passwordSchema('La contraseña'),
-      }).parse(req.body);
+      const body = z
+        .object({
+          // Nuevo flujo (recomendado): email + code
+          email: z.string().email('Email inválido').optional(),
+          code: z.string().min(4, 'Código inválido').max(12, 'Código inválido').optional(),
 
-      // Verificar token
-      const secret = process.env.JWT_SECRET;
-      if (!secret) {
-        throw new Error('JWT_SECRET is not defined');
-      }
+          // Flujo anterior (compatibilidad): token
+          token: z.string().min(1, 'Token requerido').optional(),
 
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, secret);
-      } catch (jwtError) {
-        return res.status(400).json({ success: false, error: 'Token inválido o expirado' });
-      }
+          newPassword: passwordSchema('La contraseña'),
+        })
+        .refine((v) => !!v.token || (!!v.email && !!v.code), {
+          message: 'Se requiere token o email + código',
+          path: ['token'],
+        })
+        .parse(req.body);
 
-      if (decoded.type !== 'password-reset') {
-        return res.status(400).json({ success: false, error: 'Token inválido' });
-      }
+      const { newPassword } = body;
 
-      const user = await prisma.administrador.findUnique({
-        where: { id: decoded.id },
-      });
+      let user:
+        | Awaited<ReturnType<typeof prisma.administrador.findUnique>>
+        | null = null;
 
-      if (!user || !user.activo) {
-        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-      }
+      if (body.token) {
+        // Compatibilidad: reset por token JWT (enlace)
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+          throw new Error('JWT_SECRET is not defined');
+        }
 
-      if (!user.resetPasswordToken || !user.resetPasswordExpiry) {
-        return res.status(400).json({ success: false, error: 'Token inválido' });
-      }
+        let decoded: any;
+        try {
+          decoded = jwt.verify(body.token, secret);
+        } catch {
+          return res.status(400).json({ success: false, error: 'Token inválido o expirado' });
+        }
 
-      if (new Date() > user.resetPasswordExpiry) {
-        return res.status(400).json({ success: false, error: 'Token expirado' });
-      }
+        if (decoded.type !== 'password-reset') {
+          return res.status(400).json({ success: false, error: 'Token inválido' });
+        }
 
-      const isValidToken = await bcrypt.compare(token, user.resetPasswordToken);
-      if (!isValidToken) {
-        return res.status(400).json({ success: false, error: 'Token inválido' });
+        user = await prisma.administrador.findUnique({
+          where: { id: decoded.id },
+        });
+
+        if (!user || !user.activo) {
+          return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        }
+
+        if (!user.resetPasswordToken || !user.resetPasswordExpiry) {
+          return res.status(400).json({ success: false, error: 'Token inválido' });
+        }
+
+        if (new Date() > user.resetPasswordExpiry) {
+          return res.status(400).json({ success: false, error: 'Token expirado' });
+        }
+
+        const isValidToken = await bcrypt.compare(body.token, user.resetPasswordToken);
+        if (!isValidToken) {
+          return res.status(400).json({ success: false, error: 'Token inválido' });
+        }
+      } else {
+        // Nuevo flujo: reset por código OTP
+        const email = body.email as string;
+        const code = body.code as string;
+
+        user = await prisma.administrador.findUnique({
+          where: { email },
+        });
+
+        if (!user || !user.activo) {
+          return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        }
+
+        if (!user.resetPasswordToken || !user.resetPasswordExpiry) {
+          return res.status(400).json({ success: false, error: 'Código inválido' });
+        }
+
+        if (new Date() > user.resetPasswordExpiry) {
+          return res.status(400).json({ success: false, error: 'Código expirado' });
+        }
+
+        const isValidCode = await bcrypt.compare(code, user.resetPasswordToken);
+        if (!isValidCode) {
+          return res.status(400).json({ success: false, error: 'Código inválido' });
+        }
       }
 
       // Actualizar contraseña
@@ -895,6 +929,56 @@ export class AuthController {
       }
 
       return res.status(500).json({ success: false, error: 'Error al restablecer contraseña' });
+    }
+  }
+
+  /**
+   * Verificar código de recuperación (OTP)
+   * POST /api/auth/verify-reset-code
+   */
+  static async verifyResetCode(req: Request, res: Response) {
+    try {
+      const { email, code } = z
+        .object({
+          email: z.string().email('Email inválido'),
+          code: z.string().min(4, 'Código inválido').max(12, 'Código inválido'),
+        })
+        .parse(req.body);
+
+      const user = await prisma.administrador.findUnique({
+        where: { email },
+      });
+
+      // Respuesta genérica para no filtrar si el email existe
+      const invalidResponse = () =>
+        res.status(400).json({ success: false, error: 'Código inválido o expirado' });
+
+      if (!user || !user.activo) {
+        return invalidResponse();
+      }
+
+      if (!user.resetPasswordToken || !user.resetPasswordExpiry) {
+        return invalidResponse();
+      }
+
+      if (new Date() > user.resetPasswordExpiry) {
+        return invalidResponse();
+      }
+
+      const isValidCode = await bcrypt.compare(code, user.resetPasswordToken);
+      if (!isValidCode) {
+        return invalidResponse();
+      }
+
+      return res.status(200).json({ success: true, message: 'Código verificado' });
+    } catch (error: any) {
+      console.error('Verify reset code error:', error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, error: error.issues[0].message });
+      }
+
+      return res.status(500).json({ success: false, error: 'Error al verificar código' });
     }
   }
 }

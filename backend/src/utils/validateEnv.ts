@@ -60,7 +60,7 @@ export const validateEnv = (): void => {
     warnings.push('SMTP_PASS está definido pero falta SMTP_USER.');
   }
   if (!process.env.FRONTEND_URL) {
-    warnings.push('FRONTEND_URL no está definido. Es requerido para el email de recuperar contraseña.');
+    warnings.push('FRONTEND_URL no está definido. Solo es requerido si enviás links de recuperación (en vez de código).');
   }
 
   // Configuración de WhatsApp Cloud API - warning si está incompleta

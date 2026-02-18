@@ -79,8 +79,8 @@ npm start
 - `POST /api/auth/logout` - Cerrar sesión
 - `GET /api/auth/me` - Obtener usuario actual
 - `PUT /api/auth/change-password` - Cambiar contraseña
-- `POST /api/auth/forgot-password` - Solicitar recuperación
-- `POST /api/auth/reset-password` - Resetear contraseña
+- `POST /api/auth/forgot-password` - Solicitar código de recuperación (OTP)
+- `POST /api/auth/reset-password` - Resetear contraseña (OTP; token opcional por compatibilidad)
 
 #### 2FA (cuentas administrativas)
 - `POST /api/auth/2fa/setup` - Iniciar setup (otpauthUrl)
