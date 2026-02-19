@@ -1,0 +1,6 @@
+en calendario de entregas (bandeja de inicio) cambiar:
+    -cuando se elige los estados del pedido que solo aparezca pendiente o pagado (cambiar el que dice en proceso)
+        -cuando seleccione pagado (el total pagado) que en el balance aparezca que ya se puede entregar
+        -cuando seleccione pendiente (pago parcial) que en el balance aparezca el boton para poner los pagos
+         y cuando este su totalidad, como estado aparezca pago ![alt text](image-1.png)y aparezca otro boton que sea para confirmar la entrega y que su estado ahi se vuelva entregado![alt text](image.png)
+        

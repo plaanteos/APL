@@ -71,8 +71,8 @@ const db: DemoDb = {
     { id: 4, tipo: 'Carillas', precio: 2000, id_administrador: 1 },
   ],
   estados: [
-    { id: 1, descripcion: 'En proceso', fecha_delete: null, id_administrador: 1 },
-    { id: 2, descripcion: 'Listo para entrega', fecha_delete: null, id_administrador: 1 },
+    { id: 1, descripcion: 'Pendiente', fecha_delete: null, id_administrador: 1 },
+    { id: 2, descripcion: 'Pagado', fecha_delete: null, id_administrador: 1 },
     { id: 3, descripcion: 'Entregado', fecha_delete: null, id_administrador: 1 },
   ],
   orders: [
@@ -129,7 +129,7 @@ const db: DemoDb = {
           cantidad: 6,
           precio_unitario: 2000,
           paciente: 'Sofía Ramírez',
-          id_estado: 2,
+          id_estado: 1,
         },
       ],
     },

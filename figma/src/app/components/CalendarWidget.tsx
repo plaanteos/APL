@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { DayOrdersDialog } from "./DayOrdersDialog";
 import orderService from "../../services/order.service";
-import estadoService from "../../services/estado.service";
 import { toast } from "sonner";
 
 type CalendarOrder = {
@@ -68,25 +67,20 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const [fetchedOrders, estadosCatalog] = await Promise.all([
-        orderService.getAll(),
-        estadoService.getAll().catch(() => []),
-      ]);
-
-      const estadoById = new Map<number, string>(
-        (estadosCatalog || [])
-          .filter((e: any) => e?.id != null)
-          .map((e: any) => [Number(e.id), String(e.descripcion ?? '')] as const)
-      );
+      const fetchedOrders = await orderService.getAll();
 
       const mappedOrders: CalendarOrder[] = (fetchedOrders || []).map((order: any) => {
         const firstDetalle = order?.detalles?.[0];
         const dueDate = order?.fecha_entrega ?? order?.fecha_pedido;
         const estadoId = firstDetalle?.id_estado != null ? Number(firstDetalle.id_estado) : undefined;
-        const estadoDescripcion =
-          String(firstDetalle?.estado?.descripcion ?? '').trim() ||
-          (estadoId != null ? String(estadoById.get(estadoId) ?? '').trim() : '') ||
-          'Pendiente';
+
+        const montoTotal = Number(order?.montoTotal ?? 0);
+        const montoPagado = Number(order?.montoPagado ?? 0);
+        const montoPendiente = Number(order?.montoPendiente ?? Math.max(0, montoTotal - montoPagado));
+        const isDelivered = Boolean(order?.fecha_entrega);
+
+        // UX solicitada: solo estados Pendiente o Pagado; y si se confirma entrega => Entregado.
+        const estado = isDelivered ? 'Entregado' : montoPendiente > 0 ? 'Pendiente' : 'Pagado';
 
         return {
           id: String(order?.id ?? ""),
@@ -95,9 +89,9 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
           fechaVencimiento: dueDate ? String(dueDate) : '',
           descripcion: String(order?.descripcion ?? ""),
           tipoPedido: String(firstDetalle?.producto?.tipo ?? "Pedido"),
-          montoTotal: Number(order?.montoTotal ?? 0),
-          montoPagado: Number(order?.montoPagado ?? 0),
-          estado: estadoDescripcion,
+          montoTotal,
+          montoPagado,
+          estado,
           estadoId,
           cliente: { nombre: String(order?.cliente?.nombre ?? "") },
         };
@@ -190,10 +184,9 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const getDayStatus = (dayOrders: CalendarOrder[]) => {
     const normalized = dayOrders.map((o) => normalizeStatus(o.estado));
 
-    // Prioridad visual: pendiente > en proceso > listo > entregado
+    // Prioridad visual: pendiente > pagado > entregado
     if (normalized.some((s) => s === 'PENDIENTE')) return 'PENDIENTE';
-    if (normalized.some((s) => s === 'EN_PROCESO')) return 'EN_PROCESO';
-    if (normalized.some((s) => s === 'LISTO_PARA_ENTREGA')) return 'LISTO_PARA_ENTREGA';
+    if (normalized.some((s) => s === 'PAGADO')) return 'PAGADO';
     if (normalized.some((s) => s === 'ENTREGADO')) return 'ENTREGADO';
 
     return normalized[0] || '';
@@ -206,15 +199,10 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
           bg: 'bg-[#7c9885]/25 hover:bg-[#7c9885]/35',
           indicator: 'bg-[#7c9885]',
         };
-      case 'EN_PROCESO':
+      case 'PAGADO':
         return {
-          bg: 'bg-[#033f63]/12 hover:bg-[#033f63]/18',
-          indicator: 'bg-[#033f63]',
-        };
-      case 'LISTO_PARA_ENTREGA':
-        return {
-          bg: 'bg-[#b5b682]/25 hover:bg-[#b5b682]/35',
-          indicator: 'bg-[#b5b682]',
+          bg: 'bg-[#28666e]/10 hover:bg-[#28666e]/15',
+          indicator: 'bg-[#28666e]',
         };
       case 'PENDIENTE':
       default:

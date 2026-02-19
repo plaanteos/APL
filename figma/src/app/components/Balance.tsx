@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Mail, MessageCircle, Download, Plus, DollarSign, Package, Loader2, ChevronDown, ChevronUp, CheckCircle } from "lucide-react";
+import { Mail, MessageCircle, Download, DollarSign, Loader2, CheckCircle } from "lucide-react";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
-import paymentService from "../../services/payment.service";
-import { IClient, IClientBalance, IOrderWithCalculations } from "../types";
+import { IClient, IClientBalance } from "../types";
 import {
   Select,
   SelectContent,
@@ -37,7 +36,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
     montoTotal: number;
     montoPagado: number;
   } | null>(null);
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
 
   // Cargar clientes al montar
   useEffect(() => {
@@ -108,18 +106,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
       montoPagado: item.montoPagado ?? 0,
     });
     setShowPaymentDialog(true);
-  };
-
-  const toggleOrderExpanded = (pedidoId: number) => {
-    setExpandedOrders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(pedidoId)) {
-        newSet.delete(pedidoId);
-      } else {
-        newSet.add(pedidoId);
-      }
-      return newSet;
-    });
   };
 
   const handleDownloadExcel = async () => {
@@ -402,6 +388,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                       const trabajoSubtitle = item.productos;
                       const isDelivered = !!item.entregado;
                       const hasDebt = Number(item.montoPendiente ?? 0) > 0;
+                      const isPaid = !hasDebt && Number(item.montoTotal ?? 0) > 0;
 
                       return (
                         <tr key={item.pedidoId} className="border-b last:border-b-0">
@@ -421,6 +408,10 @@ export function Balance({ selectedClientId }: BalanceProps) {
                               <span className="inline-flex items-center rounded-full bg-[#28666e]/20 px-3 py-1 text-xs text-[#28666e]">
                                 Entregado
                               </span>
+                            ) : isPaid ? (
+                              <span className="inline-flex items-center rounded-full bg-[#28666e]/15 px-3 py-1 text-xs text-[#28666e]">
+                                Pagado
+                              </span>
                             ) : (
                               <span className="inline-flex items-center rounded-full bg-[#fedc97]/60 px-3 py-1 text-xs text-[#b5b682]">
                                 Pendiente
@@ -438,6 +429,17 @@ export function Balance({ selectedClientId }: BalanceProps) {
                                 title="Registrar pago"
                               >
                                 <DollarSign className="h-4 w-4" />
+                              </Button>
+                            ) : !isDelivered && isPaid ? (
+                              <Button
+                                type="button"
+                                onClick={() => handleMarkAsDelivered(item.pedidoId)}
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9"
+                                title="Confirmar entrega"
+                              >
+                                <CheckCircle className="h-4 w-4" />
                               </Button>
                             ) : (
                               <span className="text-gray-300">—</span>

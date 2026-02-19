@@ -95,6 +95,21 @@ export function NewOrderDialog({
     telefono: "",
   });
 
+  const normalizeEstadoDescripcion = (raw: unknown) => {
+    return String(raw ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
+  };
+
+  // En calendario de entregas solo se usan: Pendiente / Pagado.
+  const estadosPago = (estados || []).filter((e) => {
+    const normalized = normalizeEstadoDescripcion((e as any)?.descripcion);
+    return normalized === 'PENDIENTE' || normalized === 'PAGADO';
+  });
+
   // Fetch clients
   useEffect(() => {
     if (open) {
@@ -444,11 +459,17 @@ export function NewOrderDialog({
               </SelectTrigger>
               <SelectContent>
                 {estados.length > 0 ? (
-                  estados.map((e) => (
-                    <SelectItem key={e.id} value={e.id.toString()}>
-                      {e.descripcion}
+                  estadosPago.length > 0 ? (
+                    estadosPago.map((e) => (
+                      <SelectItem key={e.id} value={e.id.toString()}>
+                        {e.descripcion}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="__no_payment_states" disabled>
+                      No hay estados "Pendiente"/"Pagado" en el catálogo
                     </SelectItem>
-                  ))
+                  )
                 ) : (
                   <SelectItem value="__no_states" disabled>
                     {isLoadingCatalogs ? "Cargando estados..." : "No hay estados"}

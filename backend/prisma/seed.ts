@@ -34,7 +34,7 @@ async function main() {
   }
 
   // 2. Crear estados iniciales (catálogo)
-  const estados = ['pendiente', 'en_proceso', 'entregado', 'cancelado'];
+  const estados = ['pendiente', 'en_proceso', 'pagado', 'entregado', 'cancelado'];
   
   for (const estado of estados) {
     await prisma.estado.upsert({
