@@ -844,6 +844,13 @@ export class OrderController {
 
       const pedido = await prisma.pedido.findUnique({
         where: { id: Number(id) },
+        include: {
+          detalles: {
+            include: {
+              estado: true,
+            },
+          },
+        },
       });
 
       if (!pedido || pedido.fecha_delete) {
@@ -853,17 +860,53 @@ export class OrderController {
         });
       }
 
-      if (pedido.fecha_entrega && pedido.fecha_entrega <= new Date()) {
+      const normalize = (raw: unknown) =>
+        String(raw ?? '')
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_');
+
+      const detalles = pedido.detalles || [];
+      const statuses = detalles
+        .map((d: any) => normalize(d?.estado?.descripcion))
+        .filter(Boolean);
+
+      if (statuses.length > 0 && statuses.every((s) => s === 'entregado')) {
         return res.status(400).json({
           success: false,
           error: 'El pedido ya está marcado como entregado',
         });
       }
 
-      // Marcar como entregado con la fecha actual
-      const updatedOrder = await prisma.pedido.update({
+      const estadoEntregado = await prisma.estado.findFirst({
+        where: {
+          descripcion: {
+            equals: 'entregado',
+            mode: 'insensitive',
+          },
+          fecha_delete: null,
+        },
+        select: { id: true },
+      });
+
+      if (!estadoEntregado) {
+        return res.status(500).json({
+          success: false,
+          error: 'No existe el estado "entregado" en el catálogo',
+        });
+      }
+
+      // Marcar como entregado cambiando el estado de los detalles.
+      // NOTA: fecha_entrega es fecha programada de entrega (calendario), no un flag de entregado.
+      await prisma.detallePedido.updateMany({
+        where: { id_pedido: Number(id) },
+        data: { id_estado: estadoEntregado.id },
+      });
+
+      const updatedOrder = await prisma.pedido.findUnique({
         where: { id: Number(id) },
-        data: { fecha_entrega: new Date() },
         include: {
           cliente: true,
           administrador: {
@@ -882,6 +925,13 @@ export class OrderController {
           detallesPago: true,
         },
       });
+
+      if (!updatedOrder) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pedido no encontrado',
+        });
+      }
 
       const formatted = formatOrderWithCalculations(updatedOrder);
 

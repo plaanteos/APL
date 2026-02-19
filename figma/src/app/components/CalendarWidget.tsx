@@ -77,7 +77,11 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
         const montoTotal = Number(order?.montoTotal ?? 0);
         const montoPagado = Number(order?.montoPagado ?? 0);
         const montoPendiente = Number(order?.montoPendiente ?? Math.max(0, montoTotal - montoPagado));
-        const isDelivered = Boolean(order?.fecha_entrega);
+        const detalles = Array.isArray(order?.detalles) ? order.detalles : [];
+        const detalleStatuses = detalles
+          .map((d: any) => normalizeStatus(String(d?.estado?.descripcion ?? d?.estadoDescripcion ?? '')))
+          .filter(Boolean);
+        const isDelivered = detalleStatuses.length > 0 && detalleStatuses.every((s: string) => s === 'ENTREGADO');
 
         // UX solicitada: solo estados Pendiente o Pagado; y si se confirma entrega => Entregado.
         const estado = isDelivered ? 'Entregado' : montoPendiente > 0 ? 'Pendiente' : 'Pagado';
