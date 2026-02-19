@@ -155,36 +155,63 @@ class EmailService {
     }
   }
 
-    async sendEmail(options: EmailOptions): Promise<void> {
-        try {
+  private async sendEmailViaSmtp(options: EmailOptions): Promise<void> {
+    const transporter = this.createTransporter();
+    const from =
+      process.env.EMAIL_FROM ||
+      (process.env.SMTP_USER
+        ? `"APL Laboratorio Dental" <${process.env.SMTP_USER}>`
+        : 'APL Laboratorio Dental');
+
+    const info = await transporter.sendMail({
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      ...(options.attachments?.length
+        ? {
+            attachments: options.attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content,
+              ...(a.contentType ? { contentType: a.contentType } : {}),
+            })),
+          }
+        : {}),
+    });
+    const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
+    const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';
+    logger.info(
+      `📧 Email enviado a ${options.to} (provider=smtp messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`
+    );
+  }
+
+  async sendEmail(options: EmailOptions): Promise<void> {
+    try {
       if (this.isResendEnabled()) {
-        await this.sendEmailViaResend(options);
-        return;
+        try {
+          await this.sendEmailViaResend(options);
+          return;
+        } catch (resendError: any) {
+          const statusCode = resendError?.statusCode || resendError?.status;
+          const msg = String(resendError?.message || '');
+
+          // Si Resend está en testing (403), permitir fallback a SMTP sin dominio.
+          const isResendTesting403 =
+            statusCode === 403 &&
+            (/modo testing/i.test(msg) || /only send testing emails to your own email address/i.test(msg));
+
+          if (isResendTesting403 && process.env.SMTP_USER && process.env.SMTP_PASS) {
+            logger.warn('⚠️ Resend en modo testing (403); usando fallback a SMTP.');
+            await this.sendEmailViaSmtp(options);
+            return;
+          }
+
+          throw resendError;
+        }
       }
 
-      const transporter = this.createTransporter();
-
-      const from = process.env.EMAIL_FROM || (process.env.SMTP_USER ? `"APL Laboratorio Dental" <${process.env.SMTP_USER}>` : 'APL Laboratorio Dental');
-
-      const info = await transporter.sendMail({
-        from,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        ...(options.attachments?.length
-          ? {
-              attachments: options.attachments.map((a) => ({
-                filename: a.filename,
-                content: a.content,
-                ...(a.contentType ? { contentType: a.contentType } : {}),
-              })),
-            }
-          : {}),
-      });
-      const accepted = Array.isArray((info as any).accepted) ? (info as any).accepted.join(',') : '';
-      const rejected = Array.isArray((info as any).rejected) ? (info as any).rejected.join(',') : '';
-      logger.info(`📧 Email enviado a ${options.to} (provider=smtp messageId=${(info as any).messageId || 'n/a'} accepted=${accepted || 'n/a'} rejected=${rejected || 'n/a'})`);
-        } catch (error: any) {
+      await this.sendEmailViaSmtp(options);
+    } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
       const baseMsg = 'No se pudo enviar el email';
       const msg = String(error?.message || '');
@@ -200,7 +227,7 @@ class EmailService {
       const wrapped: any = new Error(baseMsg);
       if (statusCode) wrapped.statusCode = statusCode;
       throw wrapped;
-        }
+    }
     }
 
     async sendPasswordResetEmail(email: string, token: string): Promise<void> {
