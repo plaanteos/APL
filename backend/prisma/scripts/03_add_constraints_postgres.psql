@@ -9,10 +9,7 @@
 --   Para validar datos existentes, ejecutá luego: VALIDATE CONSTRAINT.
 -- ================================================================
 
--- Producto: precio debe ser positivo
-ALTER TABLE producto
-  ADD CONSTRAINT ck_producto_precio_positive
-  CHECK (precio > 0) NOT VALID;
+-- Producto: sin precio (catálogo)
 
 -- Detalle pedidos: cantidad y precio_unitario positivos
 ALTER TABLE detalle_pedidos

@@ -3,10 +3,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { z } from 'zod';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
 import { passwordSchema } from '../utils/passwordPolicy';
 import { authenticator } from 'otplib';
+import { prisma } from '../utils/prisma';
 import {
   consumeBackupCode,
   generateBackupCodes,
@@ -15,8 +16,6 @@ import {
   normalizeOtp,
   verifyTotp,
 } from '../utils/twoFactor';
-
-const prisma = new PrismaClient();
 
 // Schemas de validación
 const loginSchema = z.object({

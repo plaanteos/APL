@@ -105,7 +105,6 @@ model Pedido {
 model Producto {
   id                Int       @id @default(autoincrement())
   tipo              String    @db.VarChar(100)
-  precio            Decimal   @db.Decimal(10,2)
   id_administrador  Int
   
   // Relaciones

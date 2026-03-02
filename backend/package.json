@@ -45,8 +45,12 @@
     "nodemailer": "^7.0.12",
     "otplib": "^12.0.1",
     "typescript": "^5.3.3",
+    "undici": "^6.21.0",
     "winston": "^3.19.0",
     "zod": "^3.22.4"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

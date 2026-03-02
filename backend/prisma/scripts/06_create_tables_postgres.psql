@@ -48,7 +48,6 @@ CREATE TABLE "pedidos" (
 CREATE TABLE "producto" (
     "id" SERIAL NOT NULL,
     "tipo" VARCHAR(100) NOT NULL,
-    "precio" DECIMAL(10,2) NOT NULL,
     "id_administrador" INTEGER NOT NULL,
 
     CONSTRAINT "producto_pkey" PRIMARY KEY ("id")

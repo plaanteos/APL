@@ -19,6 +19,7 @@ const requiredEnvVars: Array<keyof EnvConfig> = [
 
 export const validateEnv = (): void => {
   const missingVars: string[] = [];
+  const invalidVars: string[] = [];
   const warnings: string[] = [];
 
   const skipDbConnect = (process.env.SKIP_DB_CONNECT || '').toLowerCase() === 'true';
@@ -49,7 +50,7 @@ export const validateEnv = (): void => {
         warnings.push('DATABASE_URL en producción apunta a localhost/127.0.0.1. En Render eso implica DB inexistente o distinta y puede dar síntomas de "base vacía".');
       }
     } catch {
-      warnings.push('DATABASE_URL no tiene un formato válido (no se pudo parsear con URL).');
+      invalidVars.push('DATABASE_URL');
     }
   }
 
@@ -106,9 +107,15 @@ export const validateEnv = (): void => {
   }
 
   // Si faltan variables críticas, detener el servidor
-  if (missingVars.length > 0) {
+  if (missingVars.length > 0 || invalidVars.length > 0) {
     logger.error('❌ Faltan las siguientes variables de entorno requeridas:');
     missingVars.forEach(varName => logger.error(`   - ${varName}`));
+    if (invalidVars.length > 0) {
+      logger.error('❌ Las siguientes variables tienen un formato inválido:');
+      invalidVars.forEach(varName => logger.error(`   - ${varName}`));
+      logger.error('💡 Si tu password/usuario tiene caracteres especiales (:@/?#[]@), debés URL-encodarlos.');
+      logger.error('   Ej: postgresql://USER:P%40SS%3AWORD@HOST:5432/DB?sslmode=require');
+    }
     logger.error('\n💡 Asegúrate de tener un archivo .env con todas las variables requeridas');
     process.exit(1);
   }

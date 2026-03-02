@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma';
 import { AuditService } from '../services/audit.service';
-
-const prisma = new PrismaClient();
 
 type AuthUser = {
   id: number;

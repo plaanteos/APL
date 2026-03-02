@@ -34,7 +34,7 @@ async function main() {
   }
 
   // 2. Crear estados iniciales (catálogo)
-  const estados = ['pendiente', 'en_proceso', 'pagado', 'entregado', 'cancelado'];
+  const estados = ['pendiente', 'pagado', 'entregado'];
   
   for (const estado of estados) {
     await prisma.estado.upsert({
@@ -48,11 +48,11 @@ async function main() {
 
   // 3. Crear productos de ejemplo
   const productosTipo = [
-    { tipo: 'Corona de porcelana', valor: 150.00 },
-    { tipo: 'Puente fijo', valor: 450.00 },
-    { tipo: 'Prótesis completa', valor: 800.00 },
-    { tipo: 'Prótesis parcial', valor: 500.00 },
-    { tipo: 'Carilla dental', valor: 120.00 },
+    { tipo: 'Corona de porcelana' },
+    { tipo: 'Puente fijo' },
+    { tipo: 'Prótesis completa' },
+    { tipo: 'Prótesis parcial' },
+    { tipo: 'Carilla dental' },
   ];
 
   for (const prod of productosTipo) {
@@ -68,7 +68,6 @@ async function main() {
       await prisma.producto.create({
         data: {
           tipo: prod.tipo,
-          precio: prod.valor,
           id_administrador: admin.id,
         },
       });

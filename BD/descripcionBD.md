@@ -66,7 +66,7 @@ Estos valores se **calculan dinámicamente** a partir de:
 #### EstadoPedido
 Se gestiona mediante la tabla **estado**, que funciona como catálogo:
 - id (PK)
-- descripcion (ej.: pendiente, en_proceso, entregado, cancelado)
+- descripcion (valores activos: pendiente, pagado, entregado)
 - fecha_insert
 - fecha_delete
 

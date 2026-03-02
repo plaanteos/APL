@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './utils/prisma';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -32,8 +32,8 @@ dotenv.config();
 // Validar variables de entorno antes de iniciar
 validateEnv();
 
-// Initialize Prisma client
-export const prisma = new PrismaClient();
+// Prisma client (singleton)
+export { prisma };
 
 // Initialize Express app
 const app = express();

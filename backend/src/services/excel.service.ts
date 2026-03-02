@@ -1,7 +1,5 @@
 import ExcelJS from 'exceljs';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../utils/prisma';
 
 interface BalanceData {
     cliente: {

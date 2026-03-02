@@ -1,0 +1,75 @@
+-- ================================================================
+-- APL - PostgreSQL
+-- Script 09: Ajustes de catálogo Estado + Producto sin precio
+-- Fecha: 2026-02-23
+--
+-- Objetivo:
+-- 1) Estado: dejar activos solo: pendiente, pagado, entregado.
+--    - Renombrar en_proceso -> pagado cuando corresponda.
+--    - Marcar como inactivos (soft delete) otros estados (ej: cancelado).
+-- 2) Producto: eliminar columna precio si existe.
+--
+-- Nota:
+-- - Se usa soft delete para Estados (fecha_delete) para evitar romper FK
+--   si existen detalle_pedidos históricos referenciando esos estados.
+-- - Este script es idempotente (se puede ejecutar más de una vez).
+-- ================================================================
+
+BEGIN;
+
+-- 1) Producto sin precio
+ALTER TABLE producto
+  DROP COLUMN IF EXISTS precio;
+
+-- 2) Estado: convertir en_proceso -> pagado (y normalizar catálogo)
+-- Estrategia:
+-- - Si existe en_proceso y NO existe pagado: renombrar (mantiene el mismo id)
+-- - Si existen ambos: mover referencias (detalle_pedidos) de en_proceso -> pagado y soft-delete en_proceso
+DO $$
+DECLARE
+  id_en_proceso int;
+  id_pagado int;
+BEGIN
+  SELECT id INTO id_en_proceso FROM estado WHERE LOWER(descripcion) = 'en_proceso' LIMIT 1;
+  SELECT id INTO id_pagado FROM estado WHERE LOWER(descripcion) = 'pagado' LIMIT 1;
+
+  IF id_en_proceso IS NOT NULL AND id_pagado IS NULL THEN
+    UPDATE estado
+      SET descripcion = 'pagado', fecha_delete = NULL
+    WHERE id = id_en_proceso;
+  ELSIF id_en_proceso IS NOT NULL AND id_pagado IS NOT NULL THEN
+    -- Migrar referencias para no dejar detalles apuntando a un estado “viejo”
+    UPDATE detalle_pedidos
+      SET id_estado = id_pagado
+    WHERE id_estado = id_en_proceso;
+
+    UPDATE estado
+      SET fecha_delete = COALESCE(fecha_delete, NOW())
+    WHERE id = id_en_proceso;
+  END IF;
+END $$;
+
+-- Asegurar los 3 valores activos (insert si faltan)
+INSERT INTO estado (descripcion, fecha_insert, fecha_delete)
+SELECT v.descripcion, NOW(), NULL
+FROM (VALUES
+  ('pendiente'),
+  ('pagado'),
+  ('entregado')
+) AS v(descripcion)
+WHERE NOT EXISTS (
+  SELECT 1 FROM estado e WHERE LOWER(e.descripcion) = v.descripcion
+);
+
+-- Activar (fecha_delete = NULL) los 3 permitidos
+UPDATE estado
+  SET fecha_delete = NULL
+WHERE LOWER(descripcion) IN ('pendiente', 'pagado', 'entregado');
+
+-- Soft delete de cualquier otro estado activo
+UPDATE estado
+  SET fecha_delete = COALESCE(fecha_delete, NOW())
+WHERE fecha_delete IS NULL
+  AND LOWER(descripcion) NOT IN ('pendiente', 'pagado', 'entregado');
+
+COMMIT;

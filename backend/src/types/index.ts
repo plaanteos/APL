@@ -69,7 +69,6 @@ export interface EstadoDTO {
 export interface Producto {
   id: number;
   tipo: string;
-  valor: number;
   id_administrador: number;
   administrador?: Administrador;
 }
@@ -77,7 +76,6 @@ export interface Producto {
 export interface ProductoDTO {
   id: number;
   tipo: string;
-  valor: number;
   id_administrador: number;
 }
 
