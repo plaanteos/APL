@@ -126,10 +126,10 @@ export function NewOrderDialog({
       .replace(/[\s-]+/g, '_');
   };
 
-  // En calendario de entregas solo se usan: Pendiente / Pagado.
-  const estadosPago = (estados || []).filter((e) => {
+  // Al crear pedido: solo se permite Pendiente.
+  const estadosPendiente = (estados || []).filter((e) => {
     const normalized = normalizeEstadoDescripcion((e as any)?.descripcion);
-    return normalized === 'PENDIENTE' || normalized === 'PAGADO';
+    return normalized === 'PENDIENTE';
   });
 
   // Fetch clients
@@ -163,10 +163,15 @@ export function NewOrderDialog({
       setProductos(productosData);
       setEstados(estadosData);
 
+      const estadoPendiente = (estadosData || []).find((e) => {
+        const normalized = normalizeEstadoDescripcion((e as any)?.descripcion);
+        return normalized === 'PENDIENTE';
+      });
+
       // Defaults útiles (evita formularios vacíos y reduce errores)
       setFormData((prev) => ({
         ...prev,
-        estadoId: prev.estadoId || (estadosData[0]?.id?.toString() ?? ""),
+        estadoId: prev.estadoId || (estadoPendiente?.id?.toString() ?? estadosData[0]?.id?.toString() ?? ""),
       }));
     } catch (error) {
       console.error("Error al cargar catálogos:", error);
@@ -528,15 +533,15 @@ export function NewOrderDialog({
               </SelectTrigger>
               <SelectContent>
                 {estados.length > 0 ? (
-                  estadosPago.length > 0 ? (
-                    estadosPago.map((e) => (
+                  estadosPendiente.length > 0 ? (
+                    estadosPendiente.map((e) => (
                       <SelectItem key={e.id} value={e.id.toString()}>
                         {e.descripcion}
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="__no_payment_states" disabled>
-                      No hay estados "Pendiente"/"Pagado" en el catálogo
+                    <SelectItem value="__no_pending_state" disabled>
+                      No hay estado "Pendiente" en el catálogo
                     </SelectItem>
                   )
                 ) : (

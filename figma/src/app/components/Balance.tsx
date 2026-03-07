@@ -243,26 +243,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
     return first.replace(/\s+x\d+\s*$/i, '').trim() || first;
   };
 
-  if (isLoadingClients) {
-    return (
-      <div className="p-4 flex items-center justify-center h-96">
-        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-      </div>
-    );
-  }
-
-  if (clients.length === 0) {
-    return (
-      <div className="p-4">
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">No hay clientes registrados</p>
-        </Card>
-      </div>
-    );
-  }
-
-  const selectedClient = clients.find(c => c.id === currentClientId);
-
   const filteredPedidos = useMemo(() => {
     const pedidos = balanceData?.pedidos ?? [];
     if (period === 'all') return pedidos;
@@ -304,6 +284,26 @@ export function Balance({ selectedClientId }: BalanceProps) {
     const totalPendiente = filteredPedidos.reduce((sum, p) => sum + Number((p as any).montoPendiente ?? 0), 0);
     return { totalGeneral, totalPagado, totalPendiente };
   }, [filteredPedidos]);
+
+  if (isLoadingClients) {
+    return (
+      <div className="p-4 flex items-center justify-center h-96">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+      </div>
+    );
+  }
+
+  if (clients.length === 0) {
+    return (
+      <div className="p-4">
+        <Card className="p-8 text-center">
+          <p className="text-gray-500">No hay clientes registrados</p>
+        </Card>
+      </div>
+    );
+  }
+
+  const selectedClient = clients.find(c => c.id === currentClientId);
 
   return (
     <div className="p-4 space-y-4">
