@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { Mail, MessageCircle, Download, DollarSign, Loader2, CheckCircle } from "lucide-react";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
@@ -25,6 +26,15 @@ export function Balance({ selectedClientId }: BalanceProps) {
   const [clients, setClients] = useState<IClient[]>([]);
   const [currentClientId, setCurrentClientId] = useState<number | null>(selectedClientId);
   const [balanceData, setBalanceData] = useState<IClientBalance | null>(null);
+  type BalancePeriod = 'all' | 'monthly' | 'yearly';
+  const [period, setPeriod] = useState<BalancePeriod>('all');
+  const [monthValue, setMonthValue] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+  const [yearValue, setYearValue] = useState<string>(() => String(new Date().getFullYear()));
   const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,19 +148,20 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   const buildBalanceMessage = () => {
     if (!selectedClient || !balanceData) return "";
-    const total = (balanceData.totalGeneral ?? 0).toLocaleString();
-    const pagado = (balanceData.totalPagado ?? 0).toLocaleString();
-    const pendiente = (balanceData.totalPendiente ?? 0).toLocaleString();
+    const periodLabel = 'Resumen';
+
+    const total = (viewTotals.totalGeneral ?? 0).toLocaleString();
+    const pagado = (viewTotals.totalPagado ?? 0).toLocaleString();
+    const pendiente = (viewTotals.totalPendiente ?? 0).toLocaleString();
     const labName = "APL Laboratorio Dental";
 
     return [
-      `Resumen - ${labName}`,
+      `${periodLabel} - ${labName}`,
       "",
       `Hola ${selectedClient.nombre},`,
       `Resumen de balance:`,
       `Total: $${total}`,
       `Pagado: $${pagado}`,
-      `Pendiente: $${pendiente}`,
       `- APL Laboratorio Dental`,
     ].join("\n");
   };
@@ -252,32 +263,116 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   const selectedClient = clients.find(c => c.id === currentClientId);
 
+  const filteredPedidos = useMemo(() => {
+    const pedidos = balanceData?.pedidos ?? [];
+    if (period === 'all') return pedidos;
+
+    const parse = (value: any) => {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d;
+    };
+
+    if (period === 'monthly') {
+      const m = String(monthValue ?? '').trim();
+      const mm = m.match(/^([0-9]{4})-([0-9]{2})$/);
+      if (!mm) return pedidos;
+      const y = Number(mm[1]);
+      const month = Number(mm[2]);
+      const start = new Date(y, month - 1, 1);
+      const end = new Date(y, month, 1);
+      return pedidos.filter((p) => {
+        const d = parse((p as any).fecha);
+        return d != null && d >= start && d < end;
+      });
+    }
+
+    // yearly
+    const y = Number(String(yearValue ?? '').trim());
+    if (Number.isNaN(y)) return pedidos;
+    const start = new Date(y, 0, 1);
+    const end = new Date(y + 1, 0, 1);
+    return pedidos.filter((p) => {
+      const d = parse((p as any).fecha);
+      return d != null && d >= start && d < end;
+    });
+  }, [balanceData, period, monthValue, yearValue]);
+
+  const viewTotals = useMemo(() => {
+    const totalGeneral = filteredPedidos.reduce((sum, p) => sum + Number((p as any).montoTotal ?? 0), 0);
+    const totalPagado = filteredPedidos.reduce((sum, p) => sum + Number((p as any).montoPagado ?? 0), 0);
+    const totalPendiente = filteredPedidos.reduce((sum, p) => sum + Number((p as any).montoPendiente ?? 0), 0);
+    return { totalGeneral, totalPagado, totalPendiente };
+  }, [filteredPedidos]);
+
   return (
     <div className="p-4 space-y-4">
-      {/* Selector de cliente (solo si no viene preseleccionado) */}
-      {!selectedClientId && (
-        <Card className="p-4">
-          <div className="space-y-3">
-            <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">Cliente</label>
-            <Select
-              value={currentClientId?.toString() || ""}
-              onValueChange={(val) => setCurrentClientId(Number(val))}
-              name="clientId"
-            >
-              <SelectTrigger id="balanceClient" className="w-full">
-                <SelectValue placeholder="Seleccionar cliente" />
+      {/* Filtros (cliente + período) */}
+      <Card className="p-4">
+        <div className="space-y-4">
+          {!selectedClientId && (
+            <div className="space-y-2">
+              <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">Cliente</label>
+              <Select
+                value={currentClientId?.toString() || ""}
+                onValueChange={(val) => setCurrentClientId(Number(val))}
+                name="clientId"
+              >
+                <SelectTrigger id="balanceClient" className="w-full">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id.toString()}>
+                      {client.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label htmlFor="balancePeriod" className="text-sm font-medium text-gray-700">Filtro de balance</label>
+            <Select value={period} onValueChange={(v) => setPeriod(v as BalancePeriod)}>
+              <SelectTrigger id="balancePeriod" className="w-full">
+                <SelectValue placeholder="Seleccionar filtro" />
               </SelectTrigger>
               <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id.toString()}>
-                    {client.nombre}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">Por cliente (todo)</SelectItem>
+                <SelectItem value="monthly">Mensual</SelectItem>
+                <SelectItem value="yearly">Anual</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        </Card>
-      )}
+
+          {period === 'monthly' && (
+            <div className="space-y-2">
+              <label htmlFor="balanceMonth" className="text-sm font-medium text-gray-700">Mes</label>
+              <Input
+                id="balanceMonth"
+                type="month"
+                value={monthValue}
+                onChange={(e) => setMonthValue(e.target.value)}
+              />
+            </div>
+          )}
+
+          {period === 'yearly' && (
+            <div className="space-y-2">
+              <label htmlFor="balanceYear" className="text-sm font-medium text-gray-700">Año</label>
+              <Input
+                id="balanceYear"
+                type="number"
+                min="2000"
+                max="2100"
+                value={yearValue}
+                onChange={(e) => setYearValue(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Balance Data */}
       {isLoadingBalance ? (
@@ -299,19 +394,19 @@ export function Balance({ selectedClientId }: BalanceProps) {
             <Card className="p-4">
               <p className="text-xs text-gray-500">Total</p>
               <p className="text-xl font-semibold text-[#033f63]">
-                {formatCurrency(balanceData.totalGeneral ?? 0)}
+                {formatCurrency(viewTotals.totalGeneral ?? 0)}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-xs text-gray-500">Pagado</p>
               <p className="text-xl font-semibold text-[#7c9885]">
-                {formatCurrency(balanceData.totalPagado ?? 0)}
+                {formatCurrency(viewTotals.totalPagado ?? 0)}
               </p>
             </Card>
             <Card className="p-4">
               <p className="text-xs text-gray-500">Falta</p>
               <p className="text-xl font-semibold text-[#b5b682]">
-                {formatCurrency(balanceData.totalPendiente ?? 0)}
+                {formatCurrency(viewTotals.totalPendiente ?? 0)}
               </p>
             </Card>
           </div>
@@ -340,7 +435,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               onClick={handleDownloadExcel}
               variant="outline"
               className="h-16 flex flex-col items-center justify-center gap-1"
-              disabled={!balanceData || balanceData.pedidos.length === 0}
+              disabled={!balanceData || filteredPedidos.length === 0}
             >
               <Download className="h-5 w-5" />
               <span className="text-xs">Excel</span>
@@ -353,7 +448,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               <h3 className="text-base font-semibold">Detalle de Pedidos</h3>
             </div>
 
-            {balanceData.pedidos.length === 0 ? (
+            {filteredPedidos.length === 0 ? (
               <div className="text-center py-10 text-gray-500">
                 No hay pedidos registrados para este cliente
               </div>
@@ -383,7 +478,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {balanceData.pedidos.map((item) => {
+                    {filteredPedidos.map((item) => {
                       const trabajoTitle = getTrabajoTitle(item.productos);
                       const trabajoSubtitle = item.productos;
                       const isDelivered = !!item.entregado;
@@ -452,9 +547,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
                   <tfoot>
                     <tr className="border-t-2 border-[#033f63] bg-gray-50">
                       <td colSpan={3} className="py-3 px-3 text-right font-semibold text-[#033f63]">TOTAL:</td>
-                      <td className="py-3 px-3 text-right font-semibold text-[#033f63] whitespace-nowrap">{formatCurrency(balanceData.totalGeneral ?? 0)}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-[#7c9885] whitespace-nowrap">{formatCurrency(balanceData.totalPagado ?? 0)}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-[#b5b682] whitespace-nowrap">{formatCurrency(balanceData.totalPendiente ?? 0)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#033f63] whitespace-nowrap">{formatCurrency(viewTotals.totalGeneral ?? 0)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#7c9885] whitespace-nowrap">{formatCurrency(viewTotals.totalPagado ?? 0)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-[#b5b682] whitespace-nowrap">{formatCurrency(viewTotals.totalPendiente ?? 0)}</td>
                       <td colSpan={2} className="py-3 px-3" />
                     </tr>
                   </tfoot>

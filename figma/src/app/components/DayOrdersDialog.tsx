@@ -167,7 +167,7 @@ export function DayOrdersDialog({
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <FileText size={14} className={text.muted} />
-                          <span className={text.muted}>{order.nombrePaciente}</span>
+                          <span className={text.muted}>{order.nombrePaciente || '-'}</span>
                         </div>
                       </div>
 

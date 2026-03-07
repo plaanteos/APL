@@ -76,6 +76,58 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
     });
   };
 
+  type ClientKind = 'odontologo' | 'clinica' | 'otro';
+
+  const getClientKind = (name: string): ClientKind => {
+    const n = String(name ?? '').trim().toLowerCase();
+    if (n.startsWith('dr.') || n.startsWith('dr ')) return 'odontologo';
+    if (n.startsWith('clinica') || n.startsWith('clínica')) return 'clinica';
+    return 'otro';
+  };
+
+  const formatClientDisplayName = (rawName: string, kind: ClientKind) => {
+    const name = String(rawName ?? '').trim();
+    if (!name) return '';
+
+    const lowered = name.toLowerCase();
+    const stripped = lowered.startsWith('dr.')
+      ? name.replace(/^\s*dr\.?\s*/i, '')
+      : lowered.startsWith('clinica')
+        ? name.replace(/^\s*clinica\s*/i, '')
+        : lowered.startsWith('clínica')
+          ? name.replace(/^\s*clínica\s*/i, '')
+          : name;
+
+    const base = String(stripped ?? '').trim();
+    if (!base) return '';
+
+    if (kind === 'odontologo') return `Dr. ${base}`;
+    if (kind === 'clinica') return `Clínica ${base}`;
+    return base;
+  };
+
+  const getTypePillClasses = (kind: ClientKind) => {
+    switch (kind) {
+      case 'odontologo':
+        return 'bg-[#033f63]/10 text-[#033f63] border border-[#033f63]/20';
+      case 'clinica':
+        return 'bg-[#7c9885]/25 text-[#033f63] border border-[#7c9885]/50';
+      default:
+        return 'bg-gray-100 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const getAvatarClasses = (kind: ClientKind) => {
+    switch (kind) {
+      case 'odontologo':
+        return { wrap: 'bg-[#033f63]/10', icon: 'text-[#033f63]' };
+      case 'clinica':
+        return { wrap: 'bg-[#7c9885]/25', icon: 'text-[#7c9885]' };
+      default:
+        return { wrap: 'bg-gray-100', icon: 'text-gray-600' };
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 flex items-center justify-center h-96">
@@ -117,21 +169,31 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
           </div>
         ) : (
           clients.map((client) => (
+            (() => {
+              const kind = getClientKind(client.nombre);
+              const displayName = formatClientDisplayName(client.nombre, kind);
+              const avatar = getAvatarClasses(kind);
+              const kindLabel = kind === 'odontologo' ? 'Odontólogo' : kind === 'clinica' ? 'Clínica' : 'Cliente';
+
+              return (
             <Card 
               key={client.id} 
               className="p-4 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => onNavigateToBalance(client.id)}
             >
               <div className="flex items-start gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User size={24} className="text-blue-600" />
+                <div className={`w-12 h-12 ${avatar.wrap} rounded-full flex items-center justify-center flex-shrink-0`}>
+                  <User size={24} className={avatar.icon} />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="truncate">{client.nombre}</h3>
+                      <h3 className="truncate">{displayName}</h3>
                     </div>
+                    <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${getTypePillClasses(kind)}`}>
+                      {kindLabel}
+                    </span>
                   </div>
 
                   <div className="space-y-2">
@@ -161,6 +223,8 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
                 </div>
               </div>
             </Card>
+              );
+            })()
           ))
         )}
       </div>

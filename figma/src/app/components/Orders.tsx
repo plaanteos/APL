@@ -270,7 +270,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <p className="font-medium">{detalle.producto?.tipo || 'Producto'}</p>
-                                  <p className="text-gray-600">Paciente: {detalle.paciente}</p>
+                                  <p className="text-gray-600">Paciente: {detalle.paciente || '-'}</p>
                                   <p className="text-gray-500 text-xs">
                                     Estado: {getDetalleEstadoDescripcion(detalle) || 'N/A'}
                                   </p>

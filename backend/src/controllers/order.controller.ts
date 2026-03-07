@@ -35,7 +35,8 @@ const detalleSchema = z.object({
   id_producto: z.coerce.number().int().positive('ID de producto inválido'),
   cantidad: z.coerce.number().int().positive('Cantidad debe ser mayor a 0'),
   precio_unitario: z.coerce.number().positive('Precio debe ser mayor a 0'),
-  paciente: z.coerce.string().trim().min(2, 'Nombre del paciente requerido'),
+  // Paciente opcional: si no se ingresa, se guarda como "-".
+  paciente: z.coerce.string().trim().optional().transform((v) => (String(v ?? '').trim() ? String(v).trim() : '-')),
   id_estado: z.coerce.number().int().positive('ID de estado inválido'),
 });
 
@@ -61,7 +62,8 @@ const updateOrderSchema = z.object({
 const updateDetalleSchema = z.object({
   cantidad: z.coerce.number().int().positive().optional(),
   precio_unitario: z.coerce.number().positive().optional(),
-  paciente: z.coerce.string().trim().min(2).optional(),
+  // Si se envía vacío, se normaliza a "-". Si no se envía, no se modifica.
+  paciente: z.coerce.string().trim().transform((v) => (String(v ?? '').trim() ? String(v).trim() : '-')).optional(),
   id_estado: z.coerce.number().int().positive().optional(),
 });
 

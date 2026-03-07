@@ -61,13 +61,13 @@ export class NotificationController {
         let attachments: Array<{ filename: string; content: Buffer; contentType?: string }> | undefined;
         if (shouldAttachBalanceExcel) {
           const { ExcelService } = await import('../services/excel.service');
-          const buffer = await ExcelService.generateBalanceExcel(balanceClientId!);
+          const buffer = await ExcelService.generateResumenMensualExcel(balanceClientId!);
           const safeName = String(balanceClientName || `cliente_${balanceClientId}`)
             .trim()
             .replace(/\s+/g, '_')
             .replace(/[^a-zA-Z0-9_\-]/g, '');
           const date = new Date().toISOString().split('T')[0];
-          const filename = `Balance_${safeName || `cliente_${balanceClientId}`}_${date}.xlsx`;
+          const filename = `Resumen_mensual_${safeName || `cliente_${balanceClientId}`}_${date}.xlsx`;
           attachments = [
             {
               filename,

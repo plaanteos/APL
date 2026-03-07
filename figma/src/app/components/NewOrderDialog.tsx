@@ -32,9 +32,10 @@ import { Plus } from "lucide-react";
 // Schema de validación con Zod
 const orderSchema = z.object({
   clientId: z.string().min(1, "Debe seleccionar un cliente"),
-  patientName: z.string().min(2, "El nombre del paciente debe tener al menos 2 caracteres"),
+  // Paciente opcional: si queda vacío se persistirá como "-".
+  patientName: z.string().max(100, "El nombre del paciente es demasiado largo").optional(),
   description: z.string().optional(),
-  productId: z.string().min(1, "Debe seleccionar un producto"),
+  productName: z.string().min(2, "El producto debe tener al menos 2 caracteres"),
   estadoId: z.string().min(1, "Debe seleccionar un estado"),
   quantity: z.string().refine((val) => {
     const num = Number(val);
@@ -82,7 +83,7 @@ export function NewOrderDialog({
     clientId: preselectedClientId || "",
     patientName: "",
     description: "",
-    productId: "",
+    productName: "",
     estadoId: "",
     quantity: "1",
     unitPrice: "",
@@ -94,6 +95,27 @@ export function NewOrderDialog({
     email: "",
     telefono: "",
   });
+
+  type ClientKind = "odontologo" | "clinica";
+  const [newClientKind, setNewClientKind] = useState<ClientKind>("odontologo");
+
+  const formatClientDisplayName = (rawName: string, kind: ClientKind) => {
+    const name = String(rawName ?? '').trim();
+    if (!name) return '';
+    const lowered = name.toLowerCase();
+
+    const stripped = lowered.startsWith('dr.')
+      ? name.replace(/^\s*dr\.?\s*/i, '')
+      : lowered.startsWith('clinica')
+        ? name.replace(/^\s*clinica\s*/i, '')
+        : lowered.startsWith('clínica')
+          ? name.replace(/^\s*clínica\s*/i, '')
+          : name;
+
+    const base = String(stripped ?? '').trim();
+    if (!base) return '';
+    return kind === 'odontologo' ? `Dr. ${base}` : `Clínica ${base}`;
+  };
 
   const normalizeEstadoDescripcion = (raw: unknown) => {
     return String(raw ?? '')
@@ -144,7 +166,6 @@ export function NewOrderDialog({
       // Defaults útiles (evita formularios vacíos y reduce errores)
       setFormData((prev) => ({
         ...prev,
-        productId: prev.productId || (productosData[0]?.id?.toString() ?? ""),
         estadoId: prev.estadoId || (estadosData[0]?.id?.toString() ?? ""),
       }));
     } catch (error) {
@@ -152,6 +173,47 @@ export function NewOrderDialog({
       toast.error("Error al cargar productos/estados");
     } finally {
       setIsLoadingCatalogs(false);
+    }
+  };
+
+  const normalizeProductTipo = (raw: unknown) => {
+    return String(raw ?? '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[\s-]+/g, ' ');
+  };
+
+  const ensureProductoId = async (typed: string, adminId: number, defaultPrecio: number): Promise<number> => {
+    const clean = String(typed ?? '').trim();
+    if (!clean) throw new Error('Producto requerido');
+
+    const normalized = normalizeProductTipo(clean);
+    const existing = (productos || []).find((p) => normalizeProductTipo(p.tipo) === normalized);
+    if (existing?.id != null) return Number(existing.id);
+
+    // Crear producto si no existe
+    try {
+      const created = await productoService.create({
+        tipo: clean,
+        precio: defaultPrecio,
+        id_administrador: adminId,
+      });
+      // Mantener catálogo en memoria actualizado para futuros pedidos
+      setProductos((prev) => {
+        const next = [...(prev || [])];
+        next.push(created as any);
+        return next;
+      });
+      return Number((created as any).id);
+    } catch (e: any) {
+      // Si falló por duplicado u otra condición, reintentar encontrándolo
+      const refreshed = await productoService.getAll();
+      setProductos(refreshed);
+      const found = (refreshed || []).find((p) => normalizeProductTipo(p.tipo) === normalized);
+      if (found?.id != null) return Number(found.id);
+      throw e;
     }
   };
 
@@ -164,7 +226,7 @@ export function NewOrderDialog({
     setIsSubmitting(true);
     try {
       const newClient = await clientService.create({
-        nombre: newClientData.nombre,
+        nombre: formatClientDisplayName(newClientData.nombre, newClientKind),
         email: newClientData.email,
         telefono: newClientData.telefono,
       });
@@ -177,6 +239,7 @@ export function NewOrderDialog({
         email: "",
         telefono: "",
       });
+      setNewClientKind('odontologo');
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Error al crear cliente");
     } finally {
@@ -244,6 +307,13 @@ export function NewOrderDialog({
         return;
       }
 
+      const patientDisplay = String(formData.patientName ?? '').trim() || '-';
+      const productoId = await ensureProductoId(
+        String(formData.productName ?? '').trim(),
+        adminId,
+        Number(formData.unitPrice)
+      );
+
       await orderService.create({
         id_cliente: Number(formData.clientId),
         fecha_entrega: formData.dueDate,
@@ -251,23 +321,23 @@ export function NewOrderDialog({
         descripcion: formData.description?.trim() ? formData.description.trim() : undefined,
         detalles: [
           {
-            id_producto: Number(formData.productId),
+            id_producto: productoId,
             cantidad: Number(formData.quantity),
             precio_unitario: Number(formData.unitPrice),
-            paciente: formData.patientName,
+            paciente: patientDisplay,
             id_estado: Number(formData.estadoId),
           },
         ],
       });
 
-      toast.success(`Pedido para ${formData.patientName} creado exitosamente`);
+      toast.success(`Pedido para ${patientDisplay} creado exitosamente`);
       onOpenChange(false);
       onOrderCreated?.();
       setFormData({
         clientId: "",
         patientName: "",
         description: "",
-        productId: "",
+        productName: "",
         estadoId: "",
         quantity: "1",
         unitPrice: "",
@@ -315,6 +385,18 @@ export function NewOrderDialog({
             {showNewClientForm ? (
               <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
                 <div>
+                  <Label htmlFor="newClientKind">Tipo de cliente</Label>
+                  <Select value={newClientKind} onValueChange={(v) => setNewClientKind(v as ClientKind)}>
+                    <SelectTrigger id="newClientKind">
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="odontologo">Odontólogo</SelectItem>
+                      <SelectItem value="clinica">Clínica</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label htmlFor="newClientName">Nombre</Label>
                   <Input
                     id="newClientName"
@@ -324,7 +406,7 @@ export function NewOrderDialog({
                     onChange={(e) =>
                       setNewClientData({ ...newClientData, nombre: e.target.value })
                     }
-                    placeholder="Ej: Dr. Juan Pérez"
+                    placeholder={newClientKind === 'odontologo' ? 'Ej: Juan Pérez' : 'Ej: Dental Sonrisa'}
                   />
                 </div>
                 <div>
@@ -392,7 +474,7 @@ export function NewOrderDialog({
           </div>
 
           <div>
-            <Label htmlFor="patientName">Nombre del Paciente *</Label>
+            <Label htmlFor="patientName">Nombre del Paciente</Label>
             <Input
               id="patientName"
               name="patientName"
@@ -411,35 +493,22 @@ export function NewOrderDialog({
           </div>
 
           <div>
-            <Label htmlFor="product">Producto *</Label>
-            <Select
-              value={formData.productId}
-              onValueChange={(value) => {
-                setFormData({ ...formData, productId: value });
-                validateField("productId", value);
+            <Label htmlFor="productName">Producto *</Label>
+            <Input
+              id="productName"
+              name="productName"
+              type="text"
+              value={formData.productName}
+              onChange={(e) => {
+                setFormData({ ...formData, productName: e.target.value });
+                validateField("productName", e.target.value);
               }}
-              name="productId"
-              disabled={isLoadingCatalogs || productos.length === 0}
-            >
-              <SelectTrigger id="product" className={errors.productId ? "border-red-500" : ""}>
-                <SelectValue placeholder="Seleccionar producto" />
-              </SelectTrigger>
-              <SelectContent>
-                {productos.length > 0 ? (
-                  productos.map((p) => (
-                    <SelectItem key={p.id} value={p.id.toString()}>
-                      {p.tipo}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="__no_products" disabled>
-                    {isLoadingCatalogs ? "Cargando productos..." : "No hay productos"}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            {errors.productId && (
-              <p className="text-sm text-red-500 mt-1">{errors.productId}</p>
+              placeholder="Ej: Corona de porcelana"
+              className={errors.productName ? "border-red-500" : ""}
+              disabled={isLoadingCatalogs}
+            />
+            {errors.productName && (
+              <p className="text-sm text-red-500 mt-1">{errors.productName}</p>
             )}
           </div>
 

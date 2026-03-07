@@ -1,0 +1,9 @@
+1. cuando se pone crear pedidos que la opcion paciente sea opcional y poner "-" 
+en el modal de visualizacion(inisio) y en la sesion pedidos cuando no se ingreso paciente.
+2. hora de crear un nuevo cliente, que el usuario seleeccione entre Odontologo y Clinica y por medio de una 
+funcion hacer que los tipos de clientes se visualicen en la sesion de clientes con colores (el azul para 
+el Odontologo (y poner Dr. en frente del nombre) y verde la clinica (y poner clinica en frente del nombre)
+siempre teniendo en cuenta la paleta de colores que tiene el proyecto.
+3. producto al crear pedido que no sea una lista si no que lo cargue a mano.
+4.agregar un filtro de balance mensual, anual y por cliente)
+5. que la presentacion del excel diga "resumen mensual" no "balance" al enviar al cliente.

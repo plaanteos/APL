@@ -11,6 +11,13 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import clientService from "../../services/client.service";
 import { IClientFormData } from "../types";
 import { toast } from "sonner";
@@ -35,7 +42,34 @@ interface NewClientDialogProps {
   onClientCreated?: () => void;
 }
 
+type ClientKind = "odontologo" | "clinica";
+
+const normalizePrefix = (value: string) => String(value ?? '').trim().toLowerCase();
+
+const formatClientDisplayName = (rawName: string, kind: ClientKind) => {
+  const name = String(rawName ?? '').trim();
+  if (!name) return '';
+
+  const lowered = normalizePrefix(name);
+
+  // Evitar dobles prefijos si el usuario los escribió.
+  const stripped = lowered.startsWith('dr.')
+    ? name.replace(/^\s*dr\.?\s*/i, '')
+    : lowered.startsWith('clinica')
+      ? name.replace(/^\s*clinica\s*/i, '')
+      : lowered.startsWith('clínica')
+        ? name.replace(/^\s*clínica\s*/i, '')
+        : name;
+
+  const base = String(stripped ?? '').trim();
+  if (!base) return '';
+
+  if (kind === 'odontologo') return base.match(/^dr\.?\s/i) ? base : `Dr. ${base}`;
+  return base.match(/^(cl[ií]nica)\s/i) ? base : `Clínica ${base}`;
+};
+
 export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClientDialogProps) {
+  const [clientKind, setClientKind] = useState<ClientKind>("odontologo");
   const [formData, setFormData] = useState<IClientFormData>({
     nombre: "",
     email: "",
@@ -83,7 +117,11 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
     setIsSubmitting(true);
     
     try {
-      const newClient = await clientService.create(formData);
+      const nombre = formatClientDisplayName(formData.nombre, clientKind);
+      const newClient = await clientService.create({
+        ...formData,
+        nombre,
+      });
       toast.success(`Cliente ${newClient.nombre} creado exitosamente`);
       onOpenChange(false);
       onClientCreated?.();
@@ -93,6 +131,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
         email: "",
         telefono: "",
       });
+      setClientKind('odontologo');
       setErrors({});
     } catch (error: any) {
       console.error("Error creating client:", error);
@@ -115,6 +154,19 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <Label htmlFor="clientKind">Tipo de cliente *</Label>
+            <Select value={clientKind} onValueChange={(v) => setClientKind(v as ClientKind)}>
+              <SelectTrigger id="clientKind">
+                <SelectValue placeholder="Seleccionar tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="odontologo">Odontólogo</SelectItem>
+                <SelectItem value="clinica">Clínica</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
             <Label htmlFor="nombre">Nombre *</Label>
             <Input
               id="nombre"
@@ -125,7 +177,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
                 setFormData({ ...formData, nombre: e.target.value });
                 validateField("nombre", e.target.value);
               }}
-              placeholder="Nombre del cliente"
+              placeholder={clientKind === 'odontologo' ? 'Ej: Juan Pérez' : 'Ej: Dental Sonrisa'}
               className={errors.nombre ? "border-red-500" : ""}
             />
             {errors.nombre && (

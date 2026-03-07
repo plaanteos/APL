@@ -11,6 +11,7 @@ import type {
   IPagoWithDetails,
   IDetallePago,
   IClientFormData,
+  IProductoFormData,
   IOrderFormData,
   IPagoFormData,
   ID,
@@ -24,6 +25,7 @@ type DemoDb = {
   orders: IOrder[];
   pagos: IPagoWithDetails[];
   nextClientId: ID;
+  nextProductoId: ID;
   nextOrderId: ID;
   nextDetallePedidoId: ID;
   nextPagoId: ID;
@@ -165,10 +167,20 @@ const db: DemoDb = {
     },
   ],
   nextClientId: 5,
+  nextProductoId: 5,
   nextOrderId: 104,
   nextDetallePedidoId: 1004,
   nextPagoId: 203,
   nextDetallePagoId: 3003,
+};
+
+const normalizeProductTipo = (raw: unknown) => {
+  return String(raw ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s-]+/g, ' ');
 };
 
 const attachRelations = () => {
@@ -297,6 +309,27 @@ export const demoStore = {
   // Catálogos
   async getProductos(): Promise<IProducto[]> {
     return [...db.productos];
+  },
+
+  async createProducto(data: IProductoFormData & { id_administrador: ID }): Promise<IProducto> {
+    const tipo = String(data?.tipo ?? '').trim();
+    if (!tipo) throw new Error('Tipo de producto requerido (demo)');
+
+    // Evitar duplicados por nombre (similar a una unique constraint)
+    const normalized = normalizeProductTipo(tipo);
+    const existing = db.productos.find((p) => normalizeProductTipo(p.tipo) === normalized);
+    if (existing) return existing;
+
+    const precio = Number((data as any)?.precio ?? 0);
+    const newProduct: IProducto = {
+      id: db.nextProductoId++,
+      tipo,
+      precio: Number.isFinite(precio) ? precio : 0,
+      id_administrador: data.id_administrador,
+    };
+
+    db.productos = [newProduct, ...db.productos];
+    return newProduct;
   },
 
   async getEstados(): Promise<IEstado[]> {

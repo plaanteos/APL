@@ -36,6 +36,9 @@ class ProductoService {
    * Crear nuevo producto
    */
   async create(data: IProductoFormData & { id_administrador: ID }): Promise<IProducto> {
+    if (isDemoMode()) {
+      return demoStore.createProducto(data);
+    }
     const response = await api.post<ApiEnvelope<IProducto>>('/productos', data);
     return response.data.data;
   }

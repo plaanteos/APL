@@ -123,7 +123,7 @@ export function PaymentDialog({
           <div className="bg-[#033f63]/5 p-4 rounded-lg space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Paciente:</span>
-              <span className="text-[#033f63] font-medium">{paciente}</span>
+              <span className="text-[#033f63] font-medium">{paciente || '-'}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total del trabajo:</span>
