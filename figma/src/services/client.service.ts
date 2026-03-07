@@ -102,9 +102,8 @@ class ClientService {
           return {
             pedidoId,
             fecha,
-            // El backend no expone paciente/productos en este endpoint; se usa un fallback legible.
-            paciente: String(p.paciente ?? ''),
-            productos: String(p.productos ?? `${Number(p.cantidadProductos ?? 0)} productos`),
+            paciente: String(p.paciente ?? '').trim() || '-',
+            productos: String(p.productos ?? '').trim() || `${Number(p.cantidadProductos ?? 0)} productos`,
             montoTotal,
             montoPagado,
             montoPendiente,

@@ -3,6 +3,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp } from "lucide-react";
 import orderService from "../../services/order.service";
+import clientService from "../../services/client.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
 import {
@@ -22,9 +23,26 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter);
   const [orders, setOrders] = useState<IOrderWithCalculations[]>([]);
+  const [clientsById, setClientsById] = useState<Map<number, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+
+  // Cargar clientes (para resolver nombre en lista de pedidos)
+  useEffect(() => {
+    (async () => {
+      try {
+        const clients = await clientService.getAll();
+        const map = new Map<number, string>();
+        (clients || []).forEach((c) => {
+          if (c?.id != null) map.set(Number(c.id), String(c.nombre ?? '').trim());
+        });
+        setClientsById(map);
+      } catch {
+        // Silencioso: si falla, se mantiene fallback "Cliente desconocido".
+      }
+    })();
+  }, []);
 
   // Update filter when initialFilter changes
   useEffect(() => {
@@ -212,6 +230,10 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
             const isExpanded = expandedOrders.has(order.id);
             const hasDetalles = order.detalles && order.detalles.length > 0;
             const pedidoStatus = getPedidoStatus(order);
+            const resolvedClientName =
+              String(order.cliente?.nombre ?? '').trim() ||
+              String(clientsById.get(Number(order.id_cliente)) ?? '').trim() ||
+              'Cliente desconocido';
 
             return (
               <Card
@@ -223,7 +245,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                     className="flex items-start justify-between"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{order.cliente?.nombre || 'Cliente desconocido'}</p>
+                      <p className="font-medium truncate">{resolvedClientName}</p>
                       <p className="text-sm text-gray-500">Pedido #{order.id}</p>
                     </div>
                     <div className="flex items-center gap-2">

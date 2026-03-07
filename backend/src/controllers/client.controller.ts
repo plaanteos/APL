@@ -496,6 +496,8 @@ export class ClientController {
         entregado: boolean | null;
         cantidad_productos: bigint | number | null;
         monto_total: any;
+        paciente: string | null;
+        productos: string | null;
         monto_pagado: any;
         cantidad_pagos: bigint | number | null;
         ultimo_pago_fecha: Date | null;
@@ -510,6 +512,8 @@ export class ClientController {
           COALESCE(st_agg.entregado, false) AS entregado,
           COALESCE(dp_agg.cantidad_productos, 0) AS cantidad_productos,
           COALESCE(dp_agg.monto_total, 0) AS monto_total,
+          COALESCE(NULLIF(dp_agg.paciente, ''), '-') AS paciente,
+          COALESCE(NULLIF(dp_agg.productos, ''), '0 productos') AS productos,
           COALESCE(pg_agg.monto_pagado, 0) AS monto_pagado,
           COALESCE(pg_agg.cantidad_pagos, 0) AS cantidad_pagos,
           lastp.fecha_pago AS ultimo_pago_fecha,
@@ -527,8 +531,11 @@ export class ClientController {
           SELECT
             id_pedido,
             COUNT(*) AS cantidad_productos,
-            SUM(cantidad * precio_unitario) AS monto_total
-          FROM detalle_pedidos
+            SUM(cantidad * precio_unitario) AS monto_total,
+            COALESCE(NULLIF(STRING_AGG(DISTINCT NULLIF(TRIM(paciente), ''), ', '), ''), '-') AS paciente,
+            COALESCE(NULLIF(STRING_AGG((prod.tipo || ' x' || dp.cantidad)::text, ', ' ORDER BY dp.id), ''), '0 productos') AS productos
+          FROM detalle_pedidos dp
+          INNER JOIN producto prod ON prod.id = dp.id_producto
           GROUP BY id_pedido
         ) dp_agg ON dp_agg.id_pedido = p.id
         LEFT JOIN (
@@ -560,6 +567,8 @@ export class ClientController {
           fecha_entrega: r.fecha_entrega,
           entregado: Boolean(r.entregado),
           cantidadProductos: Number(r.cantidad_productos ?? 0),
+          paciente: String(r.paciente ?? '-'),
+          productos: String(r.productos ?? ''),
           montoTotal,
           montoPagado,
           montoPendiente,
