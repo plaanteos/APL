@@ -134,6 +134,31 @@ CREATE DATABASE apl_dental_lab;
 \q
 ```
 
+### 4.7 Crear un usuario administrador (en la BD)
+
+El backend incluye un script idempotente que crea (o actualiza si ya existe) un registro en la tabla `administrador`.
+
+Requisitos:
+- `DATABASE_URL` configurada (en tu `.env` o en variables de entorno)
+- Variables de entorno del admin
+
+**PowerShell (Windows):**
+
+```powershell
+cd backend
+
+$env:APL_ADMIN_EMAIL = "tu-admin@dominio.com"
+$env:APL_ADMIN_PASSWORD = "TU_PASSWORD_AQUI"
+$env:APL_ADMIN_USUARIO = "admin"          # opcional (si no, se deriva del email)
+$env:APL_ADMIN_NOMBRE = "Administrador"   # opcional
+$env:APL_ADMIN_TELEFONO = "0000000000"    # opcional
+$env:APL_ADMIN_SUPER_USUARIO = "true"     # opcional
+
+npm run create-admin
+```
+
+> Nota: el script **NO imprime la contraseña** en consola.
+
 ### 4.1 (Opcional) Script SQL de creación de tablas (PostgreSQL)
 
 Además de `npm run db:migrate`, se incluye un script SQL **generado desde Prisma** para evidenciar el DDL de tablas/índices/constraints del modelo:

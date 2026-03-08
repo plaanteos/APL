@@ -4,8 +4,10 @@ import { emailService } from '../services/email.service';
 import { whatsappService } from '../services/whatsapp.service';
 import { buildBasicEmailHtml } from '../utils/notificationTemplates';
 import { closeRedisClient, getRedisClient } from '../utils/redisClient';
+import { prisma } from '../utils/prisma';
 
 export type NotificationJobData = {
+  adminId?: number;
   channel: 'email' | 'whatsapp';
   to: string;
   subject?: string;
@@ -72,12 +74,24 @@ export const initNotificationWorker = () => {
   worker = new Worker<NotificationJobData>(
     QUEUE_NAME,
     async (job) => {
-      const { channel, to, subject, message, attachBalanceExcel, balanceClientId, balanceClientName } = job.data;
+      const { adminId, channel, to, subject, message, attachBalanceExcel, balanceClientId, balanceClientName } = job.data;
 
       if (channel === 'email') {
         const finalSubject = subject || 'Mensaje desde APL';
         let attachments: Array<{ filename: string; content: Buffer; contentType?: string }> | undefined;
         if (attachBalanceExcel && balanceClientId) {
+          if (!adminId) {
+            throw new Error('adminId requerido para adjuntar Excel');
+          }
+
+          const client = await prisma.cliente.findFirst({
+            where: { id: balanceClientId, id_administrador: adminId },
+            select: { id: true },
+          });
+          if (!client) {
+            throw new Error('Cliente no encontrado');
+          }
+
           const { ExcelService } = await import('../services/excel.service');
           const buffer = await ExcelService.generateResumenMensualExcel(balanceClientId);
           const safeName = String(balanceClientName || `cliente_${balanceClientId}`)

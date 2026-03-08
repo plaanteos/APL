@@ -62,7 +62,6 @@ export class PaymentController {
         page = 1,
         limit = 10,
         search,
-        id_administrador,
         id_pedido,
         fechaDesde,
         fechaHasta,
@@ -70,18 +69,26 @@ export class PaymentController {
 
       const offset = (Number(page) - 1) * Number(limit);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Construir filtros
       const where: any = {};
+
+      // Multi-admin: por defecto, solo pagos del admin autenticado.
+      where.id_administrador = adminId;
 
       if (search) {
         where.OR = [
           { id: Number(search) || 0 },
           { administrador: { nombre: { contains: search as string, mode: 'insensitive' } } },
         ];
-      }
-
-      if (id_administrador) {
-        where.id_administrador = Number(id_administrador);
       }
 
       if (id_pedido) {
@@ -176,8 +183,20 @@ export class PaymentController {
     try {
       const { id } = req.params;
 
-      const pago = await prisma.pago.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const pago = await prisma.pago.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           administrador: {
             select: {
@@ -288,6 +307,7 @@ export class PaymentController {
         where: { 
           id: { in: pedidoIds },
           fecha_delete: null,
+          id_administrador: adminId,
         },
         include: {
           detalles: true,
@@ -422,8 +442,17 @@ export class PaymentController {
       const { id } = req.params;
       const updateData = updatePaymentSchema.parse(req.body);
 
-      const existingPayment = await prisma.pago.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const existingPayment = await prisma.pago.findFirst({
+        where: { id: Number(id), id_administrador: adminId },
       });
 
       if (!existingPayment) {
@@ -495,8 +524,17 @@ export class PaymentController {
     try {
       const { id } = req.params;
 
-      const existingPayment = await prisma.pago.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const existingPayment = await prisma.pago.findFirst({
+        where: { id: Number(id), id_administrador: adminId },
         include: {
           detalles: true,
         },
@@ -538,10 +576,20 @@ export class PaymentController {
   // GET /api/payments/stats - Estadísticas de pagos
   static async getPaymentsStats(req: Request, res: Response) {
     try {
-      const totalPagos = await prisma.pago.count();
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const totalPagos = await prisma.pago.count({ where: { id_administrador: adminId } });
 
       // Total recaudado
       const pagos = await prisma.pago.findMany({
+        where: { id_administrador: adminId },
         select: {
           valor: true,
         },
@@ -552,18 +600,9 @@ export class PaymentController {
       // Pagos por administrador
       const pagosPorAdmin = await prisma.pago.groupBy({
         by: ['id_administrador'],
-        _count: {
-          id: true,
-        },
-        _sum: {
-          valor: true,
-        },
-        orderBy: {
-          _count: {
-            id: 'desc',
-          },
-        },
-        take: 5,
+        where: { id_administrador: adminId },
+        _count: { id: true },
+        _sum: { valor: true },
       });
 
       const pagosPorAdminDetalle = await Promise.all(
@@ -585,17 +624,13 @@ export class PaymentController {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-      const detallesPago = await prisma.detallePago.findMany({
-        where: {
-          fecha_pago: {
-            gte: sixMonthsAgo,
-          },
-        },
-        select: {
-          fecha_pago: true,
-          valor: true,
-        },
-      });
+      const detallesPago = await prisma.$queryRaw<Array<{ fecha_pago: Date; valor: any }>>`
+        SELECT dp.fecha_pago, dp.valor
+        FROM detalle_pago dp
+        INNER JOIN pago p ON p.id = dp.id_pago
+        WHERE dp.fecha_pago >= ${sixMonthsAgo}
+          AND p.id_administrador = ${adminId}
+      `;
 
       const pagosPorMes = detallesPago.reduce((acc: any, det) => {
         const mes = det.fecha_pago.toISOString().substring(0, 7); // YYYY-MM

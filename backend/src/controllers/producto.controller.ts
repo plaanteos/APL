@@ -4,10 +4,21 @@ import { prisma } from '../utils/prisma';
 import { AuditService } from '../services/audit.service';
 import { cacheDelByPrefix, cacheGetOrSet } from '../utils/cache';
 
+type AuthUser = {
+  id: number;
+  email: string;
+  super_usuario: boolean;
+};
+
+type AuthRequest = Request & {
+  user?: AuthUser;
+};
+
 // Schemas de validación - Modelo Oficial APL
 const createProductoSchema = z.object({
   tipo: z.string().min(2, 'Tipo de producto debe tener al menos 2 caracteres'),
-  id_administrador: z.number().int().positive('ID de administrador inválido'),
+  // Compat: el frontend puede enviarlo, pero el backend lo ignora para no permitir fuga entre admins.
+  id_administrador: z.number().int().positive('ID de administrador inválido').optional(),
 });
 
 const updateProductoSchema = z.object({
@@ -23,13 +34,24 @@ export class ProductoController {
         page = 1, 
         limit = 50, 
         search,
-        id_administrador,
       } = req.query;
 
       const offset = (Number(page) - 1) * Number(limit);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Construir filtros
       const where: any = {};
+
+      // Multi-admin: por defecto, solo catálogo del admin autenticado.
+      where.id_administrador = adminId;
 
       if (search) {
         where.tipo = { 
@@ -38,13 +60,9 @@ export class ProductoController {
         };
       }
 
-      if (id_administrador) {
-        where.id_administrador = Number(id_administrador);
-      }
-
       const canCache = !search && Number(page) === 1;
       const cacheKey = canCache
-        ? `productos:v1:admin:${id_administrador ? Number(id_administrador) : 'all'}:limit:${Number(limit)}`
+        ? `productos:v1:admin:${adminId}:limit:${Number(limit)}`
         : null;
 
       // Obtener productos (con caché en el caso típico de catálogo)
@@ -113,8 +131,17 @@ export class ProductoController {
     try {
       const { id } = req.params;
 
-      const producto = await prisma.producto.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const producto = await prisma.producto.findFirst({
+        where: { id: Number(id), id_administrador: adminId },
         include: {
           administrador: {
             select: {
@@ -151,11 +178,22 @@ export class ProductoController {
     try {
       const productoData = createProductoSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const effectiveAdminId = adminId;
+
       // Verificar si ya existe un producto con el mismo tipo
       const existingProducto = await prisma.producto.findFirst({
         where: { 
           tipo: productoData.tipo,
-          id_administrador: productoData.id_administrador,
+          id_administrador: effectiveAdminId,
         },
       });
 
@@ -168,7 +206,10 @@ export class ProductoController {
 
       // Crear producto
       const newProducto = await prisma.producto.create({
-        data: productoData,
+        data: {
+          tipo: productoData.tipo,
+          id_administrador: effectiveAdminId,
+        },
         include: {
           administrador: {
             select: {
@@ -211,9 +252,18 @@ export class ProductoController {
       const { id } = req.params;
       const updateData = updateProductoSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el producto existe
-      const existingProducto = await prisma.producto.findUnique({
-        where: { id: Number(id) },
+      const existingProducto = await prisma.producto.findFirst({
+        where: { id: Number(id), id_administrador: adminId },
       });
 
       if (!existingProducto) {
@@ -243,7 +293,9 @@ export class ProductoController {
       // Actualizar producto
       const updatedProducto = await prisma.producto.update({
         where: { id: Number(id) },
-        data: updateData,
+        data: {
+          ...(updateData.tipo ? { tipo: updateData.tipo } : {}),
+        },
         include: {
           administrador: {
             select: {
@@ -286,9 +338,18 @@ export class ProductoController {
     try {
       const { id } = req.params;
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el producto existe
-      const existingProducto = await prisma.producto.findUnique({
-        where: { id: Number(id) },
+      const existingProducto = await prisma.producto.findFirst({
+        where: { id: Number(id), id_administrador: adminId },
         include: {
           detalles: true, // Verificar si está en uso en detalles de pedidos
         },
@@ -333,11 +394,25 @@ export class ProductoController {
   // GET /api/productos/stats - Estadísticas de productos
   static async getProductosStats(req: Request, res: Response) {
     try {
-      const totalProductos = await prisma.producto.count();
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const totalProductos = await prisma.producto.count({ where: { id_administrador: adminId } });
 
       // Top 5 productos más usados
       const topProductos = await prisma.detallePedido.groupBy({
         by: ['id_producto'],
+        where: {
+          producto: {
+            id_administrador: adminId,
+          },
+        },
         _count: {
           id: true,
         },

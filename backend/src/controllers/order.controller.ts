@@ -56,7 +56,6 @@ const updateOrderSchema = z.object({
     z.string().min(1).transform((str) => parseDateInput(str)),
     z.date(),
   ]).optional(),
-  id_administrador: z.coerce.number().int().positive().optional(),
 });
 
 const updateDetalleSchema = z.object({
@@ -149,8 +148,20 @@ export class OrderController {
 
       const offset = (Number(page) - 1) * Number(limit);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Construir filtros
       const where: any = {};
+
+      // Multi-admin: por defecto, solo datos del administrador autenticado.
+      where.id_administrador = adminId;
 
       // Solo pedidos activos por defecto
       if (activos === 'true') {
@@ -243,8 +254,20 @@ export class OrderController {
     try {
       const { id } = req.params;
 
-      const pedido = await prisma.pedido.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const pedido = await prisma.pedido.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           cliente: true,
           administrador: {
@@ -314,8 +337,11 @@ export class OrderController {
       }
 
       // Verificar que el cliente existe
-      const cliente = await prisma.cliente.findUnique({
-        where: { id: orderData.id_cliente },
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: orderData.id_cliente,
+          id_administrador: adminId,
+        },
       });
 
       if (!cliente) {
@@ -340,7 +366,10 @@ export class OrderController {
       // Verificar que todos los productos existen
       const productIds = orderData.detalles.map(d => d.id_producto);
       const productos = await prisma.producto.findMany({
-        where: { id: { in: productIds } },
+        where: {
+          id: { in: productIds },
+          id_administrador: adminId,
+        },
       });
 
       if (productos.length !== productIds.length) {
@@ -448,11 +477,24 @@ export class OrderController {
       const { id } = req.params;
       const updateData = updateOrderSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const existingOrder = await prisma.pedido.findUnique({
         where: { id: Number(id) },
       });
 
-      if (!existingOrder || existingOrder.fecha_delete) {
+      if (
+        !existingOrder ||
+        existingOrder.fecha_delete ||
+        existingOrder.id_administrador !== adminId
+      ) {
         return res.status(404).json({
           success: false,
           error: 'Pedido no encontrado',
@@ -511,6 +553,15 @@ export class OrderController {
     try {
       const { id } = req.params;
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const existingOrder = await prisma.pedido.findUnique({
         where: { id: Number(id) },
         include: {
@@ -518,7 +569,11 @@ export class OrderController {
         },
       });
 
-      if (!existingOrder || existingOrder.fecha_delete) {
+      if (
+        !existingOrder ||
+        existingOrder.fecha_delete ||
+        existingOrder.id_administrador !== adminId
+      ) {
         return res.status(404).json({
           success: false,
           error: 'Pedido no encontrado',
@@ -558,8 +613,20 @@ export class OrderController {
       const { id } = req.params;
       const detalleData = detalleSchema.parse(req.body);
 
-      const pedido = await prisma.pedido.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const pedido = await prisma.pedido.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
       });
 
       if (!pedido || pedido.fecha_delete) {
@@ -571,7 +638,12 @@ export class OrderController {
 
       // Verificar producto y estado
       const [producto, estado] = await Promise.all([
-        prisma.producto.findUnique({ where: { id: detalleData.id_producto } }),
+        prisma.producto.findFirst({
+          where: {
+            id: detalleData.id_producto,
+            id_administrador: adminId,
+          },
+        }),
         prisma.estado.findUnique({ where: { id: detalleData.id_estado } }),
       ]);
 
@@ -639,12 +711,25 @@ export class OrderController {
       const { id, detalleId } = req.params;
       const updateData = updateDetalleSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const detalle = await prisma.detallePedido.findUnique({
         where: { id: Number(detalleId) },
         include: { pedido: true },
       });
 
-      if (!detalle || detalle.id_pedido !== Number(id)) {
+      if (
+        !detalle ||
+        detalle.id_pedido !== Number(id) ||
+        detalle.pedido.id_administrador !== adminId
+      ) {
         return res.status(404).json({
           success: false,
           error: 'Detalle no encontrado',
@@ -705,12 +790,25 @@ export class OrderController {
     try {
       const { id, detalleId } = req.params;
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const detalle = await prisma.detallePedido.findUnique({
         where: { id: Number(detalleId) },
         include: { pedido: true },
       });
 
-      if (!detalle || detalle.id_pedido !== Number(id)) {
+      if (
+        !detalle ||
+        detalle.id_pedido !== Number(id) ||
+        detalle.pedido.id_administrador !== adminId
+      ) {
         return res.status(404).json({
           success: false,
           error: 'Detalle no encontrado',
@@ -756,8 +854,20 @@ export class OrderController {
   // GET /api/orders/stats - Estadísticas de pedidos
   static async getOrdersStats(req: Request, res: Response) {
     try {
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const totalPedidos = await prisma.pedido.count({
-        where: { fecha_delete: null },
+        where: {
+          fecha_delete: null,
+          id_administrador: adminId,
+        },
       });
 
       // Pedidos por estado (contando detalles)
@@ -770,6 +880,7 @@ export class OrderController {
                 where: {
                   pedido: {
                     fecha_delete: null,
+                    id_administrador: adminId,
                   },
                 },
               },
@@ -784,6 +895,7 @@ export class OrderController {
         where: {
           pedido: {
             fecha_delete: null,
+            id_administrador: adminId,
           },
         },
         _count: {
@@ -842,8 +954,20 @@ export class OrderController {
     try {
       const { id } = req.params;
 
-      const pedido = await prisma.pedido.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const pedido = await prisma.pedido.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           detalles: {
             include: {
@@ -901,12 +1025,18 @@ export class OrderController {
       // Marcar como entregado cambiando el estado de los detalles.
       // NOTA: fecha_entrega es fecha programada de entrega (calendario), no un flag de entregado.
       await prisma.detallePedido.updateMany({
-        where: { id_pedido: Number(id) },
+        where: {
+          id_pedido: Number(id),
+          pedido: { id_administrador: adminId },
+        },
         data: { id_estado: estadoEntregado.id },
       });
 
-      const updatedOrder = await prisma.pedido.findUnique({
-        where: { id: Number(id) },
+      const updatedOrder = await prisma.pedido.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           cliente: true,
           administrador: {

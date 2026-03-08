@@ -5,6 +5,7 @@ import { emailService } from '../services/email.service';
 import { whatsappService } from '../services/whatsapp.service';
 import { buildBasicEmailHtml } from '../utils/notificationTemplates';
 import { enqueueNotification, isNotificationQueueEnabled } from '../queues/notification.queue';
+import { prisma } from '../utils/prisma';
 
 const sendSchema = z.object({
   channel: z.enum(['email', 'whatsapp']),
@@ -22,15 +23,37 @@ export class NotificationController {
     try {
       const { channel, to, subject, message, attachBalanceExcel, balanceClientId, balanceClientName } = sendSchema.parse(req.body);
 
+      const adminId = (req as any).user?.id as number | undefined;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       const shouldAttachBalanceExcel = channel === 'email' && attachBalanceExcel === true;
       if (shouldAttachBalanceExcel && !balanceClientId) {
         return res.status(400).json({ success: false, error: 'balanceClientId es requerido para adjuntar el Excel de balance' });
+      }
+
+      if (shouldAttachBalanceExcel && balanceClientId) {
+        const client = await prisma.cliente.findFirst({
+          where: { id: balanceClientId, id_administrador: adminId },
+          select: { id: true },
+        });
+        if (!client) {
+          return res.status(404).json({
+            success: false,
+            error: 'Cliente no encontrado',
+          });
+        }
       }
 
       // Si hay Redis configurado, encolar el envío para hacerlo asíncrono y con reintentos.
       if (isNotificationQueueEnabled()) {
         try {
           const job = await enqueueNotification({
+            adminId,
             channel,
             to,
             subject,

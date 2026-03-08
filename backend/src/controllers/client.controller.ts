@@ -39,8 +39,20 @@ export class ClientController {
 
       const offset = (Number(page) - 1) * Number(limit);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Construir filtros
       const where: any = {};
+
+      // Multi-admin: por defecto, solo clientes del admin autenticado.
+      where.id_administrador = adminId;
 
       if (search) {
         where.OR = [
@@ -98,6 +110,7 @@ export class ClientController {
               GROUP BY id_pedido
             ) pg_agg ON pg_agg.id_pedido = p.id
             WHERE p.fecha_delete IS NULL
+              AND p.id_administrador = ${adminId}
               AND p.id_cliente IN (${Prisma.join(clienteIds)})
             GROUP BY p.id_cliente
           `)
@@ -147,8 +160,20 @@ export class ClientController {
     try {
       const { id } = req.params;
 
-      const cliente = await prisma.cliente.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           administrador: {
             select: {
@@ -291,9 +316,21 @@ export class ClientController {
       const { id } = req.params;
       const updateData = updateClientSchema.parse(req.body);
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el cliente existe
-      const existingClient = await prisma.cliente.findUnique({
-        where: { id: Number(id) },
+      const existingClient = await prisma.cliente.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
       });
 
       if (!existingClient) {
@@ -386,9 +423,21 @@ export class ClientController {
     try {
       const { id } = req.params;
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el cliente existe
-      const existingClient = await prisma.cliente.findUnique({
-        where: { id: Number(id) },
+      const existingClient = await prisma.cliente.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         include: {
           pedidos: {
             where: {
@@ -435,21 +484,32 @@ export class ClientController {
   // GET /api/clients/stats
   static async getClientsStats(req: Request, res: Response) {
     try {
-      const totalClientes = await prisma.cliente.count();
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const totalClientes = await prisma.cliente.count({
+        where: { id_administrador: adminId },
+      });
 
       // Estadísticas por administrador (top 5)
-      const clientesPorAdmin = await prisma.cliente.groupBy({
-        by: ['id_administrador'],
-        _count: {
-          id: true,
-        },
-        orderBy: {
-          _count: {
-            id: 'desc',
-          },
-        },
-        take: 5,
-      });
+      const clientesPorAdmin = authReq.user?.super_usuario
+        ? await prisma.cliente.groupBy({
+            by: ['id_administrador'],
+            _count: { id: true },
+            orderBy: { _count: { id: 'desc' } },
+            take: 5,
+          })
+        : await prisma.cliente.groupBy({
+            by: ['id_administrador'],
+            where: { id_administrador: adminId },
+            _count: { id: true },
+          });
 
       res.json({
         success: true,
@@ -472,8 +532,20 @@ export class ClientController {
     try {
       const { id } = req.params;
 
-      const cliente = await prisma.cliente.findUnique({
-        where: { id: Number(id) },
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
         select: {
           id: true,
           nombre: true,
@@ -555,6 +627,7 @@ export class ClientController {
           ORDER BY id_pedido, fecha_pago DESC, id DESC
         ) lastp ON lastp.id_pedido = p.id
         WHERE p.id_cliente = ${Number(id)}
+          AND p.id_administrador = ${adminId}
           AND p.fecha_delete IS NULL
         ORDER BY p.fecha_pedido DESC
       `).then(rows => rows.map(r => {
@@ -622,9 +695,21 @@ export class ClientController {
     try {
       const { id } = req.params;
 
+      const authReq = req as AuthRequest;
+      const adminId = authReq.user?.id;
+      if (!adminId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Acceso denegado. Usuario no autenticado.',
+        });
+      }
+
       // Verificar que el cliente existe
-      const cliente = await prisma.cliente.findUnique({
-        where: { id: Number(id) },
+      const cliente = await prisma.cliente.findFirst({
+        where: {
+          id: Number(id),
+          id_administrador: adminId,
+        },
       });
 
       if (!cliente) {
