@@ -91,6 +91,14 @@ export default function App() {
     return <Login />;
   }
 
+  const headerUserLabel = (() => {
+    const email = String(user.email ?? '').trim();
+    if (!email) return 'Admin';
+    const at = email.indexOf('@');
+    const prefix = at >= 0 ? email.slice(0, at) : email;
+    return prefix.trim() || 'Admin';
+  })();
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
@@ -116,7 +124,7 @@ export default function App() {
           </div>
           <div className="flex items-center bg-white/10 rounded-full px-4 py-2">
             <span className="text-white text-base font-semibold whitespace-nowrap">
-              Admin
+              {headerUserLabel}
             </span>
             <span className="mx-3 h-5 w-px bg-white/30" aria-hidden="true" />
             <button
