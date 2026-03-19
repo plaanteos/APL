@@ -95,6 +95,12 @@ export const validateEnv = (): void => {
       }
     }
   }
+
+  // Si no hay ningún proveedor configurado, avisar (no es fatal, pero explica 500 al intentar enviar).
+  const hasSmtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  if (!isResend && !hasSmtp) {
+    warnings.push('Email no configurado: definí RESEND_API_KEY (recomendado en Render) o SMTP_USER/SMTP_PASS para habilitar envíos.');
+  }
   if (!process.env.FRONTEND_URL) {
     warnings.push('FRONTEND_URL no está definido. Solo es requerido si enviás links de recuperación (en vez de código).');
   }

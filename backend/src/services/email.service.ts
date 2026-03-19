@@ -221,6 +221,16 @@ class EmailService {
       const smtpCode = String(error?.code || '');
       const smtpResponseCode = Number(error?.responseCode);
 
+      // Errores típicos de red/conexión al SMTP (p.ej. proveedor bloqueado por el host).
+      const isSmtpNetworkError =
+        smtpCode === 'ETIMEDOUT' ||
+        smtpCode === 'ESOCKET' ||
+        smtpCode === 'ECONNRESET' ||
+        smtpCode === 'ECONNREFUSED' ||
+        smtpCode === 'EHOSTUNREACH' ||
+        smtpCode === 'ENETUNREACH' ||
+        smtpCode === 'ENOTFOUND';
+
       const isSmtpConfigError =
         msg.includes('SMTP_USER/SMTP_PASS no están configurados') ||
         /invalid login/i.test(msg) ||
@@ -232,7 +242,8 @@ class EmailService {
         msg.startsWith('Resend:') ||
         msg === 'RESEND_API_KEY no está configurado' ||
         msg.startsWith('EMAIL_FROM no está configurado') ||
-        isSmtpConfigError;
+        isSmtpConfigError ||
+        isSmtpNetworkError;
 
       if (process.env.NODE_ENV === 'development' || isSafeConfigError) {
         const wrapped: any = new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
@@ -240,6 +251,9 @@ class EmailService {
         // Mapear credenciales SMTP inválidas a 401 (más claro para frontend).
         if (isSmtpConfigError && !statusCode) {
           wrapped.statusCode = 401;
+        } else if (isSmtpNetworkError && !statusCode) {
+          // Timeout/bloqueo de red hacia SMTP: servicio no disponible.
+          wrapped.statusCode = smtpCode === 'ETIMEDOUT' ? 504 : 503;
         } else if (statusCode) {
           wrapped.statusCode = statusCode;
         }
