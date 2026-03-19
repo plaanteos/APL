@@ -148,7 +148,16 @@ El backend ya incluye un endpoint para pruebas/manual:
 
 - `POST /api/notifications/send` con `channel=email`
 
-Para usar **SendGrid** sin cambiar código, configurá SMTP en tu `.env`:
+Para usar **SendGrid** sin cambiar código, tenés 2 opciones.
+
+### Opción recomendada en Render: SendGrid por API (HTTP)
+
+- `SENDGRID_API_KEY=<TU_SENDGRID_API_KEY>`
+- `EMAIL_FROM="APL <tu-sender-verificado@dominio.com>"`
+
+En SendGrid podés usar **Single Sender Verification** si no tenés dominio.
+
+### Opción alternativa: SendGrid por SMTP
 
 - `SMTP_HOST=smtp.sendgrid.net`
 - `SMTP_PORT=587`

@@ -23,6 +23,10 @@ class EmailService {
     return !!process.env.RESEND_API_KEY;
   }
 
+  private isSendgridEnabled() {
+    return !!process.env.SENDGRID_API_KEY;
+  }
+
   private normalizeEnvValue(raw: string | undefined) {
     if (!raw) return { value: '', changed: false };
     const trimmed = raw.trim();
@@ -155,13 +159,130 @@ class EmailService {
     }
   }
 
+  private async sendEmailViaSendgrid(options: EmailOptions): Promise<void> {
+    const apiKeyRaw = process.env.SENDGRID_API_KEY;
+    const apiKeyNorm = this.normalizeEnvValue(apiKeyRaw);
+    const apiKey = apiKeyNorm.value;
+    if (!apiKey) {
+      throw new Error('SENDGRID_API_KEY no está configurado');
+    }
+    if (apiKeyNorm.changed) {
+      logger.warn('⚠️ SENDGRID_API_KEY contenía espacios/comillas; se normalizó automáticamente.');
+    }
+
+    const fromRaw = process.env.EMAIL_FROM;
+    const fromNorm = this.normalizeEnvValue(fromRaw);
+    const from = fromNorm.value;
+    if (!from) {
+      throw new Error('EMAIL_FROM no está configurado (requerido para SendGrid)');
+    }
+    if (fromNorm.changed) {
+      logger.warn('⚠️ EMAIL_FROM contenía espacios/comillas; se normalizó automáticamente.');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    try {
+      const payload: any = {
+        personalizations: [
+          {
+            to: [{ email: options.to }],
+            subject: options.subject,
+          },
+        ],
+        from: { email: from },
+        content: [{ type: 'text/html', value: options.html }],
+      };
+
+      // Si EMAIL_FROM viene como "Nombre <email@dominio>", SendGrid no lo acepta en email.
+      // Normalizamos en caso de formato display-name.
+      const match = from.match(/<([^>]+)>/);
+      if (match?.[1]) {
+        payload.from.email = match[1].trim();
+        payload.from.name = from.replace(match[0], '').replace(/^\s*"|"\s*$/g, '').trim() || undefined;
+      }
+
+      if (options.attachments?.length) {
+        payload.attachments = options.attachments.map((a) => ({
+          filename: a.filename,
+          content: a.content.toString('base64'),
+          type: a.contentType,
+          disposition: 'attachment',
+        }));
+      }
+
+      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        let detail = text || res.statusText;
+        try {
+          const parsed = JSON.parse(text);
+          // SendGrid suele devolver { errors: [{ message, field, help }] }
+          const first = parsed?.errors?.[0]?.message;
+          if (first) detail = first;
+        } catch {
+          // ignore
+        }
+
+        if (res.status === 401) {
+          throw this.createStatusError(`SendGrid: API key inválida (revisá SENDGRID_API_KEY). Detalle: ${detail}`, 401);
+        }
+
+        if (res.status === 403) {
+          throw this.createStatusError(
+            `SendGrid: forbidden (403). Verificá el sender/"from" en SendGrid (Single Sender Verification o dominio). Detalle: ${detail}`,
+            403
+          );
+        }
+
+        throw this.createStatusError(`SendGrid: error (${res.status}). Detalle: ${detail}`, res.status);
+      }
+
+      logger.info(`📧 Email enviado a ${options.to} (provider=sendgrid)`);
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw this.createStatusError('SendGrid request timeout', 504);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async sendEmailViaSmtp(options: EmailOptions): Promise<void> {
     const transporter = this.createTransporter();
-    const from =
-      process.env.EMAIL_FROM ||
-      (process.env.SMTP_USER
+
+    const fromRaw = process.env.EMAIL_FROM;
+    const fromNorm = this.normalizeEnvValue(fromRaw);
+    let from = fromNorm.value;
+
+    if (fromNorm.changed) {
+      logger.warn('⚠️ EMAIL_FROM contenía espacios/comillas; se normalizó automáticamente.');
+    }
+
+    // Si viene con texto extra luego del cierre de ">", el header queda inválido.
+    // Ej: "APL <a@b.com>a@b.com" -> recortar a "APL <a@b.com>".
+    const gtIndex = from.indexOf('>');
+    if (gtIndex !== -1 && from.slice(gtIndex + 1).trim().length > 0) {
+      logger.warn('⚠️ EMAIL_FROM tenía texto extra luego de ">"; se recortó automáticamente.');
+      from = from.slice(0, gtIndex + 1).trim();
+    }
+
+    if (!from) {
+      from = process.env.SMTP_USER
         ? `"APL Laboratorio Dental" <${process.env.SMTP_USER}>`
-        : 'APL Laboratorio Dental');
+        : 'APL Laboratorio Dental';
+    }
 
     const info = await transporter.sendMail({
       from,
@@ -210,6 +331,11 @@ class EmailService {
         }
       }
 
+      if (this.isSendgridEnabled()) {
+        await this.sendEmailViaSendgrid(options);
+        return;
+      }
+
       await this.sendEmailViaSmtp(options);
     } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
@@ -242,6 +368,9 @@ class EmailService {
         msg.startsWith('Resend:') ||
         msg === 'RESEND_API_KEY no está configurado' ||
         msg.startsWith('EMAIL_FROM no está configurado') ||
+        msg.startsWith('SendGrid:') ||
+        msg === 'SENDGRID_API_KEY no está configurado' ||
+        msg.startsWith('EMAIL_FROM no está configurado (requerido para SendGrid)') ||
         isSmtpConfigError ||
         isSmtpNetworkError;
 

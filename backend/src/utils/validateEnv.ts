@@ -73,9 +73,24 @@ export const validateEnv = (): void => {
 
   // Configuración de Email (Gmail/SMTP) - warning si falta
   const isResend = !!process.env.RESEND_API_KEY;
+  const isSendgrid = !!process.env.SENDGRID_API_KEY;
+
+  // Validación básica de EMAIL_FROM (aplica a SMTP y a APIs)
+  if (process.env.EMAIL_FROM) {
+    const from = String(process.env.EMAIL_FROM);
+    const gtIndex = from.indexOf('>');
+    if (gtIndex !== -1 && from.slice(gtIndex + 1).trim().length > 0) {
+      warnings.push('EMAIL_FROM parece mal formado: hay texto extra luego de ">". Ejemplo válido: "APL <gestion.apl.dental@gmail.com>"');
+    }
+  }
+
   if (isResend) {
     if (!process.env.EMAIL_FROM) {
       warnings.push('RESEND_API_KEY está definido pero falta EMAIL_FROM (ej: "APL <no-reply@tu-dominio>").');
+    }
+  } else if (isSendgrid) {
+    if (!process.env.EMAIL_FROM) {
+      warnings.push('SENDGRID_API_KEY está definido pero falta EMAIL_FROM (ej: "APL <no-reply@tu-dominio>").');
     }
   } else {
     if (process.env.SMTP_USER && !process.env.SMTP_PASS) {
@@ -98,8 +113,13 @@ export const validateEnv = (): void => {
 
   // Si no hay ningún proveedor configurado, avisar (no es fatal, pero explica 500 al intentar enviar).
   const hasSmtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-  if (!isResend && !hasSmtp) {
-    warnings.push('Email no configurado: definí RESEND_API_KEY (recomendado en Render) o SMTP_USER/SMTP_PASS para habilitar envíos.');
+  if (!isResend && !isSendgrid && !hasSmtp) {
+    warnings.push('Email no configurado: definí RESEND_API_KEY o SENDGRID_API_KEY (recomendado en Render) o SMTP_USER/SMTP_PASS para habilitar envíos.');
+  }
+
+  // Ayuda: prioridad de proveedores
+  if (isResend && isSendgrid) {
+    warnings.push('RESEND_API_KEY y SENDGRID_API_KEY están definidos. Prioridad: Resend (API) primero, luego SendGrid (API).');
   }
   if (!process.env.FRONTEND_URL) {
     warnings.push('FRONTEND_URL no está definido. Solo es requerido si enviás links de recuperación (en vez de código).');
