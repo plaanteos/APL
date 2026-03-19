@@ -13,6 +13,14 @@ interface EmailOptions {
 }
 
 class EmailService {
+  private parseBoolEnv(value: string | undefined): boolean | undefined {
+    if (value == null) return undefined;
+    const v = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+    return undefined;
+  }
+
   private createStatusError(message: string, statusCode: number) {
     const err: any = new Error(message);
     err.statusCode = statusCode;
@@ -40,7 +48,11 @@ class EmailService {
   private createTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587');
-    const secure = port === 465;
+    const secureEnv = this.parseBoolEnv(process.env.SMTP_SECURE);
+    const secure = secureEnv ?? port === 465;
+
+    const requireTlsEnv = this.parseBoolEnv(process.env.SMTP_REQUIRE_TLS);
+    const requireTLS = requireTlsEnv ?? (port === 587);
 
     const user = process.env.SMTP_USER;
     const passRaw = process.env.SMTP_PASS;
@@ -59,6 +71,7 @@ class EmailService {
       port,
       secure,
       auth: { user, pass },
+      requireTLS,
       // Evitar que el request quede colgado indefinidamente si el proveedor bloquea SMTP
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
