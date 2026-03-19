@@ -232,8 +232,10 @@ function doPost(e) {
 
 3) Deploy → “New deployment” → type “Web app”.
 	 - Execute as: **Me**
-	 - Who has access: “Anyone” (si usás token) o el modo que prefieras.
-4) Copiá la URL y colócala en `GMAIL_APPS_SCRIPT_URL`.
+	 - Who has access: **Anyone** (recomendado si usás token).
+4) Copiá la **URL de App web** que termina en **`/exec`** (evitá la de `.../dev`) y colócala en `GMAIL_APPS_SCRIPT_URL`.
+
+Si en Render ves `unauthorized`, el token no coincide: `GMAIL_APPS_SCRIPT_TOKEN` (Render) debe ser igual a `TOKEN` (Apps Script) y luego redeploy del script.
 
 ⚠️ Importante: Apps Script tiene cuotas diarias (gratis) y límites por minuto.
 

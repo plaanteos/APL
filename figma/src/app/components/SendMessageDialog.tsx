@@ -43,13 +43,6 @@ export function SendMessageDialog({
 
   const openFallback = (finalMessage: string) => {
     try {
-      if (type === 'email') {
-        const subject = 'Mensaje desde APL';
-        const url = `mailto:${encodeURIComponent(contactInfo)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalMessage)}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-
       const normalized = normalizePhone(contactInfo);
       const waDigits = normalized.replace(/[^0-9]/g, '');
       if (!waDigits) return;
@@ -86,8 +79,8 @@ export function SendMessageDialog({
     } catch (err: any) {
       console.error("Error sending notification:", err);
 
-      // Fallback: abrir cliente de email o WhatsApp Web si el endpoint falla.
-      openFallback(finalMessage);
+      // Fallback: abrir WhatsApp Web si falla el endpoint.
+      if (type === 'whatsapp') openFallback(finalMessage);
 
       toast.error("No se pudo enviar desde el sistema", {
         description:

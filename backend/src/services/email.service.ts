@@ -335,23 +335,44 @@ class EmailService {
       });
 
       const text = await res.text().catch(() => '');
+
+      // Si Google responde HTML (login/drive) suele ser URL incorrecta o acceso no público.
+      const looksLikeHtml = /<\s*!doctype\s+html|<\s*html\b/i.test(text);
+      const mentionsDrive = /drive|unable to open the file|page not found/i.test(text);
+      const mentionsLogin = /accounts\.google\.com|sign in|ServiceLogin/i.test(text);
+
       if (!res.ok) {
+        if ((res.status === 401 || res.status === 403) && (looksLikeHtml || mentionsDrive || mentionsLogin)) {
+          throw this.createStatusError(
+            'Gmail Apps Script: el Web App no está accesible públicamente o la URL es incorrecta. Usá la URL de "App web" que termina en "/exec" y desplegá con acceso "Anyone". Luego actualizá GMAIL_APPS_SCRIPT_URL en Render.',
+            res.status
+          );
+        }
+
         throw this.createStatusError(
           `Gmail Apps Script: error (${res.status}). Detalle: ${text || res.statusText}`,
           res.status
         );
       }
 
-      // Si el script devuelve JSON, lo usamos solo para logs.
-      let detail = '';
+      // Si el script devuelve JSON, detectar errores de negocio.
       try {
         const parsed = JSON.parse(text);
-        if (parsed?.error) detail = String(parsed.error);
+        const err = parsed?.error ? String(parsed.error) : '';
+        if (err) {
+          if (err === 'unauthorized') {
+            throw this.createStatusError(
+              'Gmail Apps Script: unauthorized. El token no coincide. Revisá que GMAIL_APPS_SCRIPT_TOKEN (Render) sea igual a TOKEN (Apps Script) y redeployá el script.',
+              401
+            );
+          }
+          if (err === 'missing_fields') {
+            throw this.createStatusError('Gmail Apps Script: faltan campos (to/subject/html).', 400);
+          }
+          throw this.createStatusError(`Gmail Apps Script: ${err}`, 500);
+        }
       } catch {
-        // ignore
-      }
-      if (detail) {
-        throw this.createStatusError(`Gmail Apps Script: ${detail}`, 500);
+        // Si no es JSON, lo consideramos OK.
       }
 
       logger.info(`📧 Email enviado a ${options.to} (provider=gmail-apps-script)`);
