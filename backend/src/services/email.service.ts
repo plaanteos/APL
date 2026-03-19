@@ -43,7 +43,7 @@ class EmailService {
     const pass = (passRaw || '').replace(/\s+/g, '');
 
     if (!user || !pass) {
-      throw new Error('SMTP_USER/SMTP_PASS no están configurados');
+      throw this.createStatusError('SMTP_USER/SMTP_PASS no están configurados', 500);
     }
 
     if (passRaw && passRaw !== pass) {
@@ -216,12 +216,33 @@ class EmailService {
       const baseMsg = 'No se pudo enviar el email';
       const msg = String(error?.message || '');
       const statusCode = error?.statusCode || error?.status;
+
+      // Nodemailer suele exponer estos campos en errores de auth.
+      const smtpCode = String(error?.code || '');
+      const smtpResponseCode = Number(error?.responseCode);
+
+      const isSmtpConfigError =
+        msg.includes('SMTP_USER/SMTP_PASS no están configurados') ||
+        /invalid login/i.test(msg) ||
+        smtpCode === 'EAUTH' ||
+        smtpResponseCode === 535;
+
       // Mensajes "seguros" para mostrar en producción cuando es un problema de configuración.
-      const isSafeConfigError = msg.startsWith('Resend:') || msg === 'RESEND_API_KEY no está configurado' || msg.startsWith('EMAIL_FROM no está configurado');
+      const isSafeConfigError =
+        msg.startsWith('Resend:') ||
+        msg === 'RESEND_API_KEY no está configurado' ||
+        msg.startsWith('EMAIL_FROM no está configurado') ||
+        isSmtpConfigError;
 
       if (process.env.NODE_ENV === 'development' || isSafeConfigError) {
         const wrapped: any = new Error(`${baseMsg}: ${error?.message || 'error desconocido'}`);
-        if (statusCode) wrapped.statusCode = statusCode;
+
+        // Mapear credenciales SMTP inválidas a 401 (más claro para frontend).
+        if (isSmtpConfigError && !statusCode) {
+          wrapped.statusCode = 401;
+        } else if (statusCode) {
+          wrapped.statusCode = statusCode;
+        }
         throw wrapped;
       }
       const wrapped: any = new Error(baseMsg);

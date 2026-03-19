@@ -261,7 +261,7 @@ export class ExcelService {
         workbook.creator = 'APL Laboratorio Dental';
         workbook.created = new Date();
 
-        // ÚNICA HOJA: Resumen mensual (estilo Excel normal, sin tema oscuro)
+        // ÚNICA HOJA: Resumen mensual (adjunto para enviar al cliente)
         const sheet = workbook.addWorksheet('Resumen mensual', {
             views: [{ showGridLines: true }],
         });
@@ -283,25 +283,14 @@ export class ExcelService {
             { key: 'importe', width: 14 },
         ];
 
-        // Título (como captura): centrado, grande, merge A1:D1
+        // Título (como captura): nombre del cliente, merge A1:D1
         sheet.mergeCells('A1:D1');
-        sheet.getCell('A1').value = 'RESUMEN MENSUAL';
-        sheet.getCell('A1').font = { size: 16, bold: true };
+        sheet.getCell('A1').value = balanceData.cliente.nombre;
+        sheet.getCell('A1').font = { size: 14, bold: true };
         sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-        // Info del cliente (como captura)
-        sheet.getCell('A3').value = 'Cliente:';
-        sheet.getCell('B3').value = balanceData.cliente.nombre;
-        sheet.getCell('A4').value = 'Email:';
-        sheet.getCell('B4').value = balanceData.cliente.email;
-        sheet.getCell('A5').value = 'Teléfono:';
-        sheet.getCell('B5').value = balanceData.cliente.telefono;
-        for (const r of [3, 4, 5]) {
-            sheet.getCell(r, 1).font = { bold: true };
-        }
-
-        // Encabezados de tabla (fila 7)
-        const headerRowIndex = 7;
+        // Encabezados de tabla (fila 3)
+        const headerRowIndex = 3;
         const headerRow = sheet.getRow(headerRowIndex);
         headerRow.values = ['Fecha de entrega', 'Paciente', 'Trabajo', 'Importe'];
         headerRow.height = 20;
