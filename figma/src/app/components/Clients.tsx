@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Mail, Phone, MessageCircle, User, Loader2 } from "lucide-react";
+import { Plus, Mail, Phone, MessageCircle, User, Loader2, Pencil, Trash2 } from "lucide-react";
 import clientService from "../../services/client.service";
 import type { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
+import { EditClientDialog } from "./EditClientDialog";
 
 interface ClientsProps {
   onNavigateToBalance: (clientId: number) => void;
@@ -16,6 +17,10 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
   const [clients, setClients] = useState<IClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editDialog, setEditDialog] = useState<{ open: boolean; client: IClient | null }>({
+    open: false,
+    client: null,
+  });
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
     type: "email" | "whatsapp";
@@ -30,35 +35,25 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
 
   // Fetch clients
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const response = await clientService.getAll();
-        setClients(response);
-      } catch (err: any) {
-        console.error('Error fetching clients:', err);
-        setError(err.response?.data?.error || 'Error al cargar clientes');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchClients();
+    refreshClients(true);
   }, []);
 
+  const refreshClients = async (withLoading: boolean = false) => {
+    try {
+      if (withLoading) setIsLoading(true);
+      setError(null);
+      const response = await clientService.getAll();
+      setClients(response);
+    } catch (err: any) {
+      console.error('Error fetching clients:', err);
+      setError(err.response?.data?.error || 'Error al cargar clientes');
+    } finally {
+      if (withLoading) setIsLoading(false);
+    }
+  };
+
   const handleClientCreated = () => {
-    // Refrescar datos después de crear cliente
-    const fetchClients = async () => {
-      try {
-        const response = await clientService.getAll();
-        setClients(response);
-      } catch (err) {
-        console.error('Error refreshing clients:', err);
-      }
-    };
-    fetchClients();
+    refreshClients(false);
   };
 
   const handleOpenMessage = (
@@ -74,6 +69,23 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
       clientName,
       contactInfo,
     });
+  };
+
+  const handleOpenEdit = (client: IClient, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditDialog({ open: true, client });
+  };
+
+  const handleDeleteQuick = async (client: IClient, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = window.confirm(`¿Eliminar al cliente "${client.nombre}"?`);
+    if (!ok) return;
+    try {
+      await clientService.delete(client.id);
+      await refreshClients(false);
+    } catch (err: any) {
+      console.error('Error deleting client:', err);
+    }
   };
 
   type ClientKind = 'odontologo' | 'clinica' | 'otro';
@@ -191,9 +203,27 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
                     <div className="flex-1 min-w-0">
                       <h3 className="truncate">{displayName}</h3>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${getTypePillClasses(kind)}`}>
-                      {kindLabel}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${getTypePillClasses(kind)}`}>
+                        {kindLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEdit(client, e)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        aria-label="Editar cliente"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteQuick(client, e)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-red-700"
+                        aria-label="Eliminar cliente"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -243,6 +273,14 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
         type={messageDialog.type}
         clientName={messageDialog.clientName}
         contactInfo={messageDialog.contactInfo}
+      />
+
+      <EditClientDialog
+        open={editDialog.open}
+        onOpenChange={(open) => setEditDialog({ open, client: open ? editDialog.client : null })}
+        client={editDialog.client}
+        onClientUpdated={() => refreshClients(false)}
+        onClientDeleted={() => refreshClients(false)}
       />
     </div>
   );

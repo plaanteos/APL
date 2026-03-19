@@ -163,11 +163,13 @@ export function DayOrdersDialog({
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <User size={16} className="text-current" />
-                          <span className="font-semibold">{order.cliente?.nombre || "Cliente"}</span>
+                          <span className="font-semibold">{String(order.cliente?.nombre ?? '').trim() || "Cliente desconocido"}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <FileText size={14} className={text.muted} />
-                          <span className={text.muted}>{order.nombrePaciente || '-'}</span>
+                          <span className={text.muted}>
+                            <span className="font-medium">Paciente:</span> {order.nombrePaciente || '-'}
+                          </span>
                         </div>
                       </div>
 
@@ -195,12 +197,12 @@ export function DayOrdersDialog({
                       <div className="flex items-center gap-1 text-sm">
                         <DollarSign size={14} className="text-current" />
                         <span className="font-semibold">
-                          ${Number(order.montoTotal || 0).toLocaleString()}
+                          {Number(order.montoTotal || 0).toLocaleString()}
                         </span>
                       </div>
                       {Number(order.montoPagado || 0) > 0 && (
                         <div className={`text-xs ${text.muted}`}>
-                          Pagado: ${Number(order.montoPagado || 0).toLocaleString()}
+                          Pagado: {Number(order.montoPagado || 0).toLocaleString()}
                         </div>
                       )}
                     </div>

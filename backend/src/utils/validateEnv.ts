@@ -84,6 +84,16 @@ export const validateEnv = (): void => {
     if (!process.env.SMTP_USER && process.env.SMTP_PASS) {
       warnings.push('SMTP_PASS está definido pero falta SMTP_USER.');
     }
+
+    const smtpHost = (process.env.SMTP_HOST || '').toLowerCase();
+    if (smtpHost.includes('sendgrid')) {
+      if (process.env.SMTP_USER && process.env.SMTP_USER !== 'apikey') {
+        warnings.push('Para SendGrid SMTP, SMTP_USER debe ser "apikey" (literal).');
+      }
+      if (!process.env.EMAIL_FROM) {
+        warnings.push('Para SendGrid SMTP se recomienda definir EMAIL_FROM con un sender verificado (ej: "APL <no-reply@tu-dominio>").');
+      }
+    }
   }
   if (!process.env.FRONTEND_URL) {
     warnings.push('FRONTEND_URL no está definido. Solo es requerido si enviás links de recuperación (en vez de código).');

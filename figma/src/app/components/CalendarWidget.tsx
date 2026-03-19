@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { DayOrdersDialog } from "./DayOrdersDialog";
 import orderService from "../../services/order.service";
+import clientService from "../../services/client.service";
 import { toast } from "sonner";
 
 type CalendarOrder = {
@@ -34,6 +35,7 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const [preselectedDate, setPreselectedDate] = useState<string>("");
   const [orders, setOrders] = useState<CalendarOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [clientsById, setClientsById] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     fetchOrders();
@@ -49,6 +51,12 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const parseDateValueToLocalKey = (value: string) => {
     const raw = String(value ?? '').trim();
     if (!raw) return '';
+
+    // Si viene como ISO con hora (ej. 2026-03-19T00:00:00.000Z), usamos la parte de fecha
+    // tal cual para evitar corrimiento por zona horaria.
+    if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/.test(raw)) {
+      return raw.slice(0, 10);
+    }
 
     // Si es YYYY-MM-DD, parsear como fecha local (evita corrimiento por UTC)
     const m = raw.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/);
@@ -67,7 +75,16 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const fetchedOrders = await orderService.getAll();
+      const [fetchedOrders, clients] = await Promise.all([
+        orderService.getAll(),
+        clientService.getAll(),
+      ]);
+
+      const map = new Map<number, string>();
+      (clients || []).forEach((c: any) => {
+        if (c?.id != null) map.set(Number(c.id), String(c.nombre ?? '').trim());
+      });
+      setClientsById(map);
 
       const mappedOrders: CalendarOrder[] = (fetchedOrders || []).map((order: any) => {
         const firstDetalle = order?.detalles?.[0];
@@ -97,7 +114,11 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
           montoPagado,
           estado,
           estadoId,
-          cliente: { nombre: String(order?.cliente?.nombre ?? "") },
+          cliente: {
+            nombre:
+              String(order?.cliente?.nombre ?? '').trim() ||
+              String(map.get(Number(order?.id_cliente)) ?? '').trim(),
+          },
         };
       });
 

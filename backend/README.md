@@ -142,6 +142,20 @@ Modo watch:
 npm run test:watch
 ```
 
+## 📧 Envío de emails (SendGrid)
+
+El backend ya incluye un endpoint para pruebas/manual:
+
+- `POST /api/notifications/send` con `channel=email`
+
+Para usar **SendGrid** sin cambiar código, configurá SMTP en tu `.env`:
+
+- `SMTP_HOST=smtp.sendgrid.net`
+- `SMTP_PORT=587`
+- `SMTP_USER=apikey`
+- `SMTP_PASS=<TU_SENDGRID_API_KEY>`
+- `EMAIL_FROM="APL <no-reply@tu-dominio.com>"` (recomendado; sender verificado en SendGrid)
+
 ## 🗄️ Evidencia / Verificación de BD (RBD-02)
 
 Para obtener un reporte reproducible del estado de la BD (tablas, índices, triggers, constraints, columnas 2FA), ejecutar:

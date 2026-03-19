@@ -32,17 +32,49 @@ export function SendMessageDialog({
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
+  const normalizePhone = (raw: string) => {
+    const s = String(raw ?? '').trim();
+    if (!s) return '';
+    // Mantener solo dígitos y '+' inicial.
+    const plus = s.startsWith('+') ? '+' : '';
+    const digits = s.replace(/[^0-9]/g, '');
+    return plus ? `+${digits}` : digits;
+  };
+
+  const openFallback = (finalMessage: string) => {
+    try {
+      if (type === 'email') {
+        const subject = 'Mensaje desde APL';
+        const url = `mailto:${encodeURIComponent(contactInfo)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalMessage)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      const normalized = normalizePhone(contactInfo);
+      const waDigits = normalized.replace(/[^0-9]/g, '');
+      if (!waDigits) return;
+      const url = `https://wa.me/${waDigits}?text=${encodeURIComponent(finalMessage)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // no-op
+    }
+  };
+
   const handleSend = async () => {
-    if (!message.trim()) return;
+    const finalMessage = message.trim();
+    if (!finalMessage) {
+      toast.error('Escribe un mensaje');
+      return;
+    }
 
     try {
       setIsSending(true);
 
       await notificationService.send({
         channel: type,
-        to: contactInfo,
+        to: type === 'whatsapp' ? normalizePhone(contactInfo) : contactInfo,
         subject: type === "email" ? "Mensaje desde Laboratorio Dental" : undefined,
-        message: message.trim(),
+        message: finalMessage,
       });
 
       toast.success(type === "whatsapp" ? "WhatsApp enviado" : "Email enviado", {
@@ -53,8 +85,15 @@ export function SendMessageDialog({
       onOpenChange(false);
     } catch (err: any) {
       console.error("Error sending notification:", err);
-      toast.error("No se pudo enviar", {
-        description: err?.response?.data?.error || err?.message || "Revisá configuración de Gmail/WhatsApp",
+
+      // Fallback: abrir cliente de email o WhatsApp Web si el endpoint falla.
+      openFallback(finalMessage);
+
+      toast.error("No se pudo enviar desde el sistema", {
+        description:
+          err?.response?.data?.error ||
+          err?.message ||
+          "Se abrió el canal externo como alternativa",
       });
     } finally {
       setIsSending(false);

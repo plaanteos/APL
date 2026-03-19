@@ -30,6 +30,15 @@ import type { IProducto, IEstado } from "../types";
 import { Plus } from "lucide-react";
 
 // Schema de validación con Zod
+const parseLocalDateInput = (val: string) => {
+  // El input type="date" entrega YYYY-MM-DD. new Date(YYYY-MM-DD) se interpreta como UTC,
+  // lo cual en TZ negativas puede caer en el día anterior. Parseamos a fecha local.
+  const [y, m, d] = String(val || '').split('-').map((x) => Number(x));
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
 const orderSchema = z.object({
   clientId: z.string().min(1, "Debe seleccionar un cliente"),
   // Paciente opcional: si queda vacío se persistirá como "-".
@@ -47,7 +56,8 @@ const orderSchema = z.object({
   }, "El precio debe ser mayor a 0"),
   dueDate: z.string().refine((val) => {
     if (!val) return false;
-    const selectedDate = new Date(val);
+    const selectedDate = parseLocalDateInput(val);
+    if (!selectedDate) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return selectedDate >= today;
@@ -125,12 +135,6 @@ export function NewOrderDialog({
       .toUpperCase()
       .replace(/[\s-]+/g, '_');
   };
-
-  // Al crear pedido: solo se permite Pendiente.
-  const estadosPendiente = (estados || []).filter((e) => {
-    const normalized = normalizeEstadoDescripcion((e as any)?.descripcion);
-    return normalized === 'PENDIENTE';
-  });
 
   // Fetch clients
   useEffect(() => {
@@ -533,17 +537,11 @@ export function NewOrderDialog({
               </SelectTrigger>
               <SelectContent>
                 {estados.length > 0 ? (
-                  estadosPendiente.length > 0 ? (
-                    estadosPendiente.map((e) => (
-                      <SelectItem key={e.id} value={e.id.toString()}>
-                        {e.descripcion}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="__no_pending_state" disabled>
-                      No hay estado "Pendiente" en el catálogo
+                  estados.map((e) => (
+                    <SelectItem key={e.id} value={e.id.toString()}>
+                      {e.descripcion}
                     </SelectItem>
-                  )
+                  ))
                 ) : (
                   <SelectItem value="__no_states" disabled>
                     {isLoadingCatalogs ? "Cargando estados..." : "No hay estados"}

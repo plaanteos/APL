@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
@@ -6,6 +6,9 @@ import { useAuth } from "../../hooks/useAuth";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 import { authService } from "../../services/auth.service";
+
+const REMEMBERED_LOGIN_EMAIL_KEY = "rememberedLoginEmail";
+let rememberedPasswordInMemory: { email: string; password: string } | null = null;
 
 // Schema de validación con Zod
 const loginSchema = z.object({
@@ -35,6 +38,18 @@ export function Login() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const isEmailLocked = mode === "forgot-verify" || mode === "forgot-reset";
+
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem(REMEMBERED_LOGIN_EMAIL_KEY);
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+
+      if (rememberedPasswordInMemory?.email === rememberedEmail) {
+        setPassword(rememberedPasswordInMemory.password);
+      }
+    }
+  }, []);
 
   const validateField = (field: "email" | "password", value: string) => {
     try {
@@ -76,6 +91,15 @@ export function Login() {
 
     try {
       await login(email, password, rememberMe, otp || undefined, backupCode || undefined);
+
+      if (rememberMe) {
+        localStorage.setItem(REMEMBERED_LOGIN_EMAIL_KEY, email);
+        rememberedPasswordInMemory = { email, password };
+      } else {
+        localStorage.removeItem(REMEMBERED_LOGIN_EMAIL_KEY);
+        rememberedPasswordInMemory = null;
+      }
+
       toast.success("Sesión iniciada correctamente");
     } catch (error: any) {
       console.error("Login error:", error);
@@ -211,6 +235,7 @@ export function Login() {
               autoComplete="email"
               value={email}
               readOnly={isEmailLocked}
+              disabled={isLoading}
               onChange={(e) => {
                 if (isEmailLocked) return;
                 setEmail(e.target.value);
@@ -239,6 +264,7 @@ export function Login() {
                 type="password"
                 autoComplete="current-password"
                 value={password}
+                disabled={isLoading}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   validateField("password", e.target.value);
@@ -260,7 +286,15 @@ export function Login() {
                 name="rememberMe"
                 type="checkbox"
                 checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setRememberMe(checked);
+                  if (!checked) {
+                    localStorage.removeItem(REMEMBERED_LOGIN_EMAIL_KEY);
+                    rememberedPasswordInMemory = null;
+                  }
+                }}
                 className="w-4 h-4 text-[#033f63] border-gray-300 rounded focus:ring-[#28666e]"
               />
               <label
@@ -411,7 +445,7 @@ export function Login() {
             className="w-full bg-[#033f63] hover:bg-[#28666e] text-white py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {mode === "login"
-              ? (isLoading ? "Iniciando sesión..." : "Iniciar Sesión")
+              ? (isLoading ? "Ingresando..." : "Iniciar Sesión")
               : mode === "forgot-request"
                 ? (isLoading ? "Enviando código..." : "Enviar código")
                 : mode === "forgot-verify"

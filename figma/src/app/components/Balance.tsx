@@ -310,27 +310,28 @@ export function Balance({ selectedClientId }: BalanceProps) {
       {/* Filtros (cliente + período) */}
       <Card className="p-4">
         <div className="space-y-4">
-          {!selectedClientId && (
-            <div className="space-y-2">
-              <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">Cliente</label>
-              <Select
-                value={currentClientId?.toString() || ""}
-                onValueChange={(val) => setCurrentClientId(Number(val))}
-                name="clientId"
-              >
-                <SelectTrigger id="balanceClient" className="w-full">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id.toString()}>
-                      {client.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">Cliente</label>
+            <Select
+              value={currentClientId?.toString() || ""}
+              onValueChange={(val) => setCurrentClientId(Number(val))}
+              name="clientId"
+            >
+              <SelectTrigger id="balanceClient" className="w-full">
+                <SelectValue placeholder="Seleccionar cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedClient ? (
+              <p className="text-xs text-gray-500">Mostrando balance de: <span className="font-medium text-gray-700">{selectedClient.nombre}</span></p>
+            ) : null}
+          </div>
 
           <div className="space-y-2">
             <label htmlFor="balancePeriod" className="text-sm font-medium text-gray-700">Filtro de balance</label>

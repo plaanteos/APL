@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp } from "lucide-react";
 import orderService from "../../services/order.service";
 import clientService from "../../services/client.service";
+import productoService from "../../services/producto.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
 import {
@@ -24,6 +25,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter);
   const [orders, setOrders] = useState<IOrderWithCalculations[]>([]);
   const [clientsById, setClientsById] = useState<Map<number, string>>(new Map());
+  const [productosById, setProductosById] = useState<Map<number, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
@@ -40,6 +42,22 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         setClientsById(map);
       } catch {
         // Silencioso: si falla, se mantiene fallback "Cliente desconocido".
+      }
+    })();
+  }, []);
+
+  // Cargar productos (para resolver nombre en detalle de pedido)
+  useEffect(() => {
+    (async () => {
+      try {
+        const productos = await productoService.getAll();
+        const map = new Map<number, string>();
+        (productos || []).forEach((p: any) => {
+          if (p?.id != null) map.set(Number(p.id), String(p.tipo ?? '').trim());
+        });
+        setProductosById(map);
+      } catch {
+        // Silencioso: si falla, se mantiene fallback "Producto".
       }
     })();
   }, []);
@@ -61,23 +79,21 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       setIsLoading(true);
       setError(null);
 
-      const filters: any = {};
+      // La API no expone filtros por entregado/deuda de forma consistente,
+      // así que filtramos client-side para que el selector funcione siempre.
+      const data = await orderService.getAll();
 
-      // Mapear filtros del frontend al backend
-      switch (statusFilter) {
-        case "pending":
-          filters.entregado = false;
-          break;
-        case "delivered":
-          filters.entregado = true;
-          break;
-        case "debt":
-          filters.conDeuda = true;
-          break;
-      }
+      const filtered = (data || []).filter((o) => {
+        if (statusFilter === 'all') return true;
+        if (statusFilter === 'debt') return Number(o.montoPendiente ?? 0) > 0;
 
-      const data = await orderService.getAll(filters);
-      setOrders(data);
+        const s = getPedidoStatus(o);
+        if (statusFilter === 'delivered') return s === 'ENTREGADO';
+        if (statusFilter === 'pending') return s !== 'ENTREGADO';
+        return true;
+      });
+
+      setOrders(filtered);
     } catch (err: any) {
       console.error('Error fetching orders:', err);
       setError(err.response?.data?.error || 'Error al cargar pedidos');
@@ -118,6 +134,16 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       String(detalle?.estadoDescripcion ?? '').trim() ||
       ''
     );
+  };
+
+  const getDetalleProductoNombre = (detalle: any) => {
+    const direct = String(detalle?.producto?.tipo ?? '').trim();
+    if (direct) return direct;
+
+    const byId = productosById.get(Number(detalle?.id_producto));
+    if (byId) return byId;
+
+    return 'Producto';
   };
 
   type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO';
@@ -291,7 +317,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                             <div key={detalle.id} className="text-sm bg-gray-50 p-2 rounded">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <p className="font-medium">{detalle.producto?.tipo || 'Producto'}</p>
+                                  <p className="font-medium">{getDetalleProductoNombre(detalle)}</p>
                                   <p className="text-gray-600">Paciente: {detalle.paciente || '-'}</p>
                                   <p className="text-gray-500 text-xs">
                                     Estado: {getDetalleEstadoDescripcion(detalle) || 'N/A'}
