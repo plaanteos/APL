@@ -35,6 +35,10 @@ class EmailService {
     return !!process.env.SENDGRID_API_KEY;
   }
 
+  private isGmailAppsScriptEnabled() {
+    return !!process.env.GMAIL_APPS_SCRIPT_URL;
+  }
+
   private normalizeEnvValue(raw: string | undefined) {
     if (!raw) return { value: '', changed: false };
     const trimmed = raw.trim();
@@ -272,6 +276,95 @@ class EmailService {
     }
   }
 
+  private async sendEmailViaGmailAppsScript(options: EmailOptions): Promise<void> {
+    const urlRaw = process.env.GMAIL_APPS_SCRIPT_URL;
+    const urlNorm = this.normalizeEnvValue(urlRaw);
+    const url = urlNorm.value;
+    if (!url) {
+      throw new Error('GMAIL_APPS_SCRIPT_URL no está configurado');
+    }
+
+    const tokenRaw = process.env.GMAIL_APPS_SCRIPT_TOKEN;
+    const tokenNorm = this.normalizeEnvValue(tokenRaw);
+    const token = tokenNorm.value;
+    if (tokenRaw && tokenNorm.changed) {
+      logger.warn('⚠️ GMAIL_APPS_SCRIPT_TOKEN contenía espacios/comillas; se normalizó automáticamente.');
+    }
+
+    const fromRaw = process.env.EMAIL_FROM;
+    const fromNorm = this.normalizeEnvValue(fromRaw);
+    let from = fromNorm.value;
+    if (fromNorm.changed) {
+      logger.warn('⚠️ EMAIL_FROM contenía espacios/comillas; se normalizó automáticamente.');
+    }
+
+    // Normalizar display-name a solo email si el script lo necesita.
+    const match = from.match(/<([^>]+)>/);
+    let fromName: string | undefined;
+    if (match?.[1]) {
+      const extractedName = from.replace(match[0], '').replace(/^\s*"|"\s*$/g, '').trim();
+      if (extractedName) fromName = extractedName;
+      from = match[1].trim();
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: token || undefined,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          from: from || undefined,
+          fromName,
+          attachments: options.attachments?.length
+            ? options.attachments.map((a) => ({
+                filename: a.filename,
+                contentBase64: a.content.toString('base64'),
+                contentType: a.contentType,
+              }))
+            : undefined,
+        }),
+        signal: controller.signal,
+      });
+
+      const text = await res.text().catch(() => '');
+      if (!res.ok) {
+        throw this.createStatusError(
+          `Gmail Apps Script: error (${res.status}). Detalle: ${text || res.statusText}`,
+          res.status
+        );
+      }
+
+      // Si el script devuelve JSON, lo usamos solo para logs.
+      let detail = '';
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.error) detail = String(parsed.error);
+      } catch {
+        // ignore
+      }
+      if (detail) {
+        throw this.createStatusError(`Gmail Apps Script: ${detail}`, 500);
+      }
+
+      logger.info(`📧 Email enviado a ${options.to} (provider=gmail-apps-script)`);
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        throw this.createStatusError('Gmail Apps Script request timeout', 504);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async sendEmailViaSmtp(options: EmailOptions): Promise<void> {
     const transporter = this.createTransporter();
 
@@ -349,6 +442,11 @@ class EmailService {
         return;
       }
 
+      if (this.isGmailAppsScriptEnabled()) {
+        await this.sendEmailViaGmailAppsScript(options);
+        return;
+      }
+
       await this.sendEmailViaSmtp(options);
     } catch (error: any) {
       logger.error('❌ Error enviando email:', error);
@@ -384,6 +482,8 @@ class EmailService {
         msg.startsWith('SendGrid:') ||
         msg === 'SENDGRID_API_KEY no está configurado' ||
         msg.startsWith('EMAIL_FROM no está configurado (requerido para SendGrid)') ||
+        msg.startsWith('Gmail Apps Script:') ||
+        msg === 'GMAIL_APPS_SCRIPT_URL no está configurado' ||
         isSmtpConfigError ||
         isSmtpNetworkError;
 

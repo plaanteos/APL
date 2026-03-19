@@ -74,6 +74,7 @@ export const validateEnv = (): void => {
   // Configuración de Email (Gmail/SMTP) - warning si falta
   const isResend = !!process.env.RESEND_API_KEY;
   const isSendgrid = !!process.env.SENDGRID_API_KEY;
+  const isGmailAppsScript = !!process.env.GMAIL_APPS_SCRIPT_URL;
 
   // Validación básica de EMAIL_FROM (aplica a SMTP y a APIs)
   if (process.env.EMAIL_FROM) {
@@ -91,6 +92,13 @@ export const validateEnv = (): void => {
   } else if (isSendgrid) {
     if (!process.env.EMAIL_FROM) {
       warnings.push('SENDGRID_API_KEY está definido pero falta EMAIL_FROM (ej: "APL <no-reply@tu-dominio>").');
+    }
+  } else if (isGmailAppsScript) {
+    if (process.env.GMAIL_APPS_SCRIPT_TOKEN == null || String(process.env.GMAIL_APPS_SCRIPT_TOKEN).trim() === '') {
+      warnings.push('GMAIL_APPS_SCRIPT_URL está definido pero falta GMAIL_APPS_SCRIPT_TOKEN (recomendado para evitar abuso del endpoint).');
+    }
+    if (!process.env.EMAIL_FROM) {
+      warnings.push('GMAIL_APPS_SCRIPT_URL está definido pero falta EMAIL_FROM (ej: "APL <gestion.apl.dental@gmail.com>").');
     }
   } else {
     if (process.env.SMTP_USER && !process.env.SMTP_PASS) {
@@ -113,8 +121,8 @@ export const validateEnv = (): void => {
 
   // Si no hay ningún proveedor configurado, avisar (no es fatal, pero explica 500 al intentar enviar).
   const hasSmtp = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-  if (!isResend && !isSendgrid && !hasSmtp) {
-    warnings.push('Email no configurado: definí RESEND_API_KEY o SENDGRID_API_KEY (recomendado en Render) o SMTP_USER/SMTP_PASS para habilitar envíos.');
+  if (!isResend && !isSendgrid && !isGmailAppsScript && !hasSmtp) {
+    warnings.push('Email no configurado: definí RESEND_API_KEY o SENDGRID_API_KEY (recomendado en Render) o GMAIL_APPS_SCRIPT_URL (gratis con Gmail) o SMTP_USER/SMTP_PASS para habilitar envíos.');
   }
 
   // Ayuda: prioridad de proveedores

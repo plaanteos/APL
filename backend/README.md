@@ -165,6 +165,78 @@ En SendGrid podés usar **Single Sender Verification** si no tenés dominio.
 - `SMTP_PASS=<TU_SENDGRID_API_KEY>`
 - `EMAIL_FROM="APL <no-reply@tu-dominio.com>"` (recomendado; sender verificado en SendGrid)
 
+## 📧 Envío de emails gratis con Gmail (sin SMTP) — recomendado si Render bloquea SMTP
+
+Si en Render te aparece `Connection timeout` con `smtp.gmail.com`, es común que el host bloquee/limite SMTP saliente.
+Como alternativa gratuita, podés enviar con tu cuenta Gmail vía **Google Apps Script** (HTTP), que normalmente sí funciona.
+
+### Variables de entorno (Render)
+
+- `GMAIL_APPS_SCRIPT_URL=<URL_DEL_WEB_APP>`
+- `GMAIL_APPS_SCRIPT_TOKEN=<TOKEN_SECRETO>` (recomendado)
+- `EMAIL_FROM="APL <gestion.apl.dental@gmail.com>"`
+
+### Script (Apps Script)
+
+1) Ir a https://script.google.com/ → Nuevo proyecto.
+2) Pegar este código (ajustá el token):
+
+```js
+const TOKEN = 'CAMBIAR_ESTE_TOKEN';
+
+function doPost(e) {
+	try {
+		const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+		const provided = String(body.token || (e && e.parameter && e.parameter.token) || '');
+		if (TOKEN && provided !== TOKEN) {
+			return ContentService.createTextOutput(JSON.stringify({ error: 'unauthorized' }))
+				.setMimeType(ContentService.MimeType.JSON);
+		}
+
+		const to = String(body.to || '');
+		const subject = String(body.subject || '');
+		const html = String(body.html || '');
+		const fromName = body.fromName ? String(body.fromName) : '';
+
+		if (!to || !subject || !html) {
+			return ContentService.createTextOutput(JSON.stringify({ error: 'missing_fields' }))
+				.setMimeType(ContentService.MimeType.JSON);
+		}
+
+		const attachments = Array.isArray(body.attachments)
+			? body.attachments
+					.filter((a) => a && a.contentBase64)
+					.map((a) => Utilities.newBlob(
+						Utilities.base64Decode(String(a.contentBase64)),
+						a.contentType ? String(a.contentType) : undefined,
+						a.filename ? String(a.filename) : 'attachment'
+					))
+			: [];
+
+		MailApp.sendEmail({
+			to,
+			subject,
+			htmlBody: html,
+			...(fromName ? { name: fromName } : {}),
+			...(attachments.length ? { attachments } : {}),
+		});
+
+		return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+			.setMimeType(ContentService.MimeType.JSON);
+	} catch (err) {
+		return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
+			.setMimeType(ContentService.MimeType.JSON);
+	}
+}
+```
+
+3) Deploy → “New deployment” → type “Web app”.
+	 - Execute as: **Me**
+	 - Who has access: “Anyone” (si usás token) o el modo que prefieras.
+4) Copiá la URL y colócala en `GMAIL_APPS_SCRIPT_URL`.
+
+⚠️ Importante: Apps Script tiene cuotas diarias (gratis) y límites por minuto.
+
 ## 🗄️ Evidencia / Verificación de BD (RBD-02)
 
 Para obtener un reporte reproducible del estado de la BD (tablas, índices, triggers, constraints, columnas 2FA), ejecutar:
