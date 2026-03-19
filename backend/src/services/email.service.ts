@@ -341,6 +341,14 @@ class EmailService {
       const mentionsDrive = /drive|unable to open the file|page not found/i.test(text);
       const mentionsLogin = /accounts\.google\.com|sign in|ServiceLogin/i.test(text);
 
+      // Importante: a veces Google devuelve HTML con 200. Eso NO es un envío exitoso.
+      if (res.ok && (looksLikeHtml || mentionsDrive || mentionsLogin)) {
+        throw this.createStatusError(
+          'Gmail Apps Script: la URL respondió HTML (probable /dev, acceso restringido, o redirección de Google). Usá la URL de "App web" que termina en "/exec" y desplegá con acceso "Anyone". Luego actualizá GMAIL_APPS_SCRIPT_URL en Render.',
+          502
+        );
+      }
+
       if (!res.ok) {
         if ((res.status === 401 || res.status === 403) && (looksLikeHtml || mentionsDrive || mentionsLogin)) {
           throw this.createStatusError(
