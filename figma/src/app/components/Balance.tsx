@@ -669,37 +669,37 @@ export function Balance({ selectedClientId }: BalanceProps) {
       <div className="space-y-4">
         {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-3">
-          <Card className="p-4 bg-gradient-to-br from-[#7c9885] to-[#28666e]">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-white/80">Ingresos</p>
-              <TrendingUp size={20} className="text-white/80" />
+          <Card className="p-4 border-[#28666e]/20 bg-white">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium text-gray-500">Ingresos</p>
+              <TrendingUp size={18} className="text-[#28666e]" />
             </div>
-            <p className="text-2xl font-medium text-white">{formatCurrency(income)}</p>
-            <p className="text-xs text-white/70 mt-1">{filteredGlobalOrders.length} pedidos</p>
+            <p className="text-2xl font-bold text-[#28666e]">{formatCurrency(income)}</p>
+            <p className="text-[10px] text-gray-400 mt-1">{filteredGlobalOrders.length} pedidos</p>
           </Card>
 
-          <Card className="p-4 bg-gradient-to-br from-[#b5b682] to-[#fedc97]">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-white/90">Egresos</p>
-              <TrendingDown size={20} className="text-white/90" />
+          <Card className="p-4 border-[#b5b682]/20 bg-white">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium text-gray-500">Egresos</p>
+              <TrendingDown size={18} className="text-[#b5b682]" />
             </div>
-            <p className="text-2xl font-medium text-white">{formatCurrency(expenses)}</p>
-            <p className="text-xs text-white/80 mt-1">{periodExpenses.length} gastos</p>
+            <p className="text-2xl font-bold text-[#b5b682]">{formatCurrency(expenses)}</p>
+            <p className="text-[10px] text-gray-400 mt-1">{periodExpenses.length} gastos</p>
           </Card>
         </div>
 
         {/* Balance Card */}
         <Card
-          className={`p-4 ${
-            balance >= 0
-              ? "bg-gradient-to-r from-[#033f63] to-[#28666e]"
-              : "bg-gradient-to-r from-red-600 to-red-700"
+          className={`p-4 border shadow-sm ${
+            balance >= 0 ? "border-[#033f63]/20 bg-white" : "border-red-100 bg-red-50/30"
           }`}
         >
-          <p className="text-sm text-white/80 mb-1">
+          <p className="text-xs font-medium text-gray-500 mb-1">
             {period === "monthly" ? "Balance del Mes" : "Balance Anual"}
           </p>
-          <p className="text-3xl font-medium text-white">{formatCurrency(balance)}</p>
+          <p className={`text-3xl font-bold ${balance >= 0 ? 'text-[#033f63]' : 'text-red-600'}`}>
+            {formatCurrency(balance)}
+          </p>
         </Card>
 
         {/* Desglose Egresos */}
@@ -877,21 +877,21 @@ export function Balance({ selectedClientId }: BalanceProps) {
           <>
           {/* Summary Cards - Vista por Cliente */}
           <div className="grid grid-cols-3 gap-3">
-            <Card className="p-4">
-              <p className="text-xs text-gray-500">Total</p>
-              <p className="text-xl font-semibold text-[#033f63]">
+            <Card className="p-4 border-[#033f63]/20 bg-white shadow-sm">
+              <p className="text-xs font-medium text-gray-500 mb-1">Total</p>
+              <p className="text-xl font-bold text-[#033f63]">
                 {formatCurrency(viewTotals.totalGeneral ?? 0)}
               </p>
             </Card>
-            <Card className="p-4">
-              <p className="text-xs text-gray-500">Pagado</p>
-              <p className="text-xl font-semibold text-[#7c9885]">
+            <Card className="p-4 border-[#7c9885]/20 bg-white shadow-sm">
+              <p className="text-xs font-medium text-gray-500 mb-1">Pagado</p>
+              <p className="text-xl font-bold text-[#7c9885]">
                 {formatCurrency(viewTotals.totalPagado ?? 0)}
               </p>
             </Card>
-            <Card className="p-4">
-              <p className="text-xs text-gray-500">Falta</p>
-              <p className="text-xl font-semibold text-[#b5b682]">
+            <Card className="p-4 border-[#b5b682]/20 bg-white shadow-sm">
+              <p className="text-xs font-medium text-gray-500 mb-1">Pendiente</p>
+              <p className="text-xl font-bold text-[#b5b682]">
                 {formatCurrency(viewTotals.totalPendiente ?? 0)}
               </p>
             </Card>
