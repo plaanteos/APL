@@ -5,6 +5,7 @@ import { NewOrderDialog } from "./NewOrderDialog";
 import { DayOrdersDialog } from "./DayOrdersDialog";
 import orderService from "../../services/order.service";
 import clientService from "../../services/client.service";
+import productoService from "../../services/producto.service";
 import { toast } from "sonner";
 
 type CalendarOrder = {
@@ -35,7 +36,6 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const [preselectedDate, setPreselectedDate] = useState<string>("");
   const [orders, setOrders] = useState<CalendarOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [clientsById, setClientsById] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     fetchOrders();
@@ -75,16 +75,21 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
   const fetchOrders = async () => {
     try {
       setIsLoading(true);
-      const [fetchedOrders, clients] = await Promise.all([
+      const [fetchedOrders, clients, productos] = await Promise.all([
         orderService.getAll(),
         clientService.getAll(),
+        productoService.getAll(),
       ]);
 
       const map = new Map<number, string>();
       (clients || []).forEach((c: any) => {
         if (c?.id != null) map.set(Number(c.id), String(c.nombre ?? '').trim());
       });
-      setClientsById(map);
+
+      const productMap = new Map<number, string>();
+      (productos || []).forEach((p: any) => {
+        if (p?.id != null) productMap.set(Number(p.id), String(p.tipo ?? '').trim());
+      });
 
       const mappedOrders: CalendarOrder[] = (fetchedOrders || []).map((order: any) => {
         const firstDetalle = order?.detalles?.[0];
@@ -103,13 +108,16 @@ export function CalendarWidget({ onNavigateToBalance }: CalendarWidgetProps) {
         // UX solicitada: solo estados Pendiente o Pagado; y si se confirma entrega => Entregado.
         const estado = isDelivered ? 'Entregado' : montoPendiente > 0 ? 'Pendiente' : 'Pagado';
 
+        const directProdName = String(firstDetalle?.producto?.tipo ?? '').trim();
+        const productName = directProdName || productMap.get(Number(firstDetalle?.id_producto)) || "Producto";
+
         return {
           id: String(order?.id ?? ""),
           clienteId: String(order?.id_cliente ?? ""),
           nombrePaciente: String(firstDetalle?.paciente ?? ""),
           fechaVencimiento: dueDate ? String(dueDate) : '',
           descripcion: String(order?.descripcion ?? ""),
-          tipoPedido: String(firstDetalle?.producto?.tipo ?? "Pedido"),
+          tipoPedido: String(productName),
           montoTotal,
           montoPagado,
           estado,

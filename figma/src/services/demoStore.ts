@@ -16,6 +16,7 @@ import type {
   IPagoFormData,
   ID,
 } from '../app/types';
+import type { IOtherExpense, IExpenseFormData } from './expense.service';
 
 type DemoDb = {
   adminId: ID;
@@ -24,12 +25,14 @@ type DemoDb = {
   estados: IEstado[];
   orders: IOrder[];
   pagos: IPagoWithDetails[];
+  expenses: IOtherExpense[];
   nextClientId: ID;
   nextProductoId: ID;
   nextOrderId: ID;
   nextDetallePedidoId: ID;
   nextPagoId: ID;
   nextDetallePagoId: ID;
+  nextExpenseId: ID;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -166,12 +169,36 @@ const db: DemoDb = {
       ],
     },
   ],
+  expenses: [
+    // Enero 2026
+    { id: 'e1', tipo: 'supplies', descripcion: 'Resina acrílica premium', monto: 4500, fecha: '2026-01-08T10:00:00.000Z', id_administrador: 1 },
+    { id: 'e2', tipo: 'delivery', descripcion: 'Envío urgente zona norte', monto: 1200, fecha: '2026-01-12T14:00:00.000Z', id_administrador: 1 },
+    { id: 'e3', tipo: 'supplies', descripcion: 'Dientes artificiales set completo', monto: 8900, fecha: '2026-01-15T09:00:00.000Z', id_administrador: 1 },
+    { id: 'e4', tipo: 'supplies', descripcion: 'Porcelana dental A2', monto: 3200, fecha: '2026-01-22T11:00:00.000Z', id_administrador: 1 },
+    { id: 'e5', tipo: 'delivery', descripcion: 'Cadetería express fin de mes', monto: 900, fecha: '2026-01-28T16:00:00.000Z', id_administrador: 1 },
+    // Febrero 2026
+    { id: 'e6', tipo: 'supplies', descripcion: 'Cera de modelado rosa', monto: 2100, fecha: '2026-02-03T10:00:00.000Z', id_administrador: 1 },
+    { id: 'e7', tipo: 'supplies', descripcion: 'Discos de zirconio 98mm', monto: 12500, fecha: '2026-02-07T09:00:00.000Z', id_administrador: 1 },
+    { id: 'e8', tipo: 'delivery', descripcion: 'Envío express clínica centro', monto: 1500, fecha: '2026-02-10T15:00:00.000Z', id_administrador: 1 },
+    { id: 'e9', tipo: 'supplies', descripcion: 'Cemento dental dual-cure', monto: 5600, fecha: '2026-02-14T11:00:00.000Z', id_administrador: 1 },
+    { id: 'e10', tipo: 'delivery', descripcion: 'Cadetería programada semanal', monto: 2200, fecha: '2026-02-18T14:00:00.000Z', id_administrador: 1 },
+    { id: 'e11', tipo: 'supplies', descripcion: 'Material de impresión A-Silicona', monto: 7800, fecha: '2026-02-21T10:00:00.000Z', id_administrador: 1 },
+    { id: 'e12', tipo: 'delivery', descripcion: 'Urgente fin de mes varios clientes', monto: 3100, fecha: '2026-02-27T16:00:00.000Z', id_administrador: 1 },
+    // Marzo 2026 (mes con balance negativo)
+    { id: 'e13', tipo: 'supplies', descripcion: 'Fresas y discos de grabado', monto: 18900, fecha: '2026-03-04T10:00:00.000Z', id_administrador: 1 },
+    { id: 'e14', tipo: 'supplies', descripcion: 'Yeso tipo IV importado', monto: 15400, fecha: '2026-03-09T09:00:00.000Z', id_administrador: 1 },
+    { id: 'e15', tipo: 'delivery', descripcion: 'Cadetería inicio de mes', monto: 2800, fecha: '2026-03-12T14:00:00.000Z', id_administrador: 1 },
+    { id: 'e16', tipo: 'supplies', descripcion: 'Recarga de insumos generales', monto: 22000, fecha: '2026-03-15T11:00:00.000Z', id_administrador: 1 },
+    { id: 'e17', tipo: 'delivery', descripcion: 'Envíos múltiples semana 3', monto: 4200, fecha: '2026-03-18T15:00:00.000Z', id_administrador: 1 },
+    { id: 'e18', tipo: 'supplies', descripcion: 'Porcelana, resina y accesorios', monto: 19600, fecha: '2026-03-21T10:00:00.000Z', id_administrador: 1 },
+  ] as IOtherExpense[],
   nextClientId: 5,
   nextProductoId: 5,
   nextOrderId: 104,
   nextDetallePedidoId: 1004,
   nextPagoId: 203,
   nextDetallePagoId: 3003,
+  nextExpenseId: 19,
 };
 
 const normalizeProductTipo = (raw: unknown) => {
@@ -407,5 +434,73 @@ export const demoStore = {
 
     db.pagos = [pago, ...db.pagos];
     return pago;
+  },
+
+  // Gastos
+  async getExpenses(params?: {
+    tipo?: 'all' | 'supplies' | 'delivery';
+    fechaDesde?: string;
+    fechaHasta?: string;
+  }): Promise<IOtherExpense[]> {
+    let result = [...db.expenses];
+
+    if (params?.tipo && params.tipo !== 'all') {
+      result = result.filter((e) => e.tipo === params.tipo);
+    }
+    if (params?.fechaDesde) {
+      const start = new Date(params.fechaDesde + 'T00:00:00');
+      result = result.filter((e) => new Date(e.fecha) >= start);
+    }
+    if (params?.fechaHasta) {
+      const end = new Date(params.fechaHasta + 'T23:59:59');
+      result = result.filter((e) => new Date(e.fecha) <= end);
+    }
+
+    return result.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  },
+
+  async createExpense(data: IExpenseFormData): Promise<IOtherExpense> {
+    const newExpense: IOtherExpense = {
+      id: String(db.nextExpenseId++),
+      tipo: data.tipo,
+      descripcion: data.descripcion,
+      monto: data.monto,
+      fecha: new Date().toISOString(),
+      id_administrador: db.adminId,
+    };
+    db.expenses = [newExpense, ...db.expenses];
+    return newExpense;
+  },
+
+  deleteExpense(id: string): void {
+    db.expenses = db.expenses.filter((e) => e.id !== id);
+  },
+
+  async getExpenseSummary(params: {
+    period: 'monthly' | 'yearly';
+    year: number;
+    month?: number;
+  }): Promise<{ total: number; totalInsumos: number; totalCadeteria: number; cantidad: number; gastos: IOtherExpense[] }> {
+    let gastos = [...db.expenses];
+
+    if (params.period === 'monthly' && params.month) {
+      gastos = gastos.filter((e) => {
+        const d = new Date(e.fecha);
+        return d.getFullYear() === params.year && d.getMonth() + 1 === params.month;
+      });
+    } else if (params.period === 'yearly') {
+      gastos = gastos.filter((e) => new Date(e.fecha).getFullYear() === params.year);
+    }
+
+    const totalInsumos = gastos.filter((g) => g.tipo === 'supplies').reduce((s, g) => s + g.monto, 0);
+    const totalCadeteria = gastos.filter((g) => g.tipo === 'delivery').reduce((s, g) => s + g.monto, 0);
+
+    return {
+      total: totalInsumos + totalCadeteria,
+      totalInsumos,
+      totalCadeteria,
+      cantidad: gastos.length,
+      gastos,
+    };
   },
 };

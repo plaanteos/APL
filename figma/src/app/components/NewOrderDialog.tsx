@@ -24,6 +24,7 @@ import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
 import productoService from "../../services/producto.service";
 import estadoService from "../../services/estado.service";
+import paymentService from "../../services/payment.service";
 import { authService } from "../../services/auth.service";
 import type { IClient } from "../types";
 import type { IProducto, IEstado } from "../types";
@@ -323,7 +324,7 @@ export function NewOrderDialog({
         Number(formData.unitPrice)
       );
 
-      await orderService.create({
+      const createdOrder = await orderService.create({
         id_cliente: Number(formData.clientId),
         fecha_entrega: formData.dueDate,
         id_administrador: adminId,
@@ -338,6 +339,30 @@ export function NewOrderDialog({
           },
         ],
       });
+
+      // Validar si el estado seleccionado es PAGADO para registrar el pago automático
+      const selectedEstado = estados.find(e => e.id.toString() === formData.estadoId);
+      const isPagado = selectedEstado && normalizeEstadoDescripcion(selectedEstado.descripcion) === 'PAGADO';
+      
+      if (isPagado && createdOrder) {
+        // En demo store id puede ser string o number dependiendo de la implementación.
+        // Pero en la respuesta normal es `createdOrder.id` (number/string).
+        const orderIdValue = (createdOrder as any).id;
+        if (orderIdValue != null) {
+          const amount = Number(formData.quantity) * Number(formData.unitPrice);
+          if (amount > 0) {
+            try {
+              await paymentService.create({
+                valor: amount,
+                detalles: [{ id_pedido: Number(orderIdValue), valor: amount }]
+              });
+            } catch (paymentError) {
+              console.error("Error creating automatic payment:", paymentError);
+              toast.error("El pedido fue creado pero hubo un error al registrar el pago automático.");
+            }
+          }
+        }
+      }
 
       toast.success(`Pedido para ${patientDisplay} creado exitosamente`);
       onOpenChange(false);
@@ -537,11 +562,16 @@ export function NewOrderDialog({
               </SelectTrigger>
               <SelectContent>
                 {estados.length > 0 ? (
-                  estados.map((e) => (
-                    <SelectItem key={e.id} value={e.id.toString()}>
-                      {e.descripcion}
-                    </SelectItem>
-                  ))
+                  estados
+                    .filter((e) => {
+                      const normalized = normalizeEstadoDescripcion(e.descripcion);
+                      return normalized === 'PENDIENTE' || normalized === 'PAGADO';
+                    })
+                    .map((e) => (
+                      <SelectItem key={e.id} value={e.id.toString()}>
+                        {e.descripcion}
+                      </SelectItem>
+                    ))
                 ) : (
                   <SelectItem value="__no_states" disabled>
                     {isLoadingCatalogs ? "Cargando estados..." : "No hay estados"}

@@ -12,11 +12,6 @@ export interface SendNotificationInput {
   attachBalanceExcel?: boolean;
   balanceClientId?: number;
   balanceClientName?: string;
-  //agregar pagos pendientes al mensaje
-  pendingPayments?: {
-    amount: number;
-    dueDate: string; // ISO string
-  }[];
 }
 
 export const notificationService = {

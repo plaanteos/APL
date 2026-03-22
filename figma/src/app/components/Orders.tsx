@@ -30,37 +30,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
 
-  // Cargar clientes (para resolver nombre en lista de pedidos)
-  useEffect(() => {
-    (async () => {
-      try {
-        const clients = await clientService.getAll();
-        const map = new Map<number, string>();
-        (clients || []).forEach((c) => {
-          if (c?.id != null) map.set(Number(c.id), String(c.nombre ?? '').trim());
-        });
-        setClientsById(map);
-      } catch {
-        // Silencioso: si falla, se mantiene fallback "Cliente desconocido".
-      }
-    })();
-  }, []);
-
-  // Cargar productos (para resolver nombre en detalle de pedido)
-  useEffect(() => {
-    (async () => {
-      try {
-        const productos = await productoService.getAll();
-        const map = new Map<number, string>();
-        (productos || []).forEach((p: any) => {
-          if (p?.id != null) map.set(Number(p.id), String(p.tipo ?? '').trim());
-        });
-        setProductosById(map);
-      } catch {
-        // Silencioso: si falla, se mantiene fallback "Producto".
-      }
-    })();
-  }, []);
+  // Cargar clientes se manejaba aparte pero es mejor todo en fetchOrders para evitar carga parcial
+  // Se mantienen states `clientsById` y `productosById` que se poblarán en `fetchOrders`.
 
   // Update filter when initialFilter changes
   useEffect(() => {
@@ -79,9 +50,24 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       setIsLoading(true);
       setError(null);
 
-      // La API no expone filtros por entregado/deuda de forma consistente,
-      // así que filtramos client-side para que el selector funcione siempre.
-      const data = await orderService.getAll();
+      // Cargar pedidos, clientes y productos en paralelo para evitar parpadeos
+      const [data, clients, productos] = await Promise.all([
+        orderService.getAll(),
+        clientService.getAll().catch(() => []),
+        productoService.getAll().catch(() => [])
+      ]);
+
+      const clientMap = new Map<number, string>();
+      (clients || []).forEach((c: any) => {
+        if (c?.id != null) clientMap.set(Number(c.id), String(c.nombre ?? '').trim());
+      });
+      setClientsById(clientMap);
+
+      const productMap = new Map<number, string>();
+      (productos || []).forEach((p: any) => {
+        if (p?.id != null) productMap.set(Number(p.id), String(p.tipo ?? '').trim());
+      });
+      setProductosById(productMap);
 
       const filtered = (data || []).filter((o) => {
         if (statusFilter === 'all') return true;
@@ -89,7 +75,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
 
         const s = getPedidoStatus(o);
         if (statusFilter === 'delivered') return s === 'ENTREGADO';
-        if (statusFilter === 'pending') return s !== 'ENTREGADO';
+        if (statusFilter === 'pending') return s === 'PENDIENTE' || s === 'EN_PROCESO';
+        if (statusFilter === 'paid') return s === 'PAGADO';
         return true;
       });
 
@@ -146,7 +133,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     return 'Producto';
   };
 
-  type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO';
+  type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO' | 'PAGADO';
 
   const getPedidoStatus = (order: IOrderWithCalculations): PedidoStatus => {
     const detalles = order.detalles || [];
@@ -156,6 +143,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         .filter(Boolean);
 
       if (statuses.length > 0 && statuses.every((s) => s === 'ENTREGADO')) return 'ENTREGADO';
+      // Prioridad: Si hay PAGADO y no todo es ENTREGADO, lo consideramos PAGADO
+      if (statuses.some((s) => s === 'PAGADO')) return 'PAGADO';
       // Tratamos LISTO_PARA_ENTREGA como EN_PROCESO para el pill de la lista.
       if (statuses.some((s) => s === 'EN_PROCESO' || s === 'LISTO_PARA_ENTREGA')) return 'EN_PROCESO';
       return 'PENDIENTE';
@@ -176,6 +165,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         return 'bg-[#fedc97]/55 text-[#033f63] border border-[#b5b682]/70';
       case 'EN_PROCESO':
         return 'bg-[#033f63]/15 text-[#033f63] border border-[#033f63]/25';
+      case 'PAGADO':
+        return 'bg-[#28666e]/20 text-[#28666e] border border-[#28666e]/40';
       case 'ENTREGADO':
         return 'bg-[#7c9885]/30 text-[#033f63] border border-[#7c9885]/60';
       default:
@@ -189,6 +180,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         return 'Pendiente';
       case 'EN_PROCESO':
         return 'En proceso';
+      case 'PAGADO':
+        return 'Pagado';
       case 'ENTREGADO':
         return 'Entregado';
       default:
@@ -239,6 +232,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="pending">Pendientes</SelectItem>
+            <SelectItem value="paid">Pagados</SelectItem>
             <SelectItem value="delivered">Entregados</SelectItem>
             <SelectItem value="debt">Con deuda</SelectItem>
           </SelectContent>

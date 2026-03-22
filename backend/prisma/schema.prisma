@@ -49,6 +49,7 @@ model Administrador {
   pedidos       Pedido[]
   productos     Producto[]
   pagos         Pago[]
+  otrosGastos   OtroGasto[]
   
   @@map("administrador")
 }
@@ -203,4 +204,24 @@ model Auditoria {
   @@map("auditoria")
   @@index([fecha_accion])
   @@index([usuario])
+}
+
+// ================================================================
+// TABLA: otro_gasto (Gastos generales de insumos y cadetería)
+// ================================================================
+model OtroGasto {
+  id               Int      @id @default(autoincrement())
+  tipo             String   @db.VarChar(20)   // "supplies" | "delivery"
+  descripcion      String   @db.Text
+  monto            Decimal  @db.Decimal(10,2)
+  fecha            DateTime @default(now())
+  id_administrador Int
+
+  // Relaciones
+  administrador    Administrador @relation(fields: [id_administrador], references: [id])
+
+  @@map("otro_gasto")
+  @@index([id_administrador])
+  @@index([fecha])
+  @@index([tipo])
 }

@@ -15,6 +15,7 @@ import auditRoutes from './routes/audit.routes';
 import productoRoutes from './routes/producto.routes';
 import estadoRoutes from './routes/estado.routes';
 import notificationRoutes from './routes/notification.routes';
+import expenseRoutes from './routes/expense.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -174,6 +175,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/estados', estadoRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/expenses', expenseRoutes);
 
 // Error handling middleware
 app.use(notFound);
