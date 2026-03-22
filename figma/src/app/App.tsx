@@ -5,6 +5,7 @@ import { Orders } from "./components/Orders";
 import { Clients } from "./components/Clients";
 import { Balance } from "./components/Balance";
 import { Login } from "./components/Login";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { useAuth } from "../hooks/useAuth";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
@@ -77,14 +78,7 @@ export default function App() {
   const canGoBack = navigationHistory.length > 1 && currentView !== "dashboard";
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#033f63] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {

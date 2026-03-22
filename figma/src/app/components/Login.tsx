@@ -6,6 +6,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { toast } from "sonner";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 import { authService } from "../../services/auth.service";
+import { LoadingScreen } from "./LoadingScreen";
 
 const REMEMBERED_LOGIN_EMAIL_KEY = "rememberedLoginEmail";
 let rememberedPasswordInMemory: { email: string; password: string } | null = null;
@@ -183,6 +184,10 @@ export function Login() {
       setIsLoading(false);
     }
   };
+
+  if (isLoading && (mode === "login" || mode === "forgot-reset")) {
+    return <LoadingScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#033f63] to-[#28666e] flex items-center justify-center p-4">
