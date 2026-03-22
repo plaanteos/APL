@@ -102,6 +102,7 @@ class ClientService {
           return {
             pedidoId,
             fecha,
+            fecha_entrega: p.fecha_entrega || null,
             paciente: String(p.paciente ?? '').trim() || '-',
             productos: String(p.productos ?? '').trim() || `${Number(p.cantidadProductos ?? 0)} productos`,
             montoTotal,
@@ -128,13 +129,14 @@ class ClientService {
       // En demo, exportar CSV local (sin backend) para evitar dependencias pesadas/vulnerables.
       const balance = await demoStore.getClientBalance(id);
 
-      const headers = ['Pedido', 'Fecha', 'Paciente', 'Productos', 'Total', 'Pagado', 'Pendiente', 'Entregado'];
+      const headers = ['Pedido', 'Fecha pedido', 'Fecha entrega', 'Paciente', 'Productos', 'Total', 'Pagado', 'Pendiente', 'Entregado'];
       const lines = [
         headers.join(','),
         ...balance.pedidos.map((p) => {
           const values = [
             p.pedidoId,
             new Date(p.fecha).toLocaleDateString('es-ES'),
+            p.fecha_entrega ? new Date(p.fecha_entrega as string).toLocaleDateString('es-ES') : '-',
             p.paciente,
             p.productos,
             p.montoTotal,

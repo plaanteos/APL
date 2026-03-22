@@ -3,19 +3,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
-import {
-  Mail,
-  MessageCircle,
-  Download,
-  DollarSign,
-  Loader2,
-  CheckCircle,
-  Plus,
-  Eye,
-  Printer,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
+import { Printer, MessageCircle, Mail, Download, Plus, Eye, Loader2, DollarSign, CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
 import expenseService, { IOtherExpense } from "../../services/expense.service";
@@ -65,6 +53,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showAddExpenseSheet, setShowAddExpenseSheet] = useState(false);
   const [showExpensesSheet, setShowExpensesSheet] = useState(false);
+  const [expensesCount, setExpensesCount] = useState(0);
   const [paymentTarget, setPaymentTarget] = useState<{
     pedidoId: number;
     paciente: string;
@@ -84,22 +73,20 @@ export function Balance({ selectedClientId }: BalanceProps) {
   } | null>(null);
 
   // ─── Cargar clientes ────────────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        setIsLoadingClients(true);
-        const data = await clientService.getAll();
-        setClients(data);
-        if (!currentClientId && data.length > 0) {
-          setCurrentClientId(data[0].id);
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.error || "Error al cargar clientes");
-      } finally {
-        setIsLoadingClients(false);
+  const fetchClients = useCallback(async () => {
+    try {
+      setIsLoadingClients(true);
+      const data = await clientService.getAll();
+      setClients(data);
+      if (!currentClientId && data.length > 0) {
+        setCurrentClientId(data[0].id);
       }
-    })();
-  }, []);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Error al cargar clientes");
+    } finally {
+      setIsLoadingClients(false);
+    }
+  }, [currentClientId]);
 
   useEffect(() => {
     if (selectedClientId) setCurrentClientId(selectedClientId);
@@ -120,6 +107,22 @@ export function Balance({ selectedClientId }: BalanceProps) {
       setIsLoadingBalance(false);
     }
   }, [currentClientId]);
+
+  // Cargar contador de gastos
+  const fetchExpenseCount = useCallback(async () => {
+    try {
+      const expenses = await expenseService.getAll();
+      setExpensesCount(expenses.length);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  // Efectos
+  useEffect(() => {
+    fetchClients();
+    fetchExpenseCount();
+  }, [fetchClients, fetchExpenseCount]);
 
   useEffect(() => {
     fetchBalance();
@@ -479,14 +482,15 @@ export function Balance({ selectedClientId }: BalanceProps) {
           <table className="w-full text-sm table-fixed">
             <colgroup>
               {showCheckboxes && <col className="w-[5%]" />}
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className={showCheckboxes ? "w-[25%]" : "w-[30%]"} />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+              <col className="w-[15%]" />
+              <col className={showCheckboxes ? "w-[20%]" : "w-[25%]"} />
               <col className="w-[10%]" />
               <col className="w-[10%]" />
               <col className="w-[10%]" />
               <col className="w-[10%]" />
-              <col className="w-[10%]" />
+              {period === "all" && <col className="w-[10%]" />}
             </colgroup>
             <thead>
               <tr className="border-b-2 border-[#033f63] text-left">
@@ -501,7 +505,8 @@ export function Balance({ selectedClientId }: BalanceProps) {
                     />
                   </th>
                 )}
-                <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Fecha</th>
+                <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Fecha pedido</th>
+                <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Fecha entrega</th>
                 <th className="py-3 px-3 font-semibold text-[#033f63] whitespace-nowrap">Paciente</th>
                 <th className="py-3 px-3 font-semibold text-[#033f63]">Trabajo</th>
                 <th className="py-3 px-3 font-semibold text-[#033f63] text-right whitespace-nowrap">Total</th>
@@ -538,6 +543,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
                     )}
                     <td className="py-4 px-3 text-gray-700 whitespace-nowrap align-top">
                       {formatDate(item.fecha)}
+                    </td>
+                    <td className="py-4 px-3 text-gray-700 whitespace-nowrap align-top">
+                      {item.fecha_entrega ? formatDate(item.fecha_entrega as string) : "-"}
                     </td>
                     <td className="py-4 px-3 text-gray-700 whitespace-nowrap align-top">
                       {item.paciente || "-"}
@@ -978,6 +986,11 @@ export function Balance({ selectedClientId }: BalanceProps) {
             >
               <Eye size={18} />
               <span className="text-sm">Ver Otros Gastos</span>
+              {expensesCount > 0 && (
+                <span className="flex items-center justify-center w-5 h-5 ml-1 text-xs font-medium text-white bg-[#033f63] rounded-full">
+                  {expensesCount}
+                </span>
+              )}
             </Button>
           </div>
 
@@ -1047,7 +1060,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
       <AddExpenseSheet
         open={showAddExpenseSheet}
         onOpenChange={setShowAddExpenseSheet}
-        onExpenseAdded={() => {}}
+        onExpenseAdded={fetchExpenseCount}
       />
 
       <OtherExpensesSheet

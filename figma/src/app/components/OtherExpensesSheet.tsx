@@ -107,7 +107,7 @@ export function OtherExpensesSheet({
         <SheetHeader>
           <SheetTitle className="text-[#033f63]">Otros Gastos</SheetTitle>
           <SheetDescription>
-            Resumen de insumos y gastos de cadetería registrados
+            Resumen de insumos y gastos de cadetería del cliente
           </SheetDescription>
         </SheetHeader>
 

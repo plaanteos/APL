@@ -299,6 +299,7 @@ export interface IPagoFormData {
 export interface IBalanceItem {
   pedidoId: ID;
   fecha: Date | string;
+  fecha_entrega?: Date | string | null;
   paciente: string;
   productos: string; // Lista de productos del pedido
   montoTotal: number;

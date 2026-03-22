@@ -78,7 +78,7 @@ export function AddExpenseSheet({
             Agregar Otros Gastos
           </SheetTitle>
           <SheetDescription>
-            Registra insumos y gastos de cadetería generales
+            Registra insumos y gastos de cadetería del cliente
           </SheetDescription>
         </SheetHeader>
 
