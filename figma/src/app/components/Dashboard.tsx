@@ -150,7 +150,7 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
             </div>
             <div>
               <p className="text-sm text-gray-500">Ingresos Total</p>
-              <p className="text-2xl">${(stats.totalRevenue / 1000).toFixed(0)}k</p>
+              <p className="text-2xl">${stats.totalRevenue.toLocaleString("es-ES")}</p>
             </div>
           </div>
         </Card>

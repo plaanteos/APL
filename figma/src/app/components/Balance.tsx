@@ -47,7 +47,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
   );
   const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -60,6 +60,10 @@ export function Balance({ selectedClientId }: BalanceProps) {
     montoTotal: number;
     montoPagado: number;
   } | null>(null);
+
+  // Pedidos globales para Balances Mensual/Anual
+  const [globalOrders, setGlobalOrders] = useState<any[]>([]);
+  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
 
   // Selección de pedidos para comprobante
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -139,7 +143,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
     (async () => {
       try {
-        setIsLoadingExpenses(true);
+
         const [year, month] = period === "monthly"
           ? [parseInt(monthValue.split("-")[0]), parseInt(monthValue.split("-")[1])]
           : [parseInt(yearValue), undefined];
@@ -161,15 +165,33 @@ export function Balance({ selectedClientId }: BalanceProps) {
         setPeriodExpenses([]);
         setPeriodExpenseSummary(null);
       } finally {
-        setIsLoadingExpenses(false);
+
+      }
+    })();
+
+    // Cargar pedidos globales si elegimos un filtro global
+    (async () => {
+      try {
+        setIsLoadingGlobal(true);
+        const orders = await orderService.getAll();
+        setGlobalOrders(orders);
+      } catch (err) {
+        toast.error("Error al cargar pedidos globales");
+      } finally {
+        setIsLoadingGlobal(false);
       }
     })();
   }, [period, monthValue, yearValue]);
 
-  // ─── Filtrado de pedidos ─────────────────────────────────────────────────────
+  // ─── Filtrado de pedidos del cliente ─────────────────────────────────────────
   const filteredPedidos = useMemo(() => {
     const pedidos = balanceData?.pedidos ?? [];
-    if (period === "all") return pedidos;
+    return pedidos; // El Balance de Cliente siempre muestra todo el balance del cliente sin importar la fecha
+  }, [balanceData]);
+
+  // ─── Filtrado de pedidos globales (para Mensual / Anual) ─────────────────────
+  const filteredGlobalOrders = useMemo(() => {
+    if (period === "all") return [];
 
     const parse = (value: any) => {
       const d = new Date(value);
@@ -178,26 +200,26 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
     if (period === "monthly") {
       const mm = String(monthValue).match(/^([0-9]{4})-([0-9]{2})$/);
-      if (!mm) return pedidos;
+      if (!mm) return [];
       const y = Number(mm[1]);
       const month = Number(mm[2]);
       const start = new Date(y, month - 1, 1);
       const end = new Date(y, month, 1);
-      return pedidos.filter((p) => {
-        const d = parse((p as any).fecha);
-        return d != null && d >= start && d < end;
+      return globalOrders.filter((p) => {
+        const d = parse((p as any).fecha_pedido || (p as any).fecha);
+        return d != null && d >= start && d < end && !p.fecha_delete;
       });
     }
 
     const y = Number(String(yearValue).trim());
-    if (Number.isNaN(y)) return pedidos;
+    if (Number.isNaN(y)) return [];
     const start = new Date(y, 0, 1);
     const end = new Date(y + 1, 0, 1);
-    return pedidos.filter((p) => {
-      const d = parse((p as any).fecha);
-      return d != null && d >= start && d < end;
+    return globalOrders.filter((p) => {
+      const d = parse((p as any).fecha_pedido || (p as any).fecha);
+      return d != null && d >= start && d < end && !p.fecha_delete;
     });
-  }, [balanceData, period, monthValue, yearValue]);
+  }, [globalOrders, period, monthValue, yearValue]);
 
   const viewTotals = useMemo(() => {
     const totalGeneral = filteredPedidos.reduce(
@@ -417,7 +439,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
       lines.push("");
       lines.push("=== PEDIDOS ===");
       lines.push(csvRow(["Fecha", "Paciente", "Trabajo", "Total", "Pagado", "Pendiente", "Entregado"]));
-      filteredPedidos.forEach((p) =>
+      filteredGlobalOrders.forEach((p) => // Use filteredGlobalOrders for orders list
         lines.push(csvRow([
           formatDate(p.fecha), p.paciente || "-", p.productos,
           p.montoTotal, p.montoPagado, p.montoPendiente,
@@ -637,68 +659,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
     </Card>
   );
 
-  // ─── Vista de Gastos (tabla) ─────────────────────────────────────────────────
-  const renderExpensesTable = () => (
-    <Card className="p-4">
-      <h3 className="text-base font-semibold text-[#033f63] mb-3">
-        {period === "monthly" ? "Gastos del Mes" : "Gastos del Año"}
-      </h3>
-
-      {isLoadingExpenses ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin h-6 w-6 text-[#033f63]" />
-        </div>
-      ) : periodExpenses.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-4">
-          No hay gastos registrados en este período
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b-2 border-[#033f63]">
-                <th className="text-left py-2 px-2 text-[#033f63]">Fecha</th>
-                <th className="text-left py-2 px-2 text-[#033f63]">Tipo</th>
-                <th className="text-left py-2 px-2 text-[#033f63]">Descripción</th>
-                <th className="text-right py-2 px-2 text-[#033f63]">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {periodExpenses.map((expense, index) => (
-                <tr
-                  key={expense.id}
-                  className={`border-b border-gray-100 ${index % 2 === 0 ? "bg-gray-50" : ""}`}
-                >
-                  <td className="py-3 px-2 text-gray-700 whitespace-nowrap">
-                    {formatExpenseDate(expense.fecha)}
-                  </td>
-                  <td className="py-3 px-2 text-gray-700">
-                    {expense.tipo === "supplies" ? "Insumos" : "Cadetería"}
-                  </td>
-                  <td className="py-3 px-2 text-gray-700">{expense.descripcion}</td>
-                  <td className="py-3 px-2 text-right text-[#b5b682] font-medium">
-                    {formatCurrency(expense.monto)}
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[#033f63] bg-[#b5b682]/5">
-                <td colSpan={3} className="py-3 px-2 text-right text-[#033f63]">
-                  <strong>TOTAL EGRESOS:</strong>
-                </td>
-                <td className="py-3 px-2 text-right text-[#b5b682]">
-                  <strong>{formatCurrency(periodExpenseSummary?.total ?? 0)}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-
   // ─── Resumen mensual / anual ─────────────────────────────────────────────────
   const renderPeriodSummary = () => {
-    const income = viewTotals.totalPagado;
+    const income = filteredGlobalOrders.reduce((acc, o) => acc + (o.montoPagado || 0), 0);
     const expenses = periodExpenseSummary?.total ?? 0;
     const balance = income - expenses;
 
@@ -712,7 +675,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               <TrendingUp size={20} className="text-white/80" />
             </div>
             <p className="text-2xl font-medium text-white">{formatCurrency(income)}</p>
-            <p className="text-xs text-white/70 mt-1">{filteredPedidos.length} pedidos</p>
+            <p className="text-xs text-white/70 mt-1">{filteredGlobalOrders.length} pedidos</p>
           </Card>
 
           <Card className="p-4 bg-gradient-to-br from-[#b5b682] to-[#fedc97]">
@@ -776,10 +739,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
           <Download size={18} />
           <span>Descargar CSV</span>
         </Button>
-
-        {/* Tables */}
-        {renderOrdersTable(false)}
-        {renderExpensesTable()}
       </div>
     );
   };
@@ -823,50 +782,54 @@ export function Balance({ selectedClientId }: BalanceProps) {
       {/* Filtros: cliente + período */}
       <Card className="p-4">
         <div className="space-y-4">
-          {/* Cliente */}
-          <div className="space-y-2">
-            <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">
-              Cliente
-            </label>
-            <Select
-              value={currentClientId?.toString() || ""}
-              onValueChange={(val) => setCurrentClientId(Number(val))}
-              name="clientId"
-            >
-              <SelectTrigger id="balanceClient" className="w-full">
-                <SelectValue placeholder="Seleccionar cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id.toString()}>
-                    {client.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedClient && (
-              <p className="text-xs text-gray-500">
-                Mostrando balance de:{" "}
-                <span className="font-medium text-gray-700">{selectedClient.nombre}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Período */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Período / Tipo de Balance (Aparece primero como pidió el cliente) */}
           <div className="space-y-2">
             <label htmlFor="balancePeriod" className="text-sm font-medium text-gray-700">
-              Filtro de balance
+              Tipo de balance
             </label>
             <Select value={period} onValueChange={(v) => setPeriod(v as BalancePeriod)}>
               <SelectTrigger id="balancePeriod" className="w-full">
                 <SelectValue placeholder="Seleccionar filtro" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Por cliente (todo)</SelectItem>
+                <SelectItem value="all">Balance por Cliente</SelectItem>
                 <SelectItem value="monthly">Balance Mensual</SelectItem>
                 <SelectItem value="yearly">Balance Anual</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Cliente (Solo si está en 'Balance por Cliente') */}
+          {period === "all" && (
+            <div className="space-y-2">
+              <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">
+                Seleccionar cliente
+              </label>
+              <Select
+                value={currentClientId?.toString() || ""}
+                onValueChange={(val) => setCurrentClientId(Number(val))}
+                name="clientId"
+              >
+                <SelectTrigger id="balanceClient" className="w-full">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id.toString()}>
+                      {client.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedClient && (
+                <p className="text-xs text-gray-500">
+                  Mostrando balance de:{" "}
+                  <span className="font-medium text-gray-700">{selectedClient.nombre}</span>
+                </p>
+              )}
+            </div>
+          )}
           </div>
 
           {period === "monthly" && (
@@ -897,23 +860,21 @@ export function Balance({ selectedClientId }: BalanceProps) {
         </div>
       </Card>
 
-      {/* Balance Data */}
-      {isLoadingBalance ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-        </div>
-      ) : error ? (
-        <Card className="p-4 bg-red-50 border-red-200">
-          <p className="text-red-800">{error}</p>
-        </Card>
-      ) : !balanceData ? (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">Selecciona un cliente para ver su balance</p>
-        </Card>
-      ) : period !== "all" ? (
-        renderPeriodSummary()
-      ) : (
-        <>
+      {period === "all" ? (
+        isLoadingBalance ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+          </div>
+        ) : error ? (
+          <Card className="p-4 bg-red-50 border-red-200">
+            <p className="text-red-800">{error}</p>
+          </Card>
+        ) : !balanceData ? (
+          <Card className="p-8 text-center">
+            <p className="text-gray-500">Selecciona un cliente para ver su balance</p>
+          </Card>
+        ) : (
+          <>
           {/* Summary Cards - Vista por Cliente */}
           <div className="grid grid-cols-3 gap-3">
             <Card className="p-4">
@@ -1031,9 +992,18 @@ export function Balance({ selectedClientId }: BalanceProps) {
             </Card>
           )}
 
-          {/* Tabla de pedidos con checkboxes */}
+          {/* Data tables */}
           {renderOrdersTable(true)}
         </>
+        )
+      ) : (
+        isLoadingGlobal ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+          </div>
+        ) : (
+          renderPeriodSummary()
+        )
       )}
 
       {/* Dialogs */}
