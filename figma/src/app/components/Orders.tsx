@@ -75,7 +75,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
 
         const s = getPedidoStatus(o);
         if (statusFilter === 'delivered') return s === 'ENTREGADO';
-        if (statusFilter === 'pending') return s === 'PENDIENTE' || s === 'EN_PROCESO';
+        if (statusFilter === 'pending') return s === 'PENDIENTE' || s === 'EN_PROCESO' || s === 'PAGADO';
         if (statusFilter === 'paid') return s === 'PAGADO';
         return true;
       });
@@ -150,12 +150,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       return 'PENDIENTE';
     }
 
-    // Fallback: si el backend marca entrega seteando fecha_entrega con la fecha actual,
-    // entonces una fecha_entrega pasada/presente indica entregado.
-    if (order.fecha_entrega) {
-      const deliveredAt = new Date(order.fecha_entrega);
-      if (!Number.isNaN(deliveredAt.getTime()) && deliveredAt <= new Date()) return 'ENTREGADO';
-    }
     return 'PENDIENTE';
   };
 

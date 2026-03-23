@@ -50,6 +50,8 @@ model Administrador {
   productos     Producto[]
   pagos         Pago[]
   otrosGastos   OtroGasto[]
+  whatsappSession WhatsAppSession?
+  messages      Message[]
   
   @@map("administrador")
 }
@@ -67,6 +69,7 @@ model Cliente {
   // Relaciones
   administrador     Administrador @relation(fields: [id_administrador], references: [id])
   pedidos           Pedido[]
+  messages          Message[]
   
   @@map("cliente")
   @@index([id_administrador])
@@ -224,4 +227,44 @@ model OtroGasto {
   @@index([id_administrador])
   @@index([fecha])
   @@index([tipo])
+}
+
+// ================================================================
+// TABLA: whatsapp_sessions (Multi-user sessions)
+// ================================================================
+model WhatsAppSession {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique @map("user_id")
+  sessionData  Json     @map("session_data")
+  phoneNumber  String?  @db.VarChar(20) @map("phone_number")
+  connectedAt  DateTime? @default(now()) @map("connected_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relación con Administrador (userId)
+  administrador Administrador @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_sessions")
+}
+
+// ================================================================
+// TABLA: messages (WhatsApp tracking)
+// ================================================================
+model Message {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  clientId  Int      @map("client_id")
+  content   String   @db.Text
+  direction String   @db.VarChar(20) // "outbound" | "inbound"
+  status    String   @db.VarChar(20) // "pending" | "sent" | "delivered" | "read" | "failed"
+  whatsappMessageId String? @db.VarChar(100) @map("whatsapp_message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  administrador Administrador @relation(fields: [userId], references: [id])
+  cliente       Cliente       @relation(fields: [clientId], references: [id])
+
+  @@map("messages")
+  @@index([userId])
+  @@index([clientId])
 }

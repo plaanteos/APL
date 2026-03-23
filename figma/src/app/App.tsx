@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, FileText, Users, TrendingUp, ArrowLeft, LogOut } from "lucide-react";
+import { Home, FileText, Users, TrendingUp, ArrowLeft, LogOut, MessageSquare } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { Orders } from "./components/Orders";
 import { Clients } from "./components/Clients";
@@ -7,8 +7,9 @@ import { Balance } from "./components/Balance";
 import { Login } from "./components/Login";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useAuth } from "../hooks/useAuth";
+import { WhatsAppConfig } from "./components/WhatsAppConfig";
 
-type View = "dashboard" | "orders" | "clients" | "balance";
+type View = "dashboard" | "orders" | "clients" | "balance" | "whatsapp";
 
 export default function App() {
   const { user, logout, isLoading } = useAuth();
@@ -70,6 +71,8 @@ export default function App() {
         return <Clients onNavigateToBalance={navigateToBalance} />;
       case "balance":
         return <Balance selectedClientId={selectedClientId} />;
+      case "whatsapp":
+        return <WhatsAppConfig />;
       default:
         return <Dashboard onNavigateToBalance={navigateToBalance} onNavigateTo={navigateTo} />;
     }
@@ -187,6 +190,18 @@ export default function App() {
           >
             <TrendingUp size={20} />
             <span className="text-xs">Balance</span>
+          </button>
+
+          <button
+            onClick={() => navigateTo("whatsapp")}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              currentView === "whatsapp"
+                ? "text-[#033f63]"
+                : "text-gray-500"
+            }`}
+          >
+            <MessageSquare size={20} />
+            <span className="text-xs">WhatsApp</span>
           </button>
         </div>
       </nav>

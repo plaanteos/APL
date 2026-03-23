@@ -16,6 +16,7 @@ import productoRoutes from './routes/producto.routes';
 import estadoRoutes from './routes/estado.routes';
 import notificationRoutes from './routes/notification.routes';
 import expenseRoutes from './routes/expense.routes';
+import whatsappSessionRoutes from './routes/whatsapp-session.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -26,6 +27,7 @@ import { requestLogger } from './middleware/logger';
 import logger from './utils/logger';
 import { validateEnv } from './utils/validateEnv';
 import { closeNotificationQueue, initNotificationWorker } from './queues/notification.queue';
+import { whatsappSessionManager } from './services/whatsapp-session-manager.service';
 
 // Load environment variables
 dotenv.config();
@@ -176,6 +178,7 @@ app.use('/api/productos', productoRoutes);
 app.use('/api/estados', estadoRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/whatsapp', whatsappSessionRoutes);
 
 // Error handling middleware
 app.use(notFound);
@@ -238,6 +241,9 @@ async function connectDatabase() {
 // Start server
 async function startServer() {
   await connectDatabase();
+
+  // Cargar sesiones de WhatsApp guardadas
+  whatsappSessionManager.loadSessionsFromDB();
 
   // Cola de trabajos (Redis/BullMQ) para envíos asíncronos si está configurada
   initNotificationWorker();
