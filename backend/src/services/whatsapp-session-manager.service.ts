@@ -217,7 +217,13 @@ class WhatsAppSessionManager {
         const sock = this.sessions.get(userId);
         if (!sock) throw new Error('SESSION_NOT_FOUND');
 
-        const jid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+        // Log para depuración de errores de destinatario
+        const original = phoneNumber;
+        const digits = phoneNumber.replace(/\D/g, '');
+        const jid = `${digits}@s.whatsapp.net`;
+        // Log detallado
+        // eslint-disable-next-line no-console
+        console.log(`[WA DEBUG] Enviando mensaje: userId=${userId}, phoneNumber='${original}', digits='${digits}', jid='${jid}', message='${message}'`);
         await sock.sendMessage(jid, { text: message });
     }
 
