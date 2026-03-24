@@ -109,7 +109,7 @@ export class NotificationController {
         return res.json({ success: true, queued: false, message: 'Email enviado' });
       }
 
-      await whatsappService.sendTextMessage({ to, body: message });
+      await whatsappService.sendTextMessage({ to, body: message, userId: adminId });
       return res.json({ success: true, queued: false, message: 'WhatsApp enviado' });
     } catch (error: any) {
       logger.error('Notification send error:', error);

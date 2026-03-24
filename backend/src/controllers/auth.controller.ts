@@ -775,6 +775,7 @@ export class AuthController {
           await whatsappService.sendTextMessage({
             to: user.telefono,
             body: `Recuperación de contraseña APL. Tu código de verificación es: ${resetCode}. Expira en 15 minutos.`,
+            userId: user.id
           });
         }
       } catch (sendError) {

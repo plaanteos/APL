@@ -117,7 +117,7 @@ export const initNotificationWorker = () => {
         return;
       }
 
-      await whatsappService.sendTextMessage({ to, body: message });
+      await whatsappService.sendTextMessage({ to, body: message, userId: adminId });
     },
     {
       connection: getRedis(),
