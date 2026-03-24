@@ -1,11 +1,12 @@
-import * as Baileys from '@whiskeysockets/baileys';
-// Extraer miembros con máxima compatibilidad (ESM vs CJS)
-const B = (Baileys as any).default || Baileys;
-const makeWASocket = B.makeWASocket || (Baileys as any).makeWASocket;
-const makeInMemoryStore = B.makeInMemoryStore || (Baileys as any).makeInMemoryStore;
-const DisconnectReason = B.DisconnectReason || (Baileys as any).DisconnectReason;
-const fetchLatestBaileysVersion = B.fetchLatestBaileysVersion || (Baileys as any).fetchLatestBaileysVersion;
-const useMultiFileAuthState = B.useMultiFileAuthState || (Baileys as any).useMultiFileAuthState;
+// Importación híbrida para máxima compatibilidad en producción (Render)
+const Baileys = require('@whiskeysockets/baileys');
+const BaileysUtils = Baileys.default || Baileys;
+
+const makeWASocket = BaileysUtils.makeWASocket || Baileys.makeWASocket || BaileysUtils;
+const makeInMemoryStore = BaileysUtils.makeInMemoryStore || Baileys.makeInMemoryStore;
+const DisconnectReason = BaileysUtils.DisconnectReason || Baileys.DisconnectReason;
+const fetchLatestBaileysVersion = BaileysUtils.fetchLatestBaileysVersion || Baileys.fetchLatestBaileysVersion;
+const useMultiFileAuthState = BaileysUtils.useMultiFileAuthState || Baileys.useMultiFileAuthState;
 
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
