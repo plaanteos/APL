@@ -2,7 +2,8 @@
 const Baileys = require('@whiskeysockets/baileys');
 const BaileysUtils = Baileys.default || Baileys;
 
-const makeWASocket = BaileysUtils.makeWASocket || Baileys.makeWASocket || BaileysUtils;
+// FIX #1: Eliminado tercer fallback incorrecto (|| BaileysUtils) en makeWASocket
+const makeWASocket = BaileysUtils.makeWASocket || Baileys.makeWASocket;
 const makeInMemoryStore = BaileysUtils.makeInMemoryStore || Baileys.makeInMemoryStore;
 const DisconnectReason = BaileysUtils.DisconnectReason || Baileys.DisconnectReason;
 const fetchLatestBaileysVersion = BaileysUtils.fetchLatestBaileysVersion || Baileys.fetchLatestBaileysVersion;
@@ -20,6 +21,14 @@ import { encrypt, decrypt } from '../utils/encryption';
 /**
  * WhatsAppSessionManager
  * Maneja múltiples sesiones de WhatsApp usando Baileys y persiste en base de datos.
+ * 
+ * Fixes aplicados:
+ * - FIX #1: Bug makeWASocket tercer fallback incorrecto
+ * - FIX #2: Reconexión automática ahora reutiliza callbacks guardados
+ * - FIX #3: Cleanup de callbacks en disconnectWhatsApp (evita memory leak)
+ * - FIX #4: Race condition prevenida con Set "connecting"
+ * - FIX #5: loadSessionsFromDB con delay entre conexiones para no saturar
+ * - EXTRA: getPhoneNumber() para el endpoint de status
  */
 class WhatsAppSessionManager {
     private sessions = new Map<number, any>();
@@ -28,18 +37,22 @@ class WhatsAppSessionManager {
     private readyCallbacks = new Map<number, () => void>();
     private disconnectCallbacks = new Map<number, (reason: string) => void>();
 
+    // FIX #4: Set para prevenir race condition de conexiones duplicadas
+    private connecting = new Set<number>();
+
     constructor() {
         // El manager se inicializa vacío.
     }
 
     /**
-     * Inicializa las sesiones guardadas en la base de datos al arrancar
+     * Inicializa las sesiones guardadas en la base de datos al arrancar.
+     * FIX #5: Delay de 1.5s entre cada conexión para no saturar el servidor.
      */
     async loadSessionsFromDB() {
         try {
             const savedSessions = await (prisma as any).whatsappSession.findMany();
             logger.info(`Cargando ${savedSessions.length} sesiones de WhatsApp con encriptación...`);
-            
+
             for (const sess of savedSessions) {
                 const sessionPath = path.join(process.cwd(), 'whatsapp_sessions', `auth_info_${sess.userId}`);
                 if (!fs.existsSync(sessionPath)) {
@@ -63,6 +76,9 @@ class WhatsAppSessionManager {
                     }
                 }
 
+                // FIX #5: Esperar 1.5s entre cada reconexión para no saturar
+                await new Promise(r => setTimeout(r, 1500));
+
                 this.connectWhatsApp(sess.userId).catch(err => {
                     logger.error(`Error reconectando usuario ${sess.userId}:`, err);
                 });
@@ -73,13 +89,14 @@ class WhatsAppSessionManager {
     }
 
     /**
-     * Conecta una sesión de WhatsApp para un usuario específico
+     * Conecta una sesión de WhatsApp para un usuario específico.
+     * FIX #4: Previene race condition con this.connecting Set.
      */
     async connectWhatsApp(
         userId: number,
         requesterId?: number,
-        onQR?: (qr: string) => void, 
-        onReady?: () => void, 
+        onQR?: (qr: string) => void,
+        onReady?: () => void,
         onDisconnect?: (reason: string) => void
     ): Promise<any> {
         // Validación de aislamiento estricto
@@ -91,70 +108,91 @@ class WhatsAppSessionManager {
         if (onReady) this.readyCallbacks.set(userId, onReady);
         if (onDisconnect) this.disconnectCallbacks.set(userId, onDisconnect);
 
-        if (this.sessions.has(userId)) return;
+        // FIX #4: Evitar conexiones duplicadas si ya está conectado o conectando
+        if (this.sessions.has(userId) || this.connecting.has(userId)) return;
 
-        logger.info(`Iniciando conexión segura para usuario ID: ${userId}`);
+        this.connecting.add(userId);
 
-        const sessionPath = path.join(process.cwd(), 'whatsapp_sessions', `auth_info_${userId}`);
-        if (!fs.existsSync(sessionPath)) {
-            fs.mkdirSync(sessionPath, { recursive: true });
-        }
+        try {
+            logger.info(`Iniciando conexión segura para usuario ID: ${userId}`);
 
-        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-        const { version, isLatest } = await fetchLatestBaileysVersion();
-
-        const sock = makeWASocket({
-            version,
-            printQRInTerminal: false,
-            auth: state,
-            logger: pino({ level: 'silent' }) as any,
-            browser: ['APL Secure Connector', 'Chrome', '1.0.0']
-        });
-
-        const store = makeInMemoryStore({});
-        store.bind(sock.ev);
-        this.stores.set(userId, store);
-        this.sessions.set(userId, sock);
-
-        sock.ev.on('connection.update', async (update: any) => {
-            const { connection, lastDisconnect, qr } = update;
-
-            if (qr) this.qrCallbacks.get(userId)?.(qr);
-
-            if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-                this.sessions.delete(userId);
-                this.disconnectCallbacks.get(userId)?.(lastDisconnect?.error?.message || 'Disconnected');
-
-                if (shouldReconnect) {
-                    this.connectWhatsApp(userId);
-                } else {
-                    await (prisma as any).whatsappSession.deleteMany({ where: { userId } });
-                    fs.rmSync(sessionPath, { recursive: true, force: true });
-                }
-            } else if (connection === 'open') {
-                // Sincronizar con encriptación
-                await this.syncSessionToDB(userId, sessionPath);
-                this.readyCallbacks.get(userId)?.();
+            const sessionPath = path.join(process.cwd(), 'whatsapp_sessions', `auth_info_${userId}`);
+            if (!fs.existsSync(sessionPath)) {
+                fs.mkdirSync(sessionPath, { recursive: true });
             }
-        });
 
-        sock.ev.on('creds.update', async () => {
-            await saveCreds();
-            await this.syncSessionToDB(userId, sessionPath);
-        });
+            const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+            const { version } = await fetchLatestBaileysVersion();
 
-        return sock;
+            const sock = makeWASocket({
+                version,
+                printQRInTerminal: false,
+                auth: state,
+                logger: pino({ level: 'silent' }) as any,
+                browser: ['APL Secure Connector', 'Chrome', '1.0.0']
+            });
+
+            const store = makeInMemoryStore({});
+            store.bind(sock.ev);
+            this.stores.set(userId, store);
+            this.sessions.set(userId, sock);
+
+            sock.ev.on('connection.update', async (update: any) => {
+                const { connection, lastDisconnect, qr } = update;
+
+                if (qr) this.qrCallbacks.get(userId)?.(qr);
+
+                if (connection === 'close') {
+                    const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+                    this.sessions.delete(userId);
+                    this.disconnectCallbacks.get(userId)?.(lastDisconnect?.error?.message || 'Disconnected');
+
+                    if (shouldReconnect) {
+                        // FIX #2: Reutilizar callbacks guardados al reconectar
+                        this.connectWhatsApp(
+                            userId,
+                            undefined,
+                            this.qrCallbacks.get(userId),
+                            this.readyCallbacks.get(userId),
+                            this.disconnectCallbacks.get(userId)
+                        );
+                    } else {
+                        // Usuario hizo logout: limpiar todo
+                        await (prisma as any).whatsappSession.deleteMany({ where: { userId } });
+                        fs.rmSync(sessionPath, { recursive: true, force: true });
+
+                        // FIX #3: Limpiar callbacks al hacer logout
+                        this.qrCallbacks.delete(userId);
+                        this.readyCallbacks.delete(userId);
+                        this.disconnectCallbacks.delete(userId);
+                    }
+                } else if (connection === 'open') {
+                    await this.syncSessionToDB(userId, sessionPath);
+                    this.readyCallbacks.get(userId)?.();
+                }
+            });
+
+            sock.ev.on('creds.update', async () => {
+                await saveCreds();
+                await this.syncSessionToDB(userId, sessionPath);
+            });
+
+            return sock;
+
+        } finally {
+            // FIX #4: Siempre liberar el lock de connecting
+            this.connecting.delete(userId);
+        }
     }
 
     /**
-     * Sincroniza y ENCRIPTA la sesión en la base de datos
+     * Sincroniza y ENCRIPTA la sesión en la base de datos.
      */
     private async syncSessionToDB(userId: number, sessionPath: string) {
         try {
             const files = fs.readdirSync(sessionPath);
             const sessionDataRaw: any = {};
-            
+
             for (const file of files) {
                 const fullPath = path.join(sessionPath, file);
                 if (fs.lstatSync(fullPath).isFile()) {
@@ -167,7 +205,6 @@ class WhatsAppSessionManager {
                 }
             }
 
-            // Encriptar todo el objeto JSON de la sesión
             const encryptedPayload = encrypt(JSON.stringify(sessionDataRaw));
 
             await (prisma as any).whatsappSession.upsert({
@@ -181,7 +218,7 @@ class WhatsAppSessionManager {
     }
 
     /**
-     * Envía un mensaje con validación de aislamiento
+     * Envía un mensaje con validación de aislamiento.
      */
     async sendMessage(userId: number, requesterId: number, phoneNumber: string, message: string) {
         if (userId !== requesterId) throw new Error('UNAUTHORIZED');
@@ -194,18 +231,25 @@ class WhatsAppSessionManager {
     }
 
     /**
-     * Desconecta y elimina datos con validación
+     * Desconecta y elimina datos con validación.
+     * FIX #3: Limpia callbacks para evitar memory leak.
      */
     async disconnectWhatsApp(userId: number, requesterId: number) {
         if (userId !== requesterId) throw new Error('UNAUTHORIZED');
 
         const sock = this.sessions.get(userId);
         if (sock) {
-            try { await sock.logout(); } catch (e) {}
+            try { await sock.logout(); } catch (e) { }
         }
 
         this.sessions.delete(userId);
         this.stores.delete(userId);
+
+        // FIX #3: Limpiar callbacks al desconectar
+        this.qrCallbacks.delete(userId);
+        this.readyCallbacks.delete(userId);
+        this.disconnectCallbacks.delete(userId);
+
         await (prisma as any).whatsappSession.deleteMany({ where: { userId } });
 
         const sessionPath = path.join(process.cwd(), 'whatsapp_sessions', `auth_info_${userId}`);
@@ -214,9 +258,22 @@ class WhatsAppSessionManager {
         }
     }
 
+    /**
+     * Retorna si el usuario tiene sesión activa.
+     */
     isConnected(userId: number, requesterId: number): boolean {
         if (userId !== requesterId) return false;
         return this.sessions.has(userId);
+    }
+
+    /**
+     * EXTRA: Retorna el número de teléfono conectado del usuario.
+     * Útil para el endpoint GET /api/whatsapp/status/:userId
+     */
+    getPhoneNumber(userId: number, requesterId: number): string | null {
+        if (userId !== requesterId) return null;
+        const sock = this.sessions.get(userId);
+        return sock?.user?.id?.split(':')[0] ?? null;
     }
 }
 
