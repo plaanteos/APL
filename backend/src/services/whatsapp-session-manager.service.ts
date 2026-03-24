@@ -1,13 +1,7 @@
 // Importación híbrida para máxima compatibilidad en producción (Render)
-const Baileys = require('@whiskeysockets/baileys');
-const BaileysUtils = Baileys.default || Baileys;
 
-// FIX #1: Eliminado tercer fallback incorrecto (|| BaileysUtils) en makeWASocket
-const makeWASocket = BaileysUtils.makeWASocket || Baileys.makeWASocket;
-const makeInMemoryStore = BaileysUtils.makeInMemoryStore || Baileys.makeInMemoryStore;
-const DisconnectReason = BaileysUtils.DisconnectReason || Baileys.DisconnectReason;
-const fetchLatestBaileysVersion = BaileysUtils.fetchLatestBaileysVersion || Baileys.fetchLatestBaileysVersion;
-const useMultiFileAuthState = BaileysUtils.useMultiFileAuthState || Baileys.useMultiFileAuthState;
+// Importación recomendada para Baileys >=6.x
+const { makeWASocket, makeInMemoryStore, DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
