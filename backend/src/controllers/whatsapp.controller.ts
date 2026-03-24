@@ -27,7 +27,15 @@ export class WhatsAppController {
 
         const sendEvent = (data: any) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
+        // Latido para evitar timeouts de Render (cada 15s)
+        const heartbeat = setInterval(() => {
+            res.write(': heartbeat\n\n');
+        }, 15000);
+
         try {
+            // Enviar ping inicial para confirmar conexión abierta
+            sendEvent({ status: "initializing" });
+
             await whatsappSessionManager.connectWhatsApp(
                 userId,
                 requesterId,
@@ -36,15 +44,18 @@ export class WhatsAppController {
                     sendEvent({ status: "qr", qr: qrBase64 });
                 },
                 () => {
+                    clearInterval(heartbeat);
                     sendEvent({ status: "connected" });
                     setTimeout(() => res.end(), 1000);
                 },
                 (reason) => {
+                    clearInterval(heartbeat);
                     sendEvent({ status: "disconnected", reason });
                     res.end();
                 }
             );
         } catch (error: any) {
+            clearInterval(heartbeat);
             const status = error.message === 'UNAUTHORIZED' ? 401 : 500;
             sendEvent({ status: "error", error: error.message });
             res.end();

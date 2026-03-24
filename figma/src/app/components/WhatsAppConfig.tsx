@@ -58,7 +58,7 @@ export function WhatsAppConfig() {
           checkStatus();
           eventSource.close();
         } else if (data.status === "error") {
-          setError(data.message);
+          setError(data.error || "Error desconocido en el servidor.");
           setStatus("idle");
           eventSource.close();
         } else if (data.status === "already_connected") {

@@ -119,18 +119,31 @@ export default function App() {
               />
             </div>
           </div>
-          <div className="flex items-center bg-white/10 rounded-full px-4 py-2">
-            <span className="text-white text-base font-semibold whitespace-nowrap">
-              {headerUserLabel}
-            </span>
-            <span className="mx-3 h-5 w-px bg-white/30" aria-hidden="true" />
+          <div className="flex items-center gap-3">
             <button
-              onClick={handleLogout}
-              className="p-1 hover:bg-white/10 rounded-full transition-colors"
-              aria-label="Cerrar sesión"
+              onClick={() => navigateTo("whatsapp")}
+              className={`p-2 rounded-full transition-all ${
+                currentView === "whatsapp" 
+                ? "bg-white text-[#033f63]" 
+                : "text-white hover:bg-white/10"
+              }`}
+              title="Configurar WhatsApp"
             >
-              <LogOut size={20} className="text-white" />
+              <MessageSquare size={20} />
             </button>
+            <div className="flex items-center bg-white/10 rounded-full px-4 py-2">
+              <span className="text-white text-base font-semibold whitespace-nowrap">
+                {headerUserLabel}
+              </span>
+              <span className="mx-3 h-5 w-px bg-white/30" aria-hidden="true" />
+              <button
+                onClick={handleLogout}
+                className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut size={20} className="text-white" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -190,18 +203,6 @@ export default function App() {
           >
             <TrendingUp size={20} />
             <span className="text-xs">Balance</span>
-          </button>
-
-          <button
-            onClick={() => navigateTo("whatsapp")}
-            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-              currentView === "whatsapp"
-                ? "text-[#033f63]"
-                : "text-gray-500"
-            }`}
-          >
-            <MessageSquare size={20} />
-            <span className="text-xs">WhatsApp</span>
           </button>
         </div>
       </nav>
