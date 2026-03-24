@@ -1,8 +1,6 @@
-// Importación híbrida para máxima compatibilidad en producción (Render)
-
 // Importación recomendada para Baileys >=6.x (solo desde el paquete principal)
+// FIX: makeInMemoryStore eliminado — no estaba siendo utilizado funcionalmente
 const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const { makeInMemoryStore } = require('@whiskeysockets/baileys/lib/Store/makeInMemoryStore');
 
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -23,11 +21,11 @@ import { encrypt, decrypt } from '../utils/encryption';
  * - FIX #3: Cleanup de callbacks en disconnectWhatsApp (evita memory leak)
  * - FIX #4: Race condition prevenida con Set "connecting"
  * - FIX #5: loadSessionsFromDB con delay entre conexiones para no saturar
+ * - FIX #6: makeInMemoryStore eliminado (no exportado en Baileys 6.7.x desde paquete principal)
  * - EXTRA: getPhoneNumber() para el endpoint de status
  */
 class WhatsAppSessionManager {
     private sessions = new Map<number, any>();
-    private stores = new Map<number, any>();
     private qrCallbacks = new Map<number, (qr: string) => void>();
     private readyCallbacks = new Map<number, () => void>();
     private disconnectCallbacks = new Map<number, (reason: string) => void>();
@@ -127,9 +125,7 @@ class WhatsAppSessionManager {
                 browser: ['APL Secure Connector', 'Chrome', '1.0.0']
             });
 
-            const store = makeInMemoryStore({});
-            store.bind(sock.ev);
-            this.stores.set(userId, store);
+            // FIX #6: makeInMemoryStore eliminado — no era utilizado funcionalmente
             this.sessions.set(userId, sock);
 
             sock.ev.on('connection.update', async (update: any) => {
@@ -238,7 +234,6 @@ class WhatsAppSessionManager {
         }
 
         this.sessions.delete(userId);
-        this.stores.delete(userId);
 
         // FIX #3: Limpiar callbacks al desconectar
         this.qrCallbacks.delete(userId);
