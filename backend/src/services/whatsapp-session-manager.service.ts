@@ -1,18 +1,13 @@
-import { 
-    makeWASocket, 
+import * as Baileys from '@whiskeysockets/baileys';
+// Extraer miembros con compatibilidad para distintas versiones de la bifurcación
+const makeWASocket = (Baileys.default || (Baileys as any).makeWASocket || Baileys) as any;
+const { 
     DisconnectReason, 
-    makeInMemoryStore,
-    ConnectionState,
-    WAMessage,
-    MessageUpsertType,
-    proto,
     fetchLatestBaileysVersion,
-    AuthenticationState,
-    AuthenticationCreds,
-    BufferJSON,
-    WASocket,
-    useMultiFileAuthState
-} from '@whiskeysockets/baileys';
+    useMultiFileAuthState,
+    makeInMemoryStore
+} = Baileys as any;
+
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import { prisma } from '../utils/prisma';
@@ -27,7 +22,7 @@ import { encrypt, decrypt } from '../utils/encryption';
  * Maneja múltiples sesiones de WhatsApp usando Baileys y persiste en base de datos.
  */
 class WhatsAppSessionManager {
-    private sessions = new Map<number, WASocket>();
+    private sessions = new Map<number, any>();
     private stores = new Map<number, any>();
     private qrCallbacks = new Map<number, (qr: string) => void>();
     private readyCallbacks = new Map<number, () => void>();
@@ -82,11 +77,11 @@ class WhatsAppSessionManager {
      */
     async connectWhatsApp(
         userId: number,
-        requesterId?: number, // Validación de seguridad opcional si se llama desde route
+        requesterId?: number,
         onQR?: (qr: string) => void, 
         onReady?: () => void, 
         onDisconnect?: (reason: string) => void
-    ) {
+    ): Promise<any> {
         // Validación de aislamiento estricto
         if (requesterId && userId !== requesterId) {
             throw new Error('UNAUTHORIZED');
@@ -106,7 +101,7 @@ class WhatsAppSessionManager {
         }
 
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-        const { version } = await fetchLatestBaileysVersion();
+        const { version, isLatest } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
             version,

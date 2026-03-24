@@ -1,12 +1,5 @@
-// ================================================================
-// SCHEMA PRISMA - MODELO OFICIAL DEL SECTOR BD
-// Fecha: 15 de enero de 2026
-// Fuente: Diccionario_Datos_APL.xlsx + MR APP APL.jpg
-// Base de datos: PostgreSQL 14+
-// ================================================================
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -15,256 +8,212 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ================================================================
-// TABLA: administrador
-// ================================================================
 model Administrador {
-  id            Int       @id @default(autoincrement())
-  nombre        String    @db.VarChar(100)
-  telefono      String    @db.VarChar(20)
-  email         String    @db.VarChar(100) @unique
-  usuario       String    @db.VarChar(50) @unique
-  super_usuario Boolean   @default(false)
-  password      String    // Hash con bcryptjs
-
-  // 2FA (TOTP + backup codes)
-  twoFactorEnabled     Boolean @default(false) @map("two_factor_enabled")
-  twoFactorSecret      String? @db.Text @map("two_factor_secret")
-  twoFactorBackupCodes Json?   @map("two_factor_backup_codes")
-  
-  // Timestamps (agregados para funcionalidad, no en diccionario)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Campos funcionales (no en diccionario oficial pero necesarios)
-  activo        Boolean   @default(true)
-  refreshToken  String?   @db.Text
-  
-  // Password recovery fields
-  resetPasswordToken   String?   @db.Text
+  id                   Int              @id @default(autoincrement())
+  nombre               String           @db.VarChar(100)
+  telefono             String           @db.VarChar(20)
+  email                String           @unique @db.VarChar(100)
+  usuario              String           @unique @db.VarChar(50)
+  super_usuario        Boolean          @default(false)
+  password             String
+  twoFactorEnabled     Boolean          @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String?          @map("two_factor_secret")
+  twoFactorBackupCodes Json?            @map("two_factor_backup_codes")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  activo               Boolean          @default(true)
+  refreshToken         String?
+  resetPasswordToken   String?
   resetPasswordExpiry  DateTime?
-  
-  // Relaciones según MR
-  clientes      Cliente[]
-  pedidos       Pedido[]
-  productos     Producto[]
-  pagos         Pago[]
-  otrosGastos   OtroGasto[]
-  whatsappSession WhatsAppSession?
-  messages      Message[]
-  
+  clientes             Cliente[]
+  messages             Message[]
+  otrosGastos          OtroGasto[]
+  pagos                Pago[]
+  pedidos              Pedido[]
+  productos            Producto[]
+  whatsappSession      WhatsAppSession?
+
   @@map("administrador")
 }
 
-// ================================================================
-// TABLA: cliente
-// ================================================================
+// ==============================
+// TIPO CLIENTE
+// ==============================
+model tipo_cliente {
+  id           Int       @id @default(autoincrement())
+  descripcion  String    @db.VarChar(50)
+  fecha_insert DateTime? @default(now())
+  fecha_delete DateTime?
+
+  clientes    Cliente[]
+
+  @@map("tipo_cliente")
+}
+
 model Cliente {
-  id                Int       @id @default(autoincrement())
-  nombre            String    @db.VarChar(100)
-  telefono          String    @db.VarChar(20)
-  email             String    @db.VarChar(100) @unique
-  id_administrador  Int
-  
-  // Relaciones
-  administrador     Administrador @relation(fields: [id_administrador], references: [id])
-  pedidos           Pedido[]
-  messages          Message[]
-  
-  @@map("cliente")
+  id               Int           @id @default(autoincrement())
+  nombre           String        @db.VarChar(100)
+  telefono         String        @db.VarChar(20)
+  email            String        @unique @db.VarChar(100)
+  id_administrador Int
+  celular          String?      @db.VarChar(20)
+  id_tipo          Int?
+
+  administrador    Administrador @relation(fields: [id_administrador], references: [id])
+  tipo_cliente     tipo_cliente? @relation(fields: [id_tipo], references: [id], onDelete: SetNull)
+  messages         Message[]
+  pedidos          Pedido[]
+
+  @@index([id])
   @@index([id_administrador])
   @@index([nombre])
   @@index([telefono])
+  @@index([id_tipo])
+  @@map("cliente")
 }
 
-// ================================================================
-// TABLA: pedidos
-// ================================================================
 model Pedido {
-  id                Int           @id @default(autoincrement())
-  id_cliente        Int
-  fecha_pedido      DateTime      @default(now())
-  fecha_entrega     DateTime
-  fecha_delete      DateTime?
-  id_administrador  Int
-  descripcion       String?       @db.Text
-  
-  // Relaciones
-  cliente           Cliente       @relation(fields: [id_cliente], references: [id], onDelete: Cascade)
-  administrador     Administrador @relation(fields: [id_administrador], references: [id])
-  detalles          DetallePedido[]
-  detallesPago      DetallePago[]
-  
-  @@map("pedidos")
+  id               Int             @id @default(autoincrement())
+  id_cliente       Int
+  fecha_pedido     DateTime        @default(now())
+  fecha_entrega    DateTime
+  fecha_delete     DateTime?
+  id_administrador Int
+  descripcion      String?
+  detallesPago     DetallePago[]
+  detalles         DetallePedido[]
+  administrador    Administrador   @relation(fields: [id_administrador], references: [id])
+  cliente          Cliente         @relation(fields: [id_cliente], references: [id], onDelete: Cascade)
+
   @@index([id_cliente])
   @@index([id_administrador])
   @@index([fecha_pedido])
   @@index([fecha_entrega])
   @@index([fecha_delete])
+  @@map("pedidos")
 }
 
-// ================================================================
-// TABLA: producto
-// ================================================================
 model Producto {
-  id                Int       @id @default(autoincrement())
-  tipo              String    @db.VarChar(100)
-  id_administrador  Int
-  
-  // Relaciones
-  administrador     Administrador @relation(fields: [id_administrador], references: [id])
-  detalles          DetallePedido[]
-  
-  @@map("producto")
+  id               Int             @id @default(autoincrement())
+  tipo             String          @db.VarChar(100)
+  id_administrador Int
+  detalles         DetallePedido[]
+  administrador    Administrador   @relation(fields: [id_administrador], references: [id])
+
   @@index([id_administrador])
   @@index([tipo])
+  @@map("producto")
 }
 
-// ================================================================
-// TABLA: detalle_pedidos
-// ================================================================
 model DetallePedido {
   id              Int      @id @default(autoincrement())
   id_pedido       Int
   id_producto     Int
   cantidad        Int
-  precio_unitario Decimal  @db.Decimal(10,2)
+  precio_unitario Decimal  @db.Decimal(10, 2)
   paciente        String   @db.VarChar(100)
   id_estado       Int
-  
-  // Relaciones
+  estado          Estado   @relation(fields: [id_estado], references: [id])
   pedido          Pedido   @relation(fields: [id_pedido], references: [id], onDelete: Cascade)
   producto        Producto @relation(fields: [id_producto], references: [id])
-  estado          Estado   @relation(fields: [id_estado], references: [id])
-  
-  @@map("detalle_pedidos")
+
   @@index([id_pedido])
   @@index([id_producto])
   @@index([id_estado])
+  @@map("detalle_pedidos")
 }
 
-// ================================================================
-// TABLA: estado (Catálogo)
-// ================================================================
 model Estado {
-  id            Int           @id @default(autoincrement())
-  descripcion   String        @db.VarChar(50) @unique
-  fecha_insert  DateTime      @default(now())
-  fecha_delete  DateTime?
-  
-  // Relaciones
-  detalles      DetallePedido[]
-  
-  @@map("estado")
+  id           Int             @id @default(autoincrement())
+  descripcion  String          @unique @db.VarChar(50)
+  fecha_insert DateTime        @default(now())
+  fecha_delete DateTime?
+  detalles     DetallePedido[]
+
   @@index([fecha_delete])
+  @@map("estado")
 }
 
-// ================================================================
-// TABLA: pago
-// ================================================================
 model Pago {
-  id                Int       @id @default(autoincrement())
-  valor             Decimal   @db.Decimal(10,2)
-  id_administrador  Int
-  
-  // Relaciones
-  administrador     Administrador @relation(fields: [id_administrador], references: [id])
-  detalles          DetallePago[]
-  
-  @@map("pago")
+  id               Int           @id @default(autoincrement())
+  valor            Decimal       @db.Decimal(10, 2)
+  id_administrador Int
+  detalles         DetallePago[]
+  administrador    Administrador @relation(fields: [id_administrador], references: [id])
+
   @@index([id_administrador])
+  @@map("pago")
 }
 
-// ================================================================
-// TABLA: detalle_pago
-// ================================================================
 model DetallePago {
   id         Int      @id @default(autoincrement())
   id_pago    Int
   id_pedido  Int
-  valor      Decimal  @db.Decimal(10,2)
+  valor      Decimal  @db.Decimal(10, 2)
   fecha_pago DateTime
-  
-  // Relaciones
   pago       Pago     @relation(fields: [id_pago], references: [id], onDelete: Cascade)
   pedido     Pedido   @relation(fields: [id_pedido], references: [id], onDelete: Cascade)
-  
-  @@map("detalle_pago")
+
   @@index([id_pedido])
   @@index([id_pago])
   @@index([fecha_pago])
+  @@map("detalle_pago")
 }
 
-// ================================================================
-// TABLA: auditoria (SIN RELACIONES)
-// ================================================================
 model Auditoria {
-  id            Int      @id @default(autoincrement())
-  usuario       String   @db.VarChar(50)
-  fecha_accion  DateTime @default(now())
-  accion        String   @db.VarChar(100)
-  
-  @@map("auditoria")
+  id           Int      @id @default(autoincrement())
+  usuario      String   @db.VarChar(50)
+  fecha_accion DateTime @default(now())
+  accion       String   @db.VarChar(100)
+
   @@index([fecha_accion])
   @@index([usuario])
+  @@map("auditoria")
 }
 
-// ================================================================
-// TABLA: otro_gasto (Gastos generales de insumos y cadetería)
-// ================================================================
 model OtroGasto {
-  id               Int      @id @default(autoincrement())
-  tipo             String   @db.VarChar(20)   // "supplies" | "delivery"
-  descripcion      String   @db.Text
-  monto            Decimal  @db.Decimal(10,2)
-  fecha            DateTime @default(now())
+  id               Int           @id @default(autoincrement())
+  tipo             String        @db.VarChar(20)
+  descripcion      String
+  monto            Decimal       @db.Decimal(10, 2)
+  fecha            DateTime      @default(now())
   id_administrador Int
-
-  // Relaciones
   administrador    Administrador @relation(fields: [id_administrador], references: [id])
 
-  @@map("otro_gasto")
   @@index([id_administrador])
   @@index([fecha])
   @@index([tipo])
+  @@map("otro_gasto")
 }
 
-// ================================================================
-// TABLA: whatsapp_sessions (Multi-user sessions)
-// ================================================================
 model WhatsAppSession {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @unique @map("user_id")
-  sessionData  Json     @map("session_data")
-  phoneNumber  String?  @db.VarChar(20) @map("phone_number")
-  connectedAt  DateTime? @default(now()) @map("connected_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            Int           @id @default(autoincrement())
+  userId        Int           @unique @map("user_id")
+  sessionData   Json          @map("session_data")
+  phoneNumber   String?       @map("phone_number") @db.VarChar(20)
+  connectedAt   DateTime?     @default(now()) @map("connected_at") @db.Timestamptz(6)
+  createdAt     DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime?     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  administrador Administrador @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_whatsapp_user")
 
-  // Relación con Administrador (userId)
-  administrador Administrador @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  @@index([userId], map: "idx_whatsapp_sessions_user_id")
   @@map("whatsapp_sessions")
 }
 
-// ================================================================
-// TABLA: messages (WhatsApp tracking)
-// ================================================================
 model Message {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  clientId  Int      @map("client_id")
-  content   String   @db.Text
-  direction String   @db.VarChar(20) // "outbound" | "inbound"
-  status    String   @db.VarChar(20) // "pending" | "sent" | "delivered" | "read" | "failed"
-  whatsappMessageId String? @db.VarChar(100) @map("whatsapp_message_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id                Int           @id @default(autoincrement())
+  userId            Int           @map("user_id")
+  clientId          Int           @map("client_id")
+  content           String
+  direction         String        @db.VarChar(20)
+  status            String        @db.VarChar(20)
+  whatsappMessageId String?       @map("whatsapp_message_id") @db.VarChar(100)
+  createdAt         DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  cliente           Cliente       @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_client")
+  administrador     Administrador @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_user")
 
-  // Relaciones
-  administrador Administrador @relation(fields: [userId], references: [id])
-  cliente       Cliente       @relation(fields: [clientId], references: [id])
-
+  @@index([clientId], map: "idx_messages_client_id")
+  @@index([createdAt], map: "idx_messages_created_at")
+  @@index([userId], map: "idx_messages_user_id")
   @@map("messages")
-  @@index([userId])
-  @@index([clientId])
 }
