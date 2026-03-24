@@ -52,57 +52,88 @@ const allowedOrigins = [
   'https://administracionapl.netlify.app',
   'http://localhost:5173',
   'http://localhost:5174',
-  process.env.CORS_ORIGIN
-].filter(Boolean);
+  ...(String(process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)),
+].filter((v, i, a) => a.indexOf(v) === i);
 
-console.log('🔧 Origins permitidos:', allowedOrigins);
-
-// Middleware manual de CORS para asegurar que los headers siempre se envíen
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  console.log(`📨 ${req.method} ${req.path} - Origin: ${origin || 'sin origin'}`);
-  
-  // Si el origin está en la lista permitida, agregarlo al header
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    
-    console.log(`✅ CORS headers agregados para: ${origin || '*'}`);
-  } else {
-    console.warn(`❌ Origin NO permitido: ${origin}`);
-    console.warn(`   Origins válidos:`, allowedOrigins);
+/** Orígenes exactos + producción Netlify (sitio y previews branch-deploy). */
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  const trimmed = origin.trim();
+  if (allowedOrigins.includes(trimmed)) return true;
+  try {
+    const { hostname } = new URL(trimmed);
+    if (hostname === 'administracionapl.netlify.app') return true;
+    if (hostname.endsWith('--administracionapl.netlify.app')) return true;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  } catch {
+    return false;
   }
-  
-  // Manejar preflight OPTIONS
+  return false;
+}
+
+console.log('🔧 Origins permitidos (exactos):', allowedOrigins);
+console.log('🔧 Netlify: administracionapl.netlify.app y *--administracionapl.netlify.app');
+
+function applyCorsHeaders(req: express.Request, res: express.Response) {
+  const origin = req.headers.origin as string | undefined;
+  if (!isAllowedOrigin(origin)) return false;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, Accept, Origin'
+  );
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  return true;
+}
+
+// Middleware manual de CORS (propaga el Origin permitido; obligatorio con credenciales)
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  console.log(`📨 ${req.method} ${req.path} - Origin: ${origin || 'sin origin'}`);
+
+  const ok = applyCorsHeaders(req, res);
+  if (!ok) {
+    console.warn(`❌ Origin NO permitido: ${origin || '—'}`);
+    if (req.method === 'OPTIONS') {
+      return res.status(403).end();
+    }
+    return next();
+  }
+  console.log(`✅ CORS headers para: ${origin || '*'}`);
+
   if (req.method === 'OPTIONS') {
-    console.log(`✅ Preflight OPTIONS respondido con 204`);
     return res.status(204).end();
   }
-  
   next();
 });
 
-// CORS middleware adicional con cors package
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, origin || true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  })
+);
 
 // Security middleware - CON CONFIGURACIÓN AJUSTADA PARA CORS
 app.use(helmet({
