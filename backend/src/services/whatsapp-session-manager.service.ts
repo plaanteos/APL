@@ -10,6 +10,7 @@ import path from 'path';
 import fs from 'fs';
 
 import { encrypt, decrypt } from '../utils/encryption';
+import { normalizeWhatsAppDigits } from '../utils/whatsappPhone';
 
 /**
  * WhatsAppSessionManager
@@ -210,35 +211,39 @@ class WhatsAppSessionManager {
 
     /**
      * Envía un mensaje con validación de aislamiento.
+     * Opcional: adjuntar documento (p. ej. Excel) con el texto como caption.
      */
-    async sendMessage(userId: number, requesterId: number, phoneNumber: string, message: string) {
+    async sendMessage(
+        userId: number,
+        requesterId: number,
+        phoneNumber: string,
+        message: string,
+        document?: { buffer: Buffer; fileName: string; mimetype: string }
+    ) {
         if (userId !== requesterId) throw new Error('UNAUTHORIZED');
 
         const sock = this.sessions.get(userId);
         if (!sock) throw new Error('SESSION_NOT_FOUND');
 
-        // Validar formato internacional E.164
         const original = phoneNumber;
-        let digits = phoneNumber.replace(/\D/g, '');
-        let jid = '';
-        if (phoneNumber.startsWith('+')) {
-            jid = `${digits}@s.whatsapp.net`;
-        } else if (digits.startsWith('54')) {
-            // Asumir Argentina si empieza con 54
-            jid = `${digits}@s.whatsapp.net`;
-        } else {
-            // Número inválido para WhatsApp
+        const digits = normalizeWhatsAppDigits(phoneNumber);
+        if (digits.length < 10 || digits.length > 15) {
             console.warn(`[WA WARNING] Número no válido para WhatsApp: '${original}' (digits='${digits}')`);
             throw new Error('El número de WhatsApp debe estar en formato internacional, por ejemplo: +5491139300357');
         }
-        if (digits.length < 11) {
-            console.warn(`[WA WARNING] Número demasiado corto para WhatsApp: '${original}' (digits='${digits}')`);
-            throw new Error('El número de WhatsApp es demasiado corto. Debe estar en formato internacional.');
-        }
-        // Log detallado
+        const jid = `${digits}@s.whatsapp.net`;
         // eslint-disable-next-line no-console
-        console.log(`[WA DEBUG] Enviando mensaje: userId=${userId}, phoneNumber='${original}', digits='${digits}', jid='${jid}', message='${message}'`);
-        await sock.sendMessage(jid, { text: message });
+        console.log(`[WA DEBUG] Enviando mensaje: userId=${userId}, phoneNumber='${original}', digits='${digits}', jid='${jid}', doc=${Boolean(document)}, message='${message}'`);
+        if (document?.buffer?.length) {
+            await sock.sendMessage(jid, {
+                document: document.buffer,
+                mimetype: document.mimetype,
+                fileName: document.fileName,
+                caption: message,
+            });
+        } else {
+            await sock.sendMessage(jid, { text: message });
+        }
     }
 
     /**

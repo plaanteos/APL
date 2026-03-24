@@ -8,6 +8,10 @@ import productoService from "../../services/producto.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
 import {
+  getPedidoStatus,
+  type PedidoStatus,
+} from "../../utils/orderStatus";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -71,11 +75,12 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
 
       const filtered = (data || []).filter((o) => {
         if (statusFilter === 'all') return true;
-        if (statusFilter === 'debt') return Number(o.montoPendiente ?? 0) > 0;
-
         const s = getPedidoStatus(o);
+        if (statusFilter === 'debt') {
+          return Number(o.montoPendiente ?? 0) > 0 && s !== 'PAGADO';
+        }
         if (statusFilter === 'delivered') return s === 'ENTREGADO';
-        if (statusFilter === 'pending') return s === 'PENDIENTE' || s === 'EN_PROCESO' || s === 'PAGADO';
+        if (statusFilter === 'pending') return Number(o.montoPendiente ?? 0) > 0;
         if (statusFilter === 'paid') return s === 'PAGADO';
         return true;
       });
@@ -106,15 +111,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     });
   };
 
-  const normalizeStatus = (status: string) => {
-    return String(status ?? '')
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase()
-      .replace(/[\s-]+/g, '_');
-  };
-
   const getDetalleEstadoDescripcion = (detalle: any) => {
     return (
       String(detalle?.estado?.descripcion ?? '').trim() ||
@@ -131,26 +127,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     if (byId) return byId;
 
     return 'Producto';
-  };
-
-  type PedidoStatus = 'PENDIENTE' | 'EN_PROCESO' | 'ENTREGADO' | 'PAGADO';
-
-  const getPedidoStatus = (order: IOrderWithCalculations): PedidoStatus => {
-    const detalles = order.detalles || [];
-    if (detalles.length > 0) {
-      const statuses = detalles
-        .map((d: any) => normalizeStatus(getDetalleEstadoDescripcion(d)))
-        .filter(Boolean);
-
-      if (statuses.length > 0 && statuses.every((s) => s === 'ENTREGADO')) return 'ENTREGADO';
-      // Prioridad: Si hay PAGADO y no todo es ENTREGADO, lo consideramos PAGADO
-      if (statuses.some((s) => s === 'PAGADO')) return 'PAGADO';
-      // Tratamos LISTO_PARA_ENTREGA como EN_PROCESO para el pill de la lista.
-      if (statuses.some((s) => s === 'EN_PROCESO' || s === 'LISTO_PARA_ENTREGA')) return 'EN_PROCESO';
-      return 'PENDIENTE';
-    }
-
-    return 'PENDIENTE';
   };
 
   const getStatusPillClasses = (status: PedidoStatus) => {

@@ -22,6 +22,7 @@ import { AddExpenseSheet } from "./AddExpenseSheet";
 import { OtherExpensesSheet } from "./OtherExpensesSheet";
 import { PrintableReceipt } from "./PrintableReceipt";
 import { notificationService } from "../../services/notification.service";
+import { toInternationalPlus } from "../../utils/whatsappPhone";
 
 interface BalanceProps {
   selectedClientId: number | null;
@@ -300,7 +301,11 @@ export function Balance({ selectedClientId }: BalanceProps) {
     ].join("\n");
 
     toast.promise(
-      notificationService.send({ channel: "whatsapp", to: client.telefono, message: msg }),
+      notificationService.send({
+        channel: "whatsapp",
+        to: toInternationalPlus(client.telefono),
+        message: msg,
+      }),
       {
         loading: "Enviando WhatsApp...",
         success: "Comprobante enviado por WhatsApp",
@@ -348,15 +353,19 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   const handleSendWhatsApp = async () => {
     if (!selectedClient?.telefono) { toast.error("El cliente no tiene teléfono"); return; }
+    if (!currentClientId) { toast.error("No hay cliente seleccionado"); return; }
     toast.promise(
       notificationService.send({
         channel: "whatsapp",
-        to: selectedClient.telefono,
-        message: buildBalanceMessage(),
+        to: toInternationalPlus(selectedClient.telefono),
+        message: `${buildBalanceMessage()}\n\n📎 Adjunto: resumen del balance en Excel.`,
+        attachBalanceExcel: true,
+        balanceClientId: currentClientId,
+        balanceClientName: selectedClient.nombre,
       }),
       {
-        loading: "Enviando WhatsApp...",
-        success: "Resumen enviado por WhatsApp",
+        loading: "Enviando WhatsApp con Excel...",
+        success: "Resumen y Excel enviados por WhatsApp",
         error: (e: any) => e?.response?.data?.error || "Error al enviar WhatsApp",
       }
     );

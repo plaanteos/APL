@@ -3,6 +3,7 @@ import { whatsappSessionManager } from '../services/whatsapp-session-manager.ser
 import logger from '../utils/logger';
 import QRCode from 'qrcode';
 import { prisma } from '../utils/prisma';
+import { normalizeWhatsAppDigits } from '../utils/whatsappPhone';
 
 /**
  * WhatsAppController - Versión con Aislamiento Estricto y Auditoría
@@ -110,14 +111,28 @@ export class WhatsAppController {
         }
 
         try {
-            // 1. Validar que el recipiente pertenece al usuario (Aislamiento de datos)
-            const cleanPhone = recipientPhone.replace(/\D/g, '');
-            const client = await prisma.cliente.findFirst({
+            // 1. Validar que el recipiente pertenece al usuario (mismo número normalizado que WhatsApp/JID)
+            const targetDigits = normalizeWhatsAppDigits(recipientPhone);
+            if (targetDigits.length < 10) {
+                await WhatsAppController.auditLog(userId, `WHATSAPP_SEND_FAIL: recipient=${recipientPhone} - INVALID_PHONE`);
+                return res.status(400).json({ success: false, error: 'Número de teléfono inválido.' });
+            }
+            const tail = targetDigits.slice(-8);
+            const candidates = await prisma.cliente.findMany({
                 where: {
                     id_administrador: userId,
-                    telefono: { contains: cleanPhone.slice(-8) }
-                }
+                    telefono: { contains: tail },
+                },
+                select: { id: true, telefono: true },
             });
+            let client = candidates.find((c) => normalizeWhatsAppDigits(c.telefono) === targetDigits);
+            if (!client) {
+                const all = await prisma.cliente.findMany({
+                    where: { id_administrador: userId },
+                    select: { id: true, telefono: true },
+                });
+                client = all.find((c) => normalizeWhatsAppDigits(c.telefono) === targetDigits);
+            }
 
             if (!client) {
                 await WhatsAppController.auditLog(userId, `WHATSAPP_SEND_FAIL: recipient=${recipientPhone} - RECIPIENT_NOT_OWNED`);

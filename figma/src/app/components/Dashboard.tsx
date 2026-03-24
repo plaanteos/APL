@@ -6,6 +6,10 @@ import clientService from "../../services/client.service";
 import paymentService from "../../services/payment.service";
 import { IDashboardStats } from "../types";
 import { CalendarWidget } from "./CalendarWidget";
+import {
+  isOrderFullyDelivered,
+  isPedidoPendienteLista,
+} from "../../utils/orderStatus";
 
 type View = "dashboard" | "orders" | "clients" | "balance";
 
@@ -26,25 +30,6 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const normalizeStatus = (status: unknown) => {
-    return String(status ?? '')
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase()
-      .replace(/[\s-]+/g, '_');
-  };
-
-  const isOrderDelivered = (order: any) => {
-    const detalles = Array.isArray(order?.detalles) ? order.detalles : [];
-    if (detalles.length === 0) return false;
-    const statuses = detalles
-      .map((d: any) => normalizeStatus(d?.estado?.descripcion ?? d?.estadoDescripcion ?? ''))
-      .filter(Boolean);
-    if (statuses.length === 0) return false;
-    return statuses.every((s: string) => s === 'ENTREGADO');
-  };
-
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -63,8 +48,8 @@ export function Dashboard({ onNavigateToBalance, onNavigateTo }: DashboardProps)
         // Nota: fecha_entrega es fecha de compromiso/entrega, no indica que el pedido fue entregado.
         // Consideramos entregado cuando TODOS los detalles están en estado ENTREGADO.
         const activeOrders = orders.filter((o: any) => !o.fecha_delete);
-        const deliveredOrders = activeOrders.filter((o: any) => isOrderDelivered(o));
-        const pendingOrders = activeOrders.filter((o: any) => !isOrderDelivered(o));
+        const deliveredOrders = activeOrders.filter((o) => isOrderFullyDelivered(o));
+        const pendingOrders = activeOrders.filter((o) => isPedidoPendienteLista(o));
         const totalPendingAmount = orders
           .filter(o => !o.fecha_delete)
           .reduce((sum, o) => sum + (o.montoPendiente || 0), 0);

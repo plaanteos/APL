@@ -5,6 +5,7 @@ import { whatsappService } from '../services/whatsapp.service';
 import { buildBasicEmailHtml } from '../utils/notificationTemplates';
 import { closeRedisClient, getRedisClient } from '../utils/redisClient';
 import { prisma } from '../utils/prisma';
+import { BALANCE_XLSX_MIME, loadBalanceExcelForClient } from '../utils/balanceExcelAttachment';
 
 export type NotificationJobData = {
   adminId?: number;
@@ -92,21 +93,8 @@ export const initNotificationWorker = () => {
             throw new Error('Cliente no encontrado');
           }
 
-          const { ExcelService } = await import('../services/excel.service');
-          const buffer = await ExcelService.generateResumenMensualExcel(balanceClientId);
-          const safeName = String(balanceClientName || `cliente_${balanceClientId}`)
-            .trim()
-            .replace(/\s+/g, '_')
-            .replace(/[^a-zA-Z0-9_\-]/g, '');
-          const date = new Date().toISOString().split('T')[0];
-          const filename = `Resumen_mensual_${safeName || `cliente_${balanceClientId}`}_${date}.xlsx`;
-          attachments = [
-            {
-              filename,
-              content: buffer,
-              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            },
-          ];
+          const { buffer, filename } = await loadBalanceExcelForClient(balanceClientId, balanceClientName);
+          attachments = [{ filename, content: buffer, contentType: BALANCE_XLSX_MIME }];
         }
         await emailService.sendEmail({
           to,
@@ -117,7 +105,28 @@ export const initNotificationWorker = () => {
         return;
       }
 
-      await whatsappService.sendTextMessage({ to, body: message, userId: adminId });
+      let waDocument: { buffer: Buffer; fileName: string; mimetype: string } | undefined;
+      if (attachBalanceExcel && balanceClientId) {
+        if (!adminId) {
+          throw new Error('adminId requerido para adjuntar Excel');
+        }
+        const client = await prisma.cliente.findFirst({
+          where: { id: balanceClientId, id_administrador: adminId },
+          select: { id: true },
+        });
+        if (!client) {
+          throw new Error('Cliente no encontrado');
+        }
+        const { buffer, filename } = await loadBalanceExcelForClient(balanceClientId, balanceClientName);
+        waDocument = { buffer, fileName: filename, mimetype: BALANCE_XLSX_MIME };
+      }
+
+      await whatsappService.sendTextMessage({
+        to,
+        body: message,
+        userId: adminId,
+        ...(waDocument ? { document: waDocument } : {}),
+      });
     },
     {
       connection: getRedis(),

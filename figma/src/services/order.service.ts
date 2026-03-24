@@ -10,6 +10,7 @@ import {
 } from '../app/types';
 import { isDemoMode } from './demoMode';
 import { demoStore } from './demoStore';
+import { getPedidoStatus, isPedidoPendienteLista } from '../utils/orderStatus';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -143,11 +144,11 @@ class OrderService {
   }
 
   /**
-   * Obtener pedidos pendientes (no entregados)
+   * Obtener pedidos con saldo pendiente (no totalmente pagados).
    */
   async getPending(): Promise<IOrderWithCalculations[]> {
-    // La API actual no expone "entregado" como filtro; se debe filtrar por estado (id_estado) si aplica.
-    return this.getAll();
+    const orders = await this.getAll();
+    return orders.filter(isPedidoPendienteLista);
   }
 
   /**
@@ -162,9 +163,10 @@ class OrderService {
    * Obtener pedidos con deuda
    */
   async getWithDebt(): Promise<IOrderWithCalculations[]> {
-    // La API actual no expone "conDeuda" como filtro; se puede filtrar client-side con montoPendiente.
     const orders = await this.getAll();
-    return orders.filter(o => (o.montoPendiente || 0) > 0);
+    return orders.filter(
+      (o) => (o.montoPendiente || 0) > 0 && getPedidoStatus(o) !== 'PAGADO'
+    );
   }
 
   /**

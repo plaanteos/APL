@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { z } from "zod";
 import {
   Dialog,
@@ -195,6 +195,30 @@ export function NewOrderDialog({
       .replace(/[\s-]+/g, ' ');
   };
 
+  const estadoEsPagado = useMemo(() => {
+    const e = estados.find((x) => x.id.toString() === formData.estadoId);
+    return Boolean(e && normalizeEstadoDescripcion(e.descripcion) === 'PAGADO');
+  }, [formData.estadoId, estados]);
+
+  const matchedCatalogProduct = useMemo(() => {
+    const t = String(formData.productName ?? '').trim();
+    if (!t || !estadoEsPagado) return undefined;
+    const normalized = normalizeProductTipo(t);
+    return (productos || []).find((p) => normalizeProductTipo(p.tipo) === normalized);
+  }, [formData.productName, estadoEsPagado, productos]);
+
+  useEffect(() => {
+    if (!estadoEsPagado || !matchedCatalogProduct) return;
+    const precio = Number(matchedCatalogProduct.precio);
+    if (!(precio > 0)) return;
+    const next = String(precio);
+    setFormData((prev) => (prev.unitPrice === next ? prev : { ...prev, unitPrice: next }));
+  }, [estadoEsPagado, matchedCatalogProduct]);
+
+  const unitPriceFromCatalog = Boolean(
+    estadoEsPagado && matchedCatalogProduct && Number(matchedCatalogProduct.precio) > 0
+  );
+
   const ensureProductoId = async (typed: string, adminId: number, defaultPrecio: number): Promise<number> => {
     const clean = String(typed ?? '').trim();
     if (!clean) throw new Error('Producto requerido');
@@ -288,10 +312,22 @@ export function NewOrderDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validar todo el formulario
+
+    const selectedEstadoForSubmit = estados.find((e) => e.id.toString() === formData.estadoId);
+    const isPagadoSubmit =
+      selectedEstadoForSubmit &&
+      normalizeEstadoDescripcion(selectedEstadoForSubmit.descripcion) === 'PAGADO';
+    const normalizedName = normalizeProductTipo(String(formData.productName ?? '').trim());
+    const catalogMatchForSubmit = (productos || []).find(
+      (p) => normalizeProductTipo(p.tipo) === normalizedName
+    );
+    let submitData = { ...formData };
+    if (isPagadoSubmit && catalogMatchForSubmit && Number(catalogMatchForSubmit.precio) > 0) {
+      submitData = { ...submitData, unitPrice: String(catalogMatchForSubmit.precio) };
+    }
+
     try {
-      orderSchema.parse(formData);
+      orderSchema.parse(submitData);
       setErrors({});
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -317,39 +353,37 @@ export function NewOrderDialog({
         return;
       }
 
-      const patientDisplay = String(formData.patientName ?? '').trim() || '-';
+      const patientDisplay = String(submitData.patientName ?? '').trim() || '-';
       const productoId = await ensureProductoId(
-        String(formData.productName ?? '').trim(),
+        String(submitData.productName ?? '').trim(),
         adminId,
-        Number(formData.unitPrice)
+        Number(submitData.unitPrice)
       );
 
       const createdOrder = await orderService.create({
-        id_cliente: Number(formData.clientId),
-        fecha_entrega: formData.dueDate,
+        id_cliente: Number(submitData.clientId),
+        fecha_entrega: submitData.dueDate,
         id_administrador: adminId,
-        descripcion: formData.description?.trim() ? formData.description.trim() : undefined,
+        descripcion: submitData.description?.trim() ? submitData.description.trim() : undefined,
         detalles: [
           {
             id_producto: productoId,
-            cantidad: Number(formData.quantity),
-            precio_unitario: Number(formData.unitPrice),
+            cantidad: Number(submitData.quantity),
+            precio_unitario: Number(submitData.unitPrice),
             paciente: patientDisplay,
-            id_estado: Number(formData.estadoId),
+            id_estado: Number(submitData.estadoId),
           },
         ],
       });
 
-      // Validar si el estado seleccionado es PAGADO para registrar el pago automático
-      const selectedEstado = estados.find(e => e.id.toString() === formData.estadoId);
-      const isPagado = selectedEstado && normalizeEstadoDescripcion(selectedEstado.descripcion) === 'PAGADO';
+      const isPagado = isPagadoSubmit;
       
       if (isPagado && createdOrder) {
         // En demo store id puede ser string o number dependiendo de la implementación.
         // Pero en la respuesta normal es `createdOrder.id` (number/string).
         const orderIdValue = (createdOrder as any).id;
         if (orderIdValue != null) {
-          const amount = Number(formData.quantity) * Number(formData.unitPrice);
+          const amount = Number(submitData.quantity) * Number(submitData.unitPrice);
           if (amount > 0) {
             try {
               await paymentService.create({
@@ -618,7 +652,12 @@ export function NewOrderDialog({
               )}
             </div>
             <div>
-              <Label htmlFor="unitPrice">Precio Unitario *</Label>
+              <Label htmlFor="unitPrice">
+                Precio unitario *{" "}
+                {unitPriceFromCatalog ? (
+                  <span className="text-xs font-normal text-gray-500">(automático desde catálogo)</span>
+                ) : null}
+              </Label>
               <Input
                 id="unitPrice"
                 name="unitPrice"
@@ -626,13 +665,25 @@ export function NewOrderDialog({
                 min="0"
                 step="0.01"
                 value={formData.unitPrice}
+                readOnly={unitPriceFromCatalog}
                 onChange={(e) => {
+                  if (unitPriceFromCatalog) return;
                   setFormData({ ...formData, unitPrice: e.target.value });
                   validateField("unitPrice", e.target.value);
                 }}
-                placeholder="$"
-                className={errors.unitPrice ? "border-red-500" : ""}
+                placeholder={unitPriceFromCatalog ? "" : "$"}
+                title={
+                  unitPriceFromCatalog
+                    ? "Precio tomado del producto en el catálogo"
+                    : undefined
+                }
+                className={errors.unitPrice ? "border-red-500" : unitPriceFromCatalog ? "bg-gray-50" : ""}
               />
+              {estadoEsPagado && !matchedCatalogProduct && (
+                <p className="text-xs text-gray-600 mt-1">
+                  Producto nuevo: ingresá el precio una vez; si ya está en el catálogo, se completa solo.
+                </p>
+              )}
               {errors.unitPrice && (
                 <p className="text-sm text-red-500 mt-1">{errors.unitPrice}</p>
               )}

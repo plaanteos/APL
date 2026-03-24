@@ -7,6 +7,8 @@ interface WhatsAppTextMessageInput {
   body: string;
   /** ID del usuario que envía el mensaje (requerido para SaaS multi-usuario). */
   userId?: number;
+  /** Adjunto opcional (caption = body). */
+  document?: { buffer: Buffer; fileName: string; mimetype: string };
 }
 
 /**
@@ -18,7 +20,7 @@ class WhatsAppService {
    * Envía un mensaje de texto usando el gestor de sesiones de Baileys.
    */
   async sendTextMessage(input: WhatsAppTextMessageInput): Promise<void> {
-    const { to, body, userId } = input;
+    const { to, body, userId, document } = input;
 
     if (!userId) {
       logger.error('❌ Intento de envío de WhatsApp sin userId.');
@@ -29,13 +31,14 @@ class WhatsAppService {
       throw new Error('Número de WhatsApp inválido');
     }
 
-    if (!body || !body.trim()) {
+    if ((!body || !body.trim()) && !document?.buffer?.length) {
       throw new Error('Mensaje vacío');
     }
 
+    const text = (body || '').trim() || ' ';
+
     try {
-      // Usar el manager para el envío (aislamiento validado con userId como requester)
-      await whatsappSessionManager.sendMessage(userId, userId, to, body);
+      await whatsappSessionManager.sendMessage(userId, userId, to, text, document);
       logger.info(`💬 WhatsApp enviado exitosamente por Usuario ${userId} a ${to}`);
     } catch (error: any) {
       logger.error(`❌ Error enviando WhatsApp (User ${userId}): ${error.message}`);

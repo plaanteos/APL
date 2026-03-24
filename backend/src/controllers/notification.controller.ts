@@ -6,6 +6,7 @@ import { whatsappService } from '../services/whatsapp.service';
 import { buildBasicEmailHtml } from '../utils/notificationTemplates';
 import { enqueueNotification, isNotificationQueueEnabled } from '../queues/notification.queue';
 import { prisma } from '../utils/prisma';
+import { BALANCE_XLSX_MIME, loadBalanceExcelForClient } from '../utils/balanceExcelAttachment';
 
 const sendSchema = z.object({
   channel: z.enum(['email', 'whatsapp']),
@@ -31,7 +32,8 @@ export class NotificationController {
         });
       }
 
-      const shouldAttachBalanceExcel = channel === 'email' && attachBalanceExcel === true;
+      const shouldAttachBalanceExcel =
+        attachBalanceExcel === true && (channel === 'email' || channel === 'whatsapp');
       if (shouldAttachBalanceExcel && !balanceClientId) {
         return res.status(400).json({ success: false, error: 'balanceClientId es requerido para adjuntar el Excel de balance' });
       }
@@ -83,21 +85,8 @@ export class NotificationController {
         const finalSubject = subject || 'Mensaje desde APL';
         let attachments: Array<{ filename: string; content: Buffer; contentType?: string }> | undefined;
         if (shouldAttachBalanceExcel) {
-          const { ExcelService } = await import('../services/excel.service');
-          const buffer = await ExcelService.generateResumenMensualExcel(balanceClientId!);
-          const safeName = String(balanceClientName || `cliente_${balanceClientId}`)
-            .trim()
-            .replace(/\s+/g, '_')
-            .replace(/[^a-zA-Z0-9_\-]/g, '');
-          const date = new Date().toISOString().split('T')[0];
-          const filename = `Resumen_mensual_${safeName || `cliente_${balanceClientId}`}_${date}.xlsx`;
-          attachments = [
-            {
-              filename,
-              content: buffer,
-              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            },
-          ];
+          const { buffer, filename } = await loadBalanceExcelForClient(balanceClientId!, balanceClientName);
+          attachments = [{ filename, content: buffer, contentType: BALANCE_XLSX_MIME }];
         }
         await emailService.sendEmail({
           to,
@@ -109,7 +98,18 @@ export class NotificationController {
         return res.json({ success: true, queued: false, message: 'Email enviado' });
       }
 
-      await whatsappService.sendTextMessage({ to, body: message, userId: adminId });
+      let waDocument: { buffer: Buffer; fileName: string; mimetype: string } | undefined;
+      if (shouldAttachBalanceExcel) {
+        const { buffer, filename } = await loadBalanceExcelForClient(balanceClientId!, balanceClientName);
+        waDocument = { buffer, fileName: filename, mimetype: BALANCE_XLSX_MIME };
+      }
+
+      await whatsappService.sendTextMessage({
+        to,
+        body: message,
+        userId: adminId,
+        ...(waDocument ? { document: waDocument } : {}),
+      });
       return res.json({ success: true, queued: false, message: 'WhatsApp enviado' });
     } catch (error: any) {
       logger.error('Notification send error:', error);
