@@ -1,12 +1,11 @@
 import * as Baileys from '@whiskeysockets/baileys';
-// Extraer miembros con compatibilidad para distintas versiones de la bifurcación
-const makeWASocket = (Baileys.default || (Baileys as any).makeWASocket || Baileys) as any;
-const { 
-    DisconnectReason, 
-    fetchLatestBaileysVersion,
-    useMultiFileAuthState,
-    makeInMemoryStore
-} = Baileys as any;
+// Extraer miembros con máxima compatibilidad (ESM vs CJS)
+const B = (Baileys as any).default || Baileys;
+const makeWASocket = B.makeWASocket || (Baileys as any).makeWASocket;
+const makeInMemoryStore = B.makeInMemoryStore || (Baileys as any).makeInMemoryStore;
+const DisconnectReason = B.DisconnectReason || (Baileys as any).DisconnectReason;
+const fetchLatestBaileysVersion = B.fetchLatestBaileysVersion || (Baileys as any).fetchLatestBaileysVersion;
+const useMultiFileAuthState = B.useMultiFileAuthState || (Baileys as any).useMultiFileAuthState;
 
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
