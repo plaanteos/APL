@@ -217,10 +217,24 @@ class WhatsAppSessionManager {
         const sock = this.sessions.get(userId);
         if (!sock) throw new Error('SESSION_NOT_FOUND');
 
-        // Log para depuración de errores de destinatario
+        // Validar formato internacional E.164
         const original = phoneNumber;
-        const digits = phoneNumber.replace(/\D/g, '');
-        const jid = `${digits}@s.whatsapp.net`;
+        let digits = phoneNumber.replace(/\D/g, '');
+        let jid = '';
+        if (phoneNumber.startsWith('+')) {
+            jid = `${digits}@s.whatsapp.net`;
+        } else if (digits.startsWith('54')) {
+            // Asumir Argentina si empieza con 54
+            jid = `${digits}@s.whatsapp.net`;
+        } else {
+            // Número inválido para WhatsApp
+            console.warn(`[WA WARNING] Número no válido para WhatsApp: '${original}' (digits='${digits}')`);
+            throw new Error('El número de WhatsApp debe estar en formato internacional, por ejemplo: +5491139300357');
+        }
+        if (digits.length < 11) {
+            console.warn(`[WA WARNING] Número demasiado corto para WhatsApp: '${original}' (digits='${digits}')`);
+            throw new Error('El número de WhatsApp es demasiado corto. Debe estar en formato internacional.');
+        }
         // Log detallado
         // eslint-disable-next-line no-console
         console.log(`[WA DEBUG] Enviando mensaje: userId=${userId}, phoneNumber='${original}', digits='${digits}', jid='${jid}', message='${message}'`);

@@ -32,13 +32,29 @@ export function SendMessageDialog({
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
+  // Normaliza al formato internacional E.164 (solo números válidos para WhatsApp)
   const normalizePhone = (raw: string) => {
-    const s = String(raw ?? '').trim();
+    let s = String(raw ?? '').trim();
     if (!s) return '';
-    // Mantener solo dígitos y '+' inicial.
-    const plus = s.startsWith('+') ? '+' : '';
-    const digits = s.replace(/[^0-9]/g, '');
-    return plus ? `+${digits}` : digits;
+    // Eliminar espacios, guiones, paréntesis
+    s = s.replace(/[\s\-()]/g, '');
+    // Si empieza con 00, reemplazar por +
+    if (s.startsWith('00')) s = '+' + s.slice(2);
+    // Si empieza con +, mantener
+    if (!s.startsWith('+')) {
+      // Si es de Argentina y empieza con 54 o 549, agregar +
+      if (s.startsWith('54')) s = '+' + s;
+      // Si es de otro país, el usuario debe ingresar el +
+    }
+    // Solo dígitos después del +
+    if (s.startsWith('+')) {
+      s = '+' + s.slice(1).replace(/[^0-9]/g, '');
+    } else {
+      s = s.replace(/[^0-9]/g, '');
+    }
+    // Validar largo mínimo (ejemplo: Argentina 13 dígitos +549XXXXXXXXXX)
+    if (s.length < 11) return '';
+    return s;
   };
 
   const openFallback = (finalMessage: string) => {
@@ -63,9 +79,17 @@ export function SendMessageDialog({
     try {
       setIsSending(true);
 
+
+      const normalizedPhone = type === 'whatsapp' ? normalizePhone(contactInfo) : contactInfo;
+      if (type === 'whatsapp' && (!normalizedPhone || normalizedPhone.length < 11 || !normalizedPhone.startsWith('+'))) {
+        toast.error('El número de WhatsApp debe estar en formato internacional, por ejemplo: +5491139300357');
+        setIsSending(false);
+        return;
+      }
+
       await notificationService.send({
         channel: type,
-        to: type === 'whatsapp' ? normalizePhone(contactInfo) : contactInfo,
+        to: normalizedPhone,
         subject: type === "email" ? "Mensaje desde Laboratorio Dental" : undefined,
         message: finalMessage,
       });
