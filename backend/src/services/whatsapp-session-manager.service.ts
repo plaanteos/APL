@@ -1,9 +1,7 @@
 // Importación híbrida para máxima compatibilidad en producción (Render)
 
-// Importación recomendada para Baileys >=6.x
-const { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-// Importación directa del store para máxima compatibilidad
-const { makeInMemoryStore } = require('@whiskeysockets/baileys/lib/Utils/store');
+// Importación recomendada para Baileys >=6.x (solo desde el paquete principal)
+const { makeWASocket, makeInMemoryStore, DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
