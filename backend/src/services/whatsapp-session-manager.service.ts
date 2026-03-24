@@ -250,7 +250,7 @@ class WhatsAppSessionManager {
         this.readyCallbacks.delete(userId);
         this.disconnectCallbacks.delete(userId);
 
-        await (prisma as any).whatsappSession.deleteMany({ where: { userId } });
+        await (prisma as any).whatsAppSession.deleteMany({ where: { userId } });
 
         const sessionPath = path.join(process.cwd(), 'whatsapp_sessions', `auth_info_${userId}`);
         if (fs.existsSync(sessionPath)) {
