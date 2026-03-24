@@ -13,7 +13,7 @@ export class WhatsAppController {
      * POST /api/whatsapp/connect
      */
     static async connect(req: any, res: Response) {
-        const userId = Number(req.body.userId || req.user?.id);
+        const userId = Number(req.query.userId || req.body.userId || req.user?.id);
         const requesterId = Number(req.user?.id);
 
         if (whatsappSessionManager.isConnected(userId, requesterId)) {

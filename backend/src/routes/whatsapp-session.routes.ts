@@ -10,8 +10,8 @@ const router = express.Router();
  * REST API para conectar WhatsApp multi-usuario con aislamiento estricto
  */
 
-// POST /api/whatsapp/connect - Inicia conexión vía SSE con validación de dueño
-router.post('/connect', authenticate, validateWhatsAppOwnership, asyncHandler(WhatsAppController.connect));
+// GET /connect - Inicia conexión vía SSE (EventSource usa GET) con validación de dueño
+router.get('/connect', authenticate, validateWhatsAppOwnership, asyncHandler(WhatsAppController.connect));
 
 // GET /api/whatsapp/status/:userId - Consulta estado de conexión (aislamiento)
 router.get('/status/:userId', authenticate, validateWhatsAppOwnership, asyncHandler(WhatsAppController.getStatus));
