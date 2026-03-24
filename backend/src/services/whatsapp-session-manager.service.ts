@@ -50,7 +50,7 @@ class WhatsAppSessionManager {
      */
     async loadSessionsFromDB() {
         try {
-            const savedSessions = await (prisma as any).whatsappSession.findMany();
+            const savedSessions = await (prisma as any).whatsAppSession.findMany();
             logger.info(`Cargando ${savedSessions.length} sesiones de WhatsApp con encriptación...`);
 
             for (const sess of savedSessions) {
@@ -158,7 +158,7 @@ class WhatsAppSessionManager {
                         );
                     } else {
                         // Usuario hizo logout: limpiar todo
-                        await (prisma as any).whatsappSession.deleteMany({ where: { userId } });
+                        await (prisma as any).whatsAppSession.deleteMany({ where: { userId } });
                         fs.rmSync(sessionPath, { recursive: true, force: true });
 
                         // FIX #3: Limpiar callbacks al hacer logout
@@ -207,7 +207,7 @@ class WhatsAppSessionManager {
 
             const encryptedPayload = encrypt(JSON.stringify(sessionDataRaw));
 
-            await (prisma as any).whatsappSession.upsert({
+            await (prisma as any).whatsAppSession.upsert({
                 where: { userId },
                 update: { sessionData: { payload: encryptedPayload } },
                 create: { userId, sessionData: { payload: encryptedPayload } }
