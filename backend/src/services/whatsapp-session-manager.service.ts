@@ -27,6 +27,7 @@ import { normalizeWhatsAppDigits } from '../utils/whatsappPhone';
  */
 class WhatsAppSessionManager {
     private sessions = new Map<number, any>();
+    private connectedUsers = new Set<number>();
     private qrCallbacks = new Map<number, (qr: string) => void>();
     private readyCallbacks = new Map<number, () => void>();
     private disconnectCallbacks = new Map<number, (reason: string) => void>();
@@ -137,6 +138,7 @@ class WhatsAppSessionManager {
                 if (connection === 'close') {
                     const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
                     this.sessions.delete(userId);
+                    this.connectedUsers.delete(userId);
                     this.disconnectCallbacks.get(userId)?.(lastDisconnect?.error?.message || 'Disconnected');
 
                     if (shouldReconnect) {
@@ -157,8 +159,10 @@ class WhatsAppSessionManager {
                         this.qrCallbacks.delete(userId);
                         this.readyCallbacks.delete(userId);
                         this.disconnectCallbacks.delete(userId);
+                        this.connectedUsers.delete(userId);
                     }
                 } else if (connection === 'open') {
+                    this.connectedUsers.add(userId);
                     await this.syncSessionToDB(userId, sessionPath);
                     this.readyCallbacks.get(userId)?.();
                 }
@@ -166,7 +170,9 @@ class WhatsAppSessionManager {
 
             sock.ev.on('creds.update', async () => {
                 await saveCreds();
-                await this.syncSessionToDB(userId, sessionPath);
+                if (this.connectedUsers.has(userId)) {
+                    await this.syncSessionToDB(userId, sessionPath);
+                }
             });
 
             return sock;
@@ -259,6 +265,8 @@ class WhatsAppSessionManager {
         }
 
         this.sessions.delete(userId);
+    this.connectedUsers.delete(userId);
+    this.connecting.delete(userId);
 
         // FIX #3: Limpiar callbacks al desconectar
         this.qrCallbacks.delete(userId);
@@ -278,7 +286,7 @@ class WhatsAppSessionManager {
      */
     isConnected(userId: number, requesterId: number): boolean {
         if (userId !== requesterId) return false;
-        return this.sessions.has(userId);
+        return this.connectedUsers.has(userId);
     }
 
     /**

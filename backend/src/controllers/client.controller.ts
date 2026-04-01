@@ -251,6 +251,7 @@ export class ClientController {
   static async createClient(req: Request, res: Response) {
     try {
       const clientData = createClientSchema.parse(req.body);
+      const normalizedEmail = clientData.email.toLowerCase();
 
       const authReq = req as AuthRequest;
       const adminId = authReq.user?.id;
@@ -262,8 +263,12 @@ export class ClientController {
       }
 
       // Verificar si el email ya existe
-      const existingClient = await prisma.cliente.findUnique({
-        where: { email: clientData.email },
+      const existingClient = await prisma.cliente.findFirst({
+        where: {
+          id_administrador: adminId,
+          email: { equals: normalizedEmail, mode: 'insensitive' },
+        },
+        select: { id: true },
       });
 
       if (existingClient) {
@@ -277,6 +282,7 @@ export class ClientController {
       const newClient = await prisma.cliente.create({
         data: {
           ...clientData,
+          email: normalizedEmail,
           id_administrador: adminId,
         },
       });
@@ -342,8 +348,14 @@ export class ClientController {
 
       // Si se está actualizando el email, verificar que no esté en uso
       if (updateData.email && updateData.email !== existingClient.email) {
-        const emailExists = await prisma.cliente.findUnique({
-          where: { email: updateData.email },
+        const normalizedEmail = updateData.email.toLowerCase();
+        const emailExists = await prisma.cliente.findFirst({
+          where: {
+            id_administrador: adminId,
+            id: { not: Number(id) },
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+          },
+          select: { id: true },
         });
 
         if (emailExists) {
@@ -352,6 +364,8 @@ export class ClientController {
             error: 'Ya existe un cliente con este email',
           });
         }
+
+        updateData.email = normalizedEmail;
       }
 
       // Actualizar cliente

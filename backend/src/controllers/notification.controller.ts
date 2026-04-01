@@ -38,16 +38,30 @@ export class NotificationController {
         return res.status(400).json({ success: false, error: 'balanceClientId es requerido para adjuntar el Excel de balance' });
       }
 
+      let resolvedRecipient = to;
+
       if (shouldAttachBalanceExcel && balanceClientId) {
         const client = await prisma.cliente.findFirst({
           where: { id: balanceClientId, id_administrador: adminId },
-          select: { id: true },
+          select: { id: true, email: true, telefono: true },
         });
         if (!client) {
           return res.status(404).json({
             success: false,
             error: 'Cliente no encontrado',
           });
+        }
+
+        if (channel === 'email') {
+          if (!client.email) {
+            return res.status(400).json({ success: false, error: 'El cliente no tiene email registrado' });
+          }
+          resolvedRecipient = client.email;
+        } else {
+          if (!client.telefono) {
+            return res.status(400).json({ success: false, error: 'El cliente no tiene teléfono registrado' });
+          }
+          resolvedRecipient = client.telefono;
         }
       }
 
@@ -57,7 +71,7 @@ export class NotificationController {
           const job = await enqueueNotification({
             adminId,
             channel,
-            to,
+            to: resolvedRecipient,
             subject,
             message,
             ...(shouldAttachBalanceExcel
@@ -89,7 +103,7 @@ export class NotificationController {
           attachments = [{ filename, content: buffer, contentType: BALANCE_XLSX_MIME }];
         }
         await emailService.sendEmail({
-          to,
+          to: resolvedRecipient,
           subject: finalSubject,
           html: buildBasicEmailHtml(finalSubject, message),
           ...(attachments ? { attachments } : {}),
@@ -105,7 +119,7 @@ export class NotificationController {
       }
 
       await whatsappService.sendTextMessage({
-        to,
+        to: resolvedRecipient,
         body: message,
         userId: adminId,
         ...(waDocument ? { document: waDocument } : {}),

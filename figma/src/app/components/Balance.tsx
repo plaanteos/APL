@@ -20,7 +20,7 @@ import { NewOrderDialog } from "./NewOrderDialog";
 import { PaymentDialog } from "./PaymentDialog";
 import { AddExpenseSheet } from "./AddExpenseSheet";
 import { OtherExpensesSheet } from "./OtherExpensesSheet";
-import { PrintableReceipt } from "./PrintableReceipt";
+import { printReceipt } from "./PrintableReceipt";
 import { notificationService } from "../../services/notification.service";
 import { toInternationalPlus } from "../../utils/whatsappPhone";
 
@@ -261,8 +261,22 @@ export function Balance({ selectedClientId }: BalanceProps) {
       toast.error("Selecciona al menos un pedido para imprimir");
       return;
     }
-    setTimeout(() => window.print(), 100);
-    toast.success("Abriendo vista de impresión");
+
+    if (!activeClient) {
+      toast.error("No hay cliente seleccionado para generar el comprobante");
+      return;
+    }
+
+    try {
+      printReceipt({
+        client: activeClient,
+        orders: filteredPedidos,
+        selectedOrderIds,
+      });
+      toast.success("Abriendo comprobante de impresión");
+    } catch (error: any) {
+      toast.error(error?.message || "No se pudo abrir la vista de impresión");
+    }
   };
 
   // ─── Enviar WhatsApp con pedidos seleccionados ───────────────────────────────
@@ -282,6 +296,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
     );
     const total = selectedOrders.reduce((s, p) => s + p.montoTotal, 0);
     const pagado = selectedOrders.reduce((s, p) => s + p.montoPagado, 0);
+    const pendiente = selectedOrders.reduce((s, p) => s + p.montoPendiente, 0);
 
     const msg = [
       `Comprobante de Pedidos - APL Laboratorio Dental`,
@@ -291,11 +306,12 @@ export function Balance({ selectedClientId }: BalanceProps) {
       `Detalle de ${selectedOrders.length} pedido(s):`,
       ...selectedOrders.map(
         (p) =>
-          `• ${p.paciente || "—"}: $${p.montoTotal.toLocaleString("es-ES")} (pagado: $${p.montoPagado.toLocaleString("es-ES")})`
+          `• ${p.paciente || "—"}: total $${p.montoTotal.toLocaleString("es-ES")} | pagado $${p.montoPagado.toLocaleString("es-ES")} | pendiente $${p.montoPendiente.toLocaleString("es-ES")}`
       ),
       ``,
       `Total: $${total.toLocaleString("es-ES")}`,
       `Pagado: $${pagado.toLocaleString("es-ES")}`,
+      `Pendiente: $${pendiente.toLocaleString("es-ES")}`,
       ``,
       `- APL Laboratorio Dental`,
     ].join("\n");
@@ -317,11 +333,20 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   // ─── Handlers de notificación ────────────────────────────────────────────────
   const buildBalanceMessage = () => {
-    if (!selectedClient) return "";
+    if (!activeClient) return "";
+
+    const detailLines = filteredPedidos.slice(0, 20).map((pedido) => {
+      const trabajo = getTrabajoTitle(pedido.productos) || pedido.productos || "Trabajo dental";
+      return `• ${formatDate(pedido.fecha)} | ${pedido.paciente || "-"} | ${trabajo}: total ${formatCurrency(pedido.montoTotal)} | pagado ${formatCurrency(pedido.montoPagado)} | pendiente ${formatCurrency(pedido.montoPendiente)}`;
+    });
+
     return [
       `Resumen de balance - APL Laboratorio Dental`,
       ``,
-      `Hola ${selectedClient.nombre},`,
+      `Hola ${activeClient.nombre},`,
+      ``,
+      `Detalle de pedidos:`,
+      ...(detailLines.length > 0 ? detailLines : ["• Sin pedidos registrados"]),
       `Total: $${viewTotals.totalGeneral.toLocaleString("es-ES")}`,
       `Pagado: $${viewTotals.totalPagado.toLocaleString("es-ES")}`,
       `Pendiente: $${viewTotals.totalPendiente.toLocaleString("es-ES")}`,
@@ -331,17 +356,17 @@ export function Balance({ selectedClientId }: BalanceProps) {
   };
 
   const handleSendEmail = async () => {
-    if (!selectedClient?.email) { toast.error("El cliente no tiene email"); return; }
+    if (!activeClient?.email) { toast.error("El cliente no tiene email"); return; }
     if (!currentClientId) { toast.error("No hay cliente seleccionado"); return; }
     toast.promise(
       notificationService.send({
         channel: "email",
-        to: selectedClient.email,
-        subject: `Resumen de balance - ${selectedClient.nombre}`,
+        to: activeClient.email,
+        subject: `Resumen de balance - ${activeClient.nombre}`,
         message: buildBalanceMessage(),
         attachBalanceExcel: true,
         balanceClientId: currentClientId,
-        balanceClientName: selectedClient.nombre,
+        balanceClientName: activeClient.nombre,
       }),
       {
         loading: "Enviando email...",
@@ -352,16 +377,16 @@ export function Balance({ selectedClientId }: BalanceProps) {
   };
 
   const handleSendWhatsApp = async () => {
-    if (!selectedClient?.telefono) { toast.error("El cliente no tiene teléfono"); return; }
+    if (!activeClient?.telefono) { toast.error("El cliente no tiene teléfono"); return; }
     if (!currentClientId) { toast.error("No hay cliente seleccionado"); return; }
     toast.promise(
       notificationService.send({
         channel: "whatsapp",
-        to: toInternationalPlus(selectedClient.telefono),
+        to: toInternationalPlus(activeClient.telefono),
         message: `${buildBalanceMessage()}\n\n📎 Adjunto: resumen del balance en Excel.`,
         attachBalanceExcel: true,
         balanceClientId: currentClientId,
-        balanceClientName: selectedClient.nombre,
+        balanceClientName: activeClient.nombre,
       }),
       {
         loading: "Enviando WhatsApp con Excel...",
@@ -421,6 +446,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
   };
 
   const selectedClient = clients.find((c) => c.id === currentClientId);
+  const activeClient = balanceData?.cliente?.id === currentClientId
+    ? balanceData.cliente
+    : selectedClient;
 
   // ─── Descarga CSV mensual / anual (sin dependencias externas) ────────────────
   const handleDownloadPeriodExcel = () => {
@@ -829,10 +857,10 @@ export function Balance({ selectedClientId }: BalanceProps) {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedClient && (
+              {activeClient && (
                 <p className="text-xs text-gray-500">
                   Mostrando balance de:{" "}
-                  <span className="font-medium text-gray-700">{selectedClient.nombre}</span>
+                  <span className="font-medium text-gray-700">{activeClient.nombre}</span>
                 </p>
               )}
             </div>
@@ -910,7 +938,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               onClick={handleSendEmail}
               variant="outline"
               className="h-16 flex flex-col items-center justify-center gap-1"
-              disabled={!selectedClient?.email}
+              disabled={!activeClient?.email}
             >
               <Mail className="h-5 w-5" />
               <span className="text-xs">Email</span>
@@ -919,7 +947,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
               onClick={handleSendWhatsApp}
               variant="outline"
               className="h-16 flex flex-col items-center justify-center gap-1"
-              disabled={!selectedClient?.telefono}
+              disabled={!activeClient?.telefono}
             >
               <MessageCircle className="h-5 w-5" />
               <span className="text-xs">WhatsApp</span>
@@ -1045,15 +1073,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
         onOpenChange={setShowExpensesSheet}
       />
       </div>
-
-      {/* Comprobante imprimible (No oculto por print:hidden del padre) */}
-      {selectedClient && (
-        <PrintableReceipt
-          client={selectedClient}
-          orders={filteredPedidos}
-          selectedOrderIds={selectedOrderIds}
-        />
-      )}
     </>
   );
 }

@@ -54,7 +54,7 @@ model Cliente {
   id               Int           @id @default(autoincrement())
   nombre           String        @db.VarChar(100)
   telefono         String        @db.VarChar(20)
-  email            String        @unique @db.VarChar(100)
+  email            String        @db.VarChar(100)
   id_administrador Int
   celular          String?      @db.VarChar(20)
   id_tipo          Int?
@@ -69,6 +69,7 @@ model Cliente {
   @@index([nombre])
   @@index([telefono])
   @@index([id_tipo])
+  @@unique([id_administrador, email])
   @@map("cliente")
 }
 

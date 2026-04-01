@@ -1,0 +1,10 @@
+-- ================================================================
+-- FIX: Permitir el mismo email de Cliente en distintos administradores
+--      (unicidad por (id_administrador, email) en vez de global)
+-- ================================================================
+
+-- 1) Eliminar índice único global (si existe)
+DROP INDEX IF EXISTS "cliente_email_key";
+
+-- 2) Crear índice único compuesto (si no existe)
+CREATE UNIQUE INDEX IF NOT EXISTS "cliente_admin_email_key" ON "cliente"("id_administrador", "email");

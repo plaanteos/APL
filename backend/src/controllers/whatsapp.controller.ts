@@ -33,6 +33,10 @@ export class WhatsAppController {
             res.write(': heartbeat\n\n');
         }, 15000);
 
+        req.on('close', () => {
+            clearInterval(heartbeat);
+        });
+
         try {
             // Enviar ping inicial para confirmar conexión abierta
             sendEvent({ status: "initializing" });
@@ -57,7 +61,6 @@ export class WhatsAppController {
             );
         } catch (error: any) {
             clearInterval(heartbeat);
-            const status = error.message === 'UNAUTHORIZED' ? 401 : 500;
             sendEvent({ status: "error", error: error.message });
             res.end();
         }

@@ -113,7 +113,7 @@ CREATE UNIQUE INDEX "administrador_email_key" ON "administrador"("email");
 CREATE UNIQUE INDEX "administrador_usuario_key" ON "administrador"("usuario");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "cliente_email_key" ON "cliente"("email");
+CREATE UNIQUE INDEX "cliente_admin_email_key" ON "cliente"("id_administrador", "email");
 
 -- CreateIndex
 CREATE INDEX "cliente_id_administrador_idx" ON "cliente"("id_administrador");

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
 import { MessageSquare, CheckCircle2, RefreshCcw, LogOut, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
@@ -10,6 +10,7 @@ import { useAuth } from "../../hooks/useAuth";
  */
 export function WhatsAppConfig() {
   const { user } = useAuth();
+  const eventSourceRef = useRef<EventSource | null>(null);
   const [status, setStatus] = useState<"idle" | "connecting" | "qr" | "connected">("idle");
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
@@ -38,14 +39,38 @@ export function WhatsAppConfig() {
     checkStatus();
   }, [user]);
 
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+    };
+  }, []);
+
+  const handleCancelConnect = async () => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    setQrCode(null);
+    setStatus("idle");
+
+    if (!user?.id) return;
+
+    try {
+      await whatsappService.disconnect(user.id);
+    } catch {
+      // Si no había sesión persistida, ignorar el error de cancelación.
+    }
+  };
+
   const handleConnect = () => {
     if (!user?.id) return;
+    eventSourceRef.current?.close();
     setStatus("connecting");
     setQrCode(null);
     setError(null);
 
     const url = whatsappService.getConnectUrl(user.id);
     const eventSource = new EventSource(url);
+    eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
       try {
@@ -57,14 +82,22 @@ export function WhatsAppConfig() {
           setStatus("connected");
           checkStatus();
           eventSource.close();
+          eventSourceRef.current = null;
         } else if (data.status === "error") {
           setError(data.error || "Error desconocido en el servidor.");
           setStatus("idle");
           eventSource.close();
+          eventSourceRef.current = null;
         } else if (data.status === "already_connected") {
           setStatus("connected");
           checkStatus();
           eventSource.close();
+          eventSourceRef.current = null;
+        } else if (data.status === "disconnected") {
+          setQrCode(null);
+          setStatus("idle");
+          eventSource.close();
+          eventSourceRef.current = null;
         }
       } catch (e) {
         console.error("Error parseando evento SSE:", e);
@@ -78,10 +111,7 @@ export function WhatsAppConfig() {
         setStatus("idle");
       }
       eventSource.close();
-    };
-
-    return () => {
-      eventSource.close();
+      eventSourceRef.current = null;
     };
   };
 
@@ -181,7 +211,7 @@ export function WhatsAppConfig() {
                     <p>3. Toca en Vincular un dispositivo</p>
                   </div>
                 </div>
-                <Button variant="ghost" onClick={() => setStatus("idle")} className="text-gray-400 hover:text-red-500">
+                <Button variant="ghost" onClick={handleCancelConnect} className="text-gray-400 hover:text-red-500">
                   Cancelar
                 </Button>
               </div>

@@ -9,7 +9,12 @@ async function setupTestClient() {
     }
 
     const client = await prisma.cliente.upsert({
-      where: { email: 'test_jesu@apl.com' },
+      where: {
+        id_administrador_email: {
+          id_administrador: admin.id,
+          email: 'test_jesu@apl.com',
+        },
+      },
       update: {
         telefono: '+543408670623',
         id_administrador: admin.id

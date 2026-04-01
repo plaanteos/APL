@@ -49,13 +49,14 @@ model Cliente {
   id                Int       @id @default(autoincrement())
   nombre            String    @db.VarChar(100)
   telefono          String    @db.VarChar(20)
-  email             String    @db.VarChar(100) @unique
+  email             String    @db.VarChar(100)
   id_administrador  Int
   
   // Relaciones
   administrador     Administrador @relation(fields: [id_administrador], references: [id])
   pedidos           Pedido[]
   
+  @@unique([id_administrador, email])
   @@map("cliente")
 }
 
