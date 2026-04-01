@@ -7,12 +7,17 @@ import type { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
 import { SendMessageDialog } from "./SendMessageDialog";
 import { EditClientDialog } from "./EditClientDialog";
+import { WhatsAppConnectionNotice } from "./WhatsAppConnectionNotice";
+import { useAuth } from "../../hooks/useAuth";
+import { useWhatsAppConnectionStatus } from "../../hooks/useWhatsAppConnectionStatus";
 
 interface ClientsProps {
   onNavigateToBalance: (clientId: number) => void;
 }
 
 export function Clients({ onNavigateToBalance }: ClientsProps) {
+  const { user } = useAuth();
+  const isWhatsAppConnected = useWhatsAppConnectionStatus(user?.id);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [clients, setClients] = useState<IClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -172,6 +177,8 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
           Nuevo
         </Button>
       </div>
+
+      {isWhatsAppConnected === false && <WhatsAppConnectionNotice />}
 
       {/* Clients List */}
       <div className="space-y-3">

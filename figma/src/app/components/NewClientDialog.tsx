@@ -21,6 +21,7 @@ import {
 import clientService from "../../services/client.service";
 import { IClientFormData } from "../types";
 import { toast } from "sonner";
+import { formatPhoneInput } from "../../utils/whatsappPhone";
 
 // Schema de validación con Zod
 const clientSchema = z.object({
@@ -45,6 +46,8 @@ interface NewClientDialogProps {
 type ClientKind = "odontologo" | "clinica";
 
 const normalizePrefix = (value: string) => String(value ?? '').trim().toLowerCase();
+
+const phoneHelperText = 'Formato sugerido: +54 9 11 3756 75. Primero el codigo de pais, luego el 9, despues el codigo de area y al final el numero.';
 
 const formatClientDisplayName = (rawName: string, kind: ClientKind) => {
   const name = String(rawName ?? '').trim();
@@ -214,12 +217,16 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
               autoComplete="tel"
               value={formData.telefono}
               onChange={(e) => {
-                setFormData({ ...formData, telefono: e.target.value });
-                validateField("telefono", e.target.value);
+                const formattedPhone = formatPhoneInput(e.target.value);
+                setFormData({ ...formData, telefono: formattedPhone });
+                validateField("telefono", formattedPhone);
               }}
-              placeholder="+598 99 123 456"
+              placeholder="+54 9 11 3756 75"
               className={errors.telefono ? "border-red-500" : ""}
             />
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {phoneHelperText}
+            </p>
             {errors.telefono && (
               <p className="text-sm text-red-500 mt-1">{errors.telefono}</p>
             )}

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { toast } from "sonner";
+import { formatPhoneInput } from "../../utils/whatsappPhone";
 import clientService from "../../services/client.service";
 import orderService from "../../services/order.service";
 import productoService from "../../services/producto.service";
@@ -498,9 +499,9 @@ export function NewOrderDialog({
                     type="tel"
                     value={newClientData.telefono}
                     onChange={(e) =>
-                      setNewClientData({ ...newClientData, telefono: e.target.value })
+                      setNewClientData({ ...newClientData, telefono: formatPhoneInput(e.target.value) })
                     }
-                    placeholder="Ej: +54 11 1234-5678"
+                    placeholder="Ej: +54 9 11 3756 75"
                   />
                 </div>
                 <Button

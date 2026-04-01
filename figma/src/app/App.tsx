@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Home, FileText, Users, TrendingUp, ArrowLeft, LogOut, MessageSquare } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { Orders } from "./components/Orders";
@@ -8,8 +8,9 @@ import { Login } from "./components/Login";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useAuth } from "../hooks/useAuth";
 import { WhatsAppConfig } from "./components/WhatsAppConfig";
+import { addAppNavigationListener, AppView } from "./navigation";
 
-type View = "dashboard" | "orders" | "clients" | "balance" | "whatsapp";
+type View = AppView;
 
 export default function App() {
   const { user, logout, isLoading } = useAuth();
@@ -60,6 +61,8 @@ export default function App() {
     setSelectedClientId(clientId);
     navigateTo("balance", clientId);
   };
+
+  useEffect(() => addAppNavigationListener((view) => navigateTo(view)), [navigationHistory]);
 
   const renderView = () => {
     switch (currentView) {

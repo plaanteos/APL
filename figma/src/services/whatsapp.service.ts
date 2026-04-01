@@ -1,5 +1,18 @@
 import { apiClient } from "./api";
 
+const WHATSAPP_NOT_CONNECTED_CODE = "WHATSAPP_SESSION_NOT_CONNECTED";
+
+export const isWhatsAppSessionNotConnectedError = (error: any) => {
+  const message = String(error?.response?.data?.error || error?.message || "");
+  return message.includes(WHATSAPP_NOT_CONNECTED_CODE);
+};
+
+export const getWhatsAppConnectionGuidance = () => ({
+  title: "WhatsApp no esta vinculado",
+  description:
+    "Para vincularlo, toca el icono de WhatsApp en la barra superior. Luego: 1) entra a Vincular WhatsApp, 2) abre WhatsApp en tu telefono, 3) ve a Dispositivos vinculados, 4) toca Vincular un dispositivo y 5) escanea el codigo QR.",
+});
+
 const whatsappService = {
   /**
    * Obtiene el estado de conexión para un usuario

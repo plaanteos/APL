@@ -21,6 +21,7 @@ import {
 import clientService from "../../services/client.service";
 import type { IClient, IClientFormData } from "../types";
 import { toast } from "sonner";
+import { formatPhoneInput } from "../../utils/whatsappPhone";
 
 const clientSchema = z.object({
   nombre: z
@@ -39,6 +40,8 @@ const clientSchema = z.object({
 });
 
 type ClientKind = "odontologo" | "clinica";
+
+const phoneHelperText = 'Formato sugerido: +54 9 11 3756 75. Primero el codigo de pais, luego el 9, despues el codigo de area y al final el numero.';
 
 const normalizePrefix = (value: string) => String(value ?? "").trim().toLowerCase();
 
@@ -104,7 +107,7 @@ export function EditClientDialog({
 
   const validateField = (field: keyof IClientFormData, value: any) => {
     try {
-      (clientSchema.shape as any)[field].parse(value);
+      clientSchema.shape[field].parse(value);
       setErrors((prev) => ({ ...prev, [field]: "" }));
       return true;
     } catch (error) {
@@ -239,11 +242,16 @@ export function EditClientDialog({
               autoComplete="tel"
               value={formData.telefono}
               onChange={(e) => {
-                setFormData({ ...formData, telefono: e.target.value });
-                validateField("telefono", e.target.value);
+                const formattedPhone = formatPhoneInput(e.target.value);
+                setFormData({ ...formData, telefono: formattedPhone });
+                validateField("telefono", formattedPhone);
               }}
+              placeholder="+54 9 11 3756 75"
               className={errors.telefono ? "border-red-500" : ""}
             />
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              {phoneHelperText}
+            </p>
             {errors.telefono && <p className="text-sm text-red-500 mt-1">{errors.telefono}</p>}
           </div>
 

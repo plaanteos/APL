@@ -14,6 +14,13 @@ import { Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { notificationService } from "../../services/notification.service";
 import { normalizeWhatsAppDigits, toInternationalPlus } from "../../utils/whatsappPhone";
+import {
+  getWhatsAppConnectionGuidance,
+  isWhatsAppSessionNotConnectedError,
+} from "../../services/whatsapp.service";
+import { WhatsAppConnectionNotice } from "./WhatsAppConnectionNotice";
+import { useAuth } from "../../hooks/useAuth";
+import { useWhatsAppConnectionStatus } from "../../hooks/useWhatsAppConnectionStatus";
 
 interface SendMessageDialogProps {
   open: boolean;
@@ -30,6 +37,8 @@ export function SendMessageDialog({
   clientName,
   contactInfo,
 }: SendMessageDialogProps) {
+  const { user } = useAuth();
+  const isWhatsAppConnected = useWhatsAppConnectionStatus(user?.id);
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -80,6 +89,14 @@ export function SendMessageDialog({
     } catch (err: any) {
       console.error("Error sending notification:", err);
 
+      if (type === 'whatsapp' && isWhatsAppSessionNotConnectedError(err)) {
+        const guidance = getWhatsAppConnectionGuidance();
+        toast.error(guidance.title, {
+          description: guidance.description,
+        });
+        return;
+      }
+
       // Fallback: abrir WhatsApp Web si falla el endpoint.
       if (type === 'whatsapp') openFallback(finalMessage);
 
@@ -127,6 +144,8 @@ export function SendMessageDialog({
             <p className="text-sm text-gray-500">{contactInfo}</p>
           </div>
 
+          {isWhatsApp && isWhatsAppConnected === false && <WhatsAppConnectionNotice />}
+
           <div>
             <Label htmlFor="message">Mensaje</Label>
             <Textarea
@@ -158,7 +177,7 @@ export function SendMessageDialog({
           <Button
             type="button"
             onClick={handleSend}
-            disabled={!message.trim() || isSending}
+            disabled={!message.trim() || isSending || (isWhatsApp && isWhatsAppConnected === false)}
             className={
               isWhatsApp
                 ? "bg-green-600 hover:bg-green-700"

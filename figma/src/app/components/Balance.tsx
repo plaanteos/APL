@@ -21,8 +21,15 @@ import { PaymentDialog } from "./PaymentDialog";
 import { AddExpenseSheet } from "./AddExpenseSheet";
 import { OtherExpensesSheet } from "./OtherExpensesSheet";
 import { printReceipt } from "./PrintableReceipt";
+import { WhatsAppConnectionNotice } from "./WhatsAppConnectionNotice";
 import { notificationService } from "../../services/notification.service";
 import { toInternationalPlus } from "../../utils/whatsappPhone";
+import {
+  getWhatsAppConnectionGuidance,
+  isWhatsAppSessionNotConnectedError,
+} from "../../services/whatsapp.service";
+import { useAuth } from "../../hooks/useAuth";
+import { useWhatsAppConnectionStatus } from "../../hooks/useWhatsAppConnectionStatus";
 
 interface BalanceProps {
   selectedClientId: number | null;
@@ -31,6 +38,7 @@ interface BalanceProps {
 type BalancePeriod = "all" | "monthly" | "yearly";
 
 export function Balance({ selectedClientId }: BalanceProps) {
+  const { user } = useAuth();
   const [clients, setClients] = useState<IClient[]>([]);
   const [currentClientId, setCurrentClientId] = useState<number | null>(
     selectedClientId
@@ -68,6 +76,16 @@ export function Balance({ selectedClientId }: BalanceProps) {
 
   // Selección de pedidos para comprobante
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
+  const isWhatsAppConnected = useWhatsAppConnectionStatus(user?.id);
+
+  const getWhatsAppSendErrorMessage = (error: any) => {
+    if (isWhatsAppSessionNotConnectedError(error)) {
+      const guidance = getWhatsAppConnectionGuidance();
+      return `${guidance.title}. ${guidance.description}`;
+    }
+
+    return error?.response?.data?.error || "Error al enviar WhatsApp";
+  };
 
   // Gastos para balance mensual/anual
   const [periodExpenses, setPeriodExpenses] = useState<IOtherExpense[]>([]);
@@ -325,7 +343,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
       {
         loading: "Enviando WhatsApp...",
         success: "Comprobante enviado por WhatsApp",
-        error: (e: any) => e?.response?.data?.error || "Error al enviar",
+        error: (e: any) => getWhatsAppSendErrorMessage(e),
       }
     );
     setSelectedOrderIds([]);
@@ -391,7 +409,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
       {
         loading: "Enviando WhatsApp con Excel...",
         success: "Resumen y Excel enviados por WhatsApp",
-        error: (e: any) => e?.response?.data?.error || "Error al enviar WhatsApp",
+        error: (e: any) => getWhatsAppSendErrorMessage(e),
       }
     );
   };
@@ -962,6 +980,8 @@ export function Balance({ selectedClientId }: BalanceProps) {
               <span className="text-xs">Excel</span>
             </Button>
           </div>
+
+          {isWhatsAppConnected === false && <WhatsAppConnectionNotice />}
 
           {/* Otros Gastos */}
           <div className="grid grid-cols-2 gap-2">
