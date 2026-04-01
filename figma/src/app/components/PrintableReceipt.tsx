@@ -413,11 +413,12 @@ const buildReceiptHtml = ({ client, orders, selectedOrderIds }: PrintableReceipt
 };
 
 export const printReceipt = (props: PrintableReceiptProps) => {
-  const printWindow = window.open("", "_blank", "width=420,height=840,noopener,noreferrer");
+  const printWindow = window.open("", "apl-print-receipt", "width=420,height=840");
   if (!printWindow) {
     throw new Error("No se pudo abrir la ventana de impresión. Revisa si el navegador bloqueó el popup.");
   }
 
+  printWindow.focus();
   printWindow.document.open();
   printWindow.document.write(buildReceiptHtml(props));
   printWindow.document.close();
