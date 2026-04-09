@@ -18,10 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { toast } from "sonner";
 import orderService from "../../services/order.service";
 import productoService from "../../services/producto.service";
 import estadoService from "../../services/estado.service";
+import { Plus, Trash2 } from "lucide-react";
 import type { IEstado, IOrderWithCalculations, IProducto } from "../types";
 
 interface EditOrderDialogProps {
@@ -43,6 +54,7 @@ const toDateInputValue = (value?: Date | string | null) => {
 
 type DetailFormState = {
   id: number;
+  isNew?: boolean;
   id_producto: string;
   cantidad: string;
   precio_unitario: string;
@@ -63,7 +75,10 @@ export function EditOrderDialog({
   const [estados, setEstados] = useState<IEstado[]>([]);
   const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeletingDetail, setIsDeletingDetail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [detailPendingDelete, setDetailPendingDelete] = useState<DetailFormState | null>(null);
+  const [nextTempDetailId, setNextTempDetailId] = useState(-1);
 
   useEffect(() => {
     if (!open) return;
@@ -95,6 +110,7 @@ export function EditOrderDialog({
     setDetailForms(
       (order?.detalles || []).map((detalle) => ({
         id: Number(detalle.id),
+        isNew: false,
         id_producto: String(detalle.id_producto ?? ""),
         cantidad: String(detalle.cantidad ?? "1"),
         precio_unitario: String(detalle.precio_unitario ?? ""),
@@ -102,6 +118,7 @@ export function EditOrderDialog({
         id_estado: String(detalle.id_estado ?? ""),
       }))
     );
+    setNextTempDetailId(-1);
     setErrors({});
   }, [open, order]);
 
@@ -109,6 +126,61 @@ export function EditOrderDialog({
     setDetailForms((prev) => prev.map((detail) => (
       detail.id === detailId ? { ...detail, [field]: value } : detail
     )));
+  };
+
+  const handleRequestDeleteDetail = (detail: DetailFormState) => {
+    setDetailPendingDelete(detail);
+  };
+
+  const handleAddDetail = () => {
+    const defaultEstadoId = estados[0] ? String(estados[0].id) : "";
+    const defaultProductoId = productos[0] ? String(productos[0].id) : "";
+
+    setDetailForms((prev) => ([
+      ...prev,
+      {
+        id: nextTempDetailId,
+        isNew: true,
+        id_producto: defaultProductoId,
+        cantidad: "1",
+        precio_unitario: "",
+        paciente: "",
+        id_estado: defaultEstadoId,
+      },
+    ]));
+    setNextTempDetailId((prev) => prev - 1);
+  };
+
+  const confirmDeleteDetail = async () => {
+    if (!order || !detailPendingDelete) return;
+
+    if (detailPendingDelete.isNew) {
+      setDetailForms((prev) => prev.filter((detail) => detail.id !== detailPendingDelete.id));
+      setDetailPendingDelete(null);
+      return;
+    }
+
+    setIsDeletingDetail(true);
+    try {
+      await orderService.deleteDetalle(order.id, detailPendingDelete.id);
+      setDetailForms((prev) => prev.filter((detail) => detail.id !== detailPendingDelete.id));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[`producto-${detailPendingDelete.id}`];
+        delete next[`cantidad-${detailPendingDelete.id}`];
+        delete next[`precio-${detailPendingDelete.id}`];
+        delete next[`estado-${detailPendingDelete.id}`];
+        return next;
+      });
+      toast.success("Detalle eliminado permanentemente. Los montos del pedido ya reflejan el cambio.");
+      setDetailPendingDelete(null);
+      onOrderUpdated?.();
+    } catch (err: any) {
+      console.error("Error deleting detail:", err);
+      toast.error(err?.response?.data?.error || "No se pudo eliminar el detalle del pedido");
+    } finally {
+      setIsDeletingDetail(false);
+    }
   };
 
   const validate = () => {
@@ -161,6 +233,17 @@ export function EditOrderDialog({
       });
 
       for (const detailForm of detailForms) {
+        if (detailForm.isNew) {
+          await orderService.addDetalle(order.id, {
+            id_producto: Number(detailForm.id_producto),
+            cantidad: Number(detailForm.cantidad),
+            precio_unitario: Number(detailForm.precio_unitario),
+            paciente: String(detailForm.paciente ?? "").trim() || "-",
+            id_estado: Number(detailForm.id_estado),
+          });
+          continue;
+        }
+
         const original = detailById.get(detailForm.id);
         if (!original) continue;
 
@@ -234,10 +317,35 @@ export function EditOrderDialog({
           </div>
 
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddDetail}
+                disabled={isSubmitting || isLoadingCatalogs}
+              >
+                <Plus size={16} className="mr-2" />
+                Agregar detalle
+              </Button>
+            </div>
+
             {detailForms.map((detail, index) => (
               <div key={detail.id} className="rounded-lg border border-gray-200 p-4 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-slate-700">Detalle {index + 1}</h4>
+                  <h4 className="text-sm font-medium text-slate-700">
+                    {detail.isNew ? `Nuevo detalle ${index + 1}` : `Detalle ${index + 1}`}
+                  </h4>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRequestDeleteDetail(detail)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    disabled={isSubmitting || isDeletingDetail}
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    Eliminar detalle
+                  </Button>
                 </div>
 
                 <div>
@@ -339,6 +447,37 @@ export function EditOrderDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        <AlertDialog open={!!detailPendingDelete} onOpenChange={(open) => !open && !isDeletingDetail ? setDetailPendingDelete(null) : undefined}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Eliminar Detalle Permanentemente</AlertDialogTitle>
+              <AlertDialogDescription>
+                {detailPendingDelete
+                  ? detailPendingDelete.isNew
+                    ? `Este nuevo detalle se quitará del formulario antes de guardar.`
+                    : `El detalle ${detailForms.findIndex((detail) => detail.id === detailPendingDelete.id) + 1} se eliminará definitivamente del pedido. Los montos del pedido se recalcularán automáticamente. Esta acción no se puede deshacer.`
+                  : ""}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeletingDetail}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmDeleteDetail();
+                }}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {detailPendingDelete?.isNew
+                  ? "Quitar Detalle"
+                  : isDeletingDetail
+                    ? "Eliminando..."
+                    : "Eliminar Permanentemente"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

@@ -422,11 +422,6 @@ export const demoStore = {
     const idx = db.orders.findIndex((o) => o.id === orderId);
     if (idx === -1) throw new Error('Pedido no encontrado (demo)');
 
-    const existing = db.orders[idx];
-    if (existing.fecha_delete) {
-      throw new Error('Pedido ya eliminado (demo)');
-    }
-
     db.pagos = (db.pagos || [])
       .map((pago) => {
         const detalles = (pago.detalles || []).filter((detalle) => detalle.id_pedido !== orderId);
@@ -439,10 +434,7 @@ export const demoStore = {
       })
       .filter((pago) => (pago.detalles || []).length > 0);
 
-    db.orders[idx] = {
-      ...existing,
-      fecha_delete: nowIso(),
-    };
+    db.orders.splice(idx, 1);
   },
 
   async updateOrderDetalle(

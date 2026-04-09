@@ -550,7 +550,7 @@ export class OrderController {
     }
   }
 
-  // DELETE /api/orders/:id - Soft delete (marcar fecha_delete)
+  // DELETE /api/orders/:id - Eliminar permanentemente
   static async deleteOrder(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -619,9 +619,8 @@ export class OrderController {
           }
         }
 
-        await tx.pedido.update({
+        await tx.pedido.delete({
           where: { id: Number(id) },
-          data: { fecha_delete: new Date() },
         });
 
         return {
@@ -634,8 +633,8 @@ export class OrderController {
       res.json({
         success: true,
         message: result.removedPaymentApplications > 0
-          ? 'Pedido eliminado. Los pagos vinculados fueron recalculados automaticamente.'
-          : 'Pedido eliminado exitosamente.',
+          ? 'Pedido eliminado permanentemente. Los pagos vinculados fueron recalculados automaticamente.'
+          : 'Pedido eliminado permanentemente de la base de datos.',
         data: result,
       });
     } catch (error) {
@@ -918,7 +917,7 @@ export class OrderController {
 
       res.json({
         success: true,
-        message: 'Detalle eliminado exitosamente',
+        message: 'Detalle eliminado permanentemente de la base de datos.',
       });
     } catch (error) {
       console.error('Delete detalle error:', error);

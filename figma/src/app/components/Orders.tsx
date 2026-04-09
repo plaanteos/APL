@@ -10,6 +10,16 @@ import { NewOrderDialog } from "./NewOrderDialog";
 import { EditOrderDialog } from "./EditOrderDialog";
 import { toast } from "sonner";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import {
   getPedidoStatus,
   type PedidoStatus,
 } from "../../utils/orderStatus";
@@ -39,6 +49,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const [orderPendingDelete, setOrderPendingDelete] = useState<IOrderWithCalculations | null>(null);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
 
   // Cargar clientes se manejaba aparte pero es mejor todo en fetchOrders para evitar carga parcial
   // Se mantienen states `clientsById` y `productosById` que se poblarán en `fetchOrders`.
@@ -111,19 +123,22 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
 
   const handleDeleteOrder = async (order: IOrderWithCalculations, e: React.MouseEvent) => {
     e.stopPropagation();
+    setOrderPendingDelete(order);
+  };
 
-    const confirmDelete = window.confirm(
-      `¿Eliminar el pedido #${order.id}? Esta acción lo ocultará de los listados activos y recalculará automáticamente los pagos, balances e ingresos vinculados.`
-    );
-    if (!confirmDelete) return;
-
+  const confirmDeleteOrder = async () => {
+    if (!orderPendingDelete) return;
+    setIsDeletingOrder(true);
     try {
-      const result = await orderService.softDelete(order.id);
-      toast.success(result.message || 'Pedido eliminado y montos recalculados');
+      const result = await orderService.softDelete(orderPendingDelete.id);
+      toast.success(result.message || 'Pedido eliminado permanentemente y montos recalculados');
+      setOrderPendingDelete(null);
       await fetchOrders();
     } catch (err: any) {
       console.error('Error deleting order:', err);
-      toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido ni recalcular los montos relacionados');
+      toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido permanentemente ni recalcular los montos relacionados');
+    } finally {
+      setIsDeletingOrder(false);
     }
   };
 
@@ -401,6 +416,31 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         order={editDialog.order}
         onOrderUpdated={() => fetchOrders()}
       />
+
+      <AlertDialog open={!!orderPendingDelete} onOpenChange={(open) => !open && !isDeletingOrder ? setOrderPendingDelete(null) : undefined}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar Pedido Permanentemente</AlertDialogTitle>
+            <AlertDialogDescription>
+              {orderPendingDelete
+                ? `El pedido #${orderPendingDelete.id} se eliminará definitivamente de la base de datos. También se ajustarán o eliminarán los pagos vinculados para mantener balances e ingresos correctos. Esta acción no se puede deshacer.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingOrder}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDeleteOrder();
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeletingOrder ? 'Eliminando...' : 'Eliminar Permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
