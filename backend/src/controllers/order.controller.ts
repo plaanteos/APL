@@ -529,7 +529,7 @@ export class OrderController {
 
       res.json({
         success: true,
-        message: 'Pedido actualizado exitosamente',
+        message: 'Pedido actualizado exitosamente. Los montos relacionados se recalculan automaticamente.',
         data: formatted,
       });
     } catch (error) {
@@ -582,15 +582,61 @@ export class OrderController {
         });
       }
 
-      // Soft delete
-      await prisma.pedido.update({
-        where: { id: Number(id) },
-        data: { fecha_delete: new Date() },
+      const result = await prisma.$transaction(async (tx) => {
+        const paymentLinks = await tx.detallePago.findMany({
+          where: { id_pedido: Number(id) },
+          select: { id_pago: true, valor: true },
+        });
+
+        const affectedPaymentIds = [...new Set(paymentLinks.map((link) => Number(link.id_pago)))];
+
+        const removedPaymentApplications = await tx.detallePago.deleteMany({
+          where: { id_pedido: Number(id) },
+        });
+
+        let updatedPayments = 0;
+        let deletedPayments = 0;
+
+        for (const paymentId of affectedPaymentIds) {
+          const aggregates = await tx.detallePago.aggregate({
+            where: { id_pago: paymentId },
+            _sum: { valor: true },
+            _count: { id: true },
+          });
+
+          const remainingCount = Number(aggregates._count.id ?? 0);
+          const remainingValue = Number(aggregates._sum.valor ?? 0);
+
+          if (remainingCount === 0) {
+            await tx.pago.delete({ where: { id: paymentId } });
+            deletedPayments += 1;
+          } else {
+            await tx.pago.update({
+              where: { id: paymentId },
+              data: { valor: remainingValue },
+            });
+            updatedPayments += 1;
+          }
+        }
+
+        await tx.pedido.update({
+          where: { id: Number(id) },
+          data: { fecha_delete: new Date() },
+        });
+
+        return {
+          removedPaymentApplications: removedPaymentApplications.count,
+          updatedPayments,
+          deletedPayments,
+        };
       });
 
       res.json({
         success: true,
-        message: 'Pedido eliminado exitosamente',
+        message: result.removedPaymentApplications > 0
+          ? 'Pedido eliminado. Los pagos vinculados fueron recalculados automaticamente.'
+          : 'Pedido eliminado exitosamente.',
+        data: result,
       });
     } catch (error) {
       console.error('Delete order error:', error);

@@ -427,6 +427,18 @@ export const demoStore = {
       throw new Error('Pedido ya eliminado (demo)');
     }
 
+    db.pagos = (db.pagos || [])
+      .map((pago) => {
+        const detalles = (pago.detalles || []).filter((detalle) => detalle.id_pedido !== orderId);
+        const valor = detalles.reduce((sum, detalle) => sum + Number(detalle.valor ?? 0), 0);
+        return {
+          ...pago,
+          detalles,
+          valor,
+        };
+      })
+      .filter((pago) => (pago.detalles || []).length > 0);
+
     db.orders[idx] = {
       ...existing,
       fecha_delete: nowIso(),

@@ -112,16 +112,18 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const handleDeleteOrder = async (order: IOrderWithCalculations, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    const confirmDelete = window.confirm(`¿Eliminar el pedido #${order.id}? Esta acción lo marcará como eliminado.`);
+    const confirmDelete = window.confirm(
+      `¿Eliminar el pedido #${order.id}? Esta acción lo ocultará de los listados activos y recalculará automáticamente los pagos, balances e ingresos vinculados.`
+    );
     if (!confirmDelete) return;
 
     try {
-      await orderService.softDelete(order.id);
-      toast.success('Pedido eliminado');
+      const result = await orderService.softDelete(order.id);
+      toast.success(result.message || 'Pedido eliminado y montos recalculados');
       await fetchOrders();
     } catch (err: any) {
       console.error('Error deleting order:', err);
-      toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido');
+      toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido ni recalcular los montos relacionados');
     }
   };
 

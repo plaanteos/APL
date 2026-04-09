@@ -184,12 +184,12 @@ export function EditOrderDialog({
         await orderService.updateDetalle(order.id, detailForm.id, nextPayload);
       }
 
-      toast.success("Pedido actualizado");
+      toast.success("Pedido actualizado. Los saldos y montos relacionados ya reflejan los cambios.");
       onOpenChange(false);
       onOrderUpdated?.();
     } catch (err: any) {
       console.error("Error updating order:", err);
-      toast.error(err?.response?.data?.error || "No se pudo actualizar el pedido");
+      toast.error(err?.response?.data?.error || "No se pudo actualizar el pedido ni recalcular sus montos relacionados");
     } finally {
       setIsSubmitting(false);
     }
