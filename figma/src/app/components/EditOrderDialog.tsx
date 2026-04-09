@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -64,8 +64,6 @@ export function EditOrderDialog({
   const [isLoadingCatalogs, setIsLoadingCatalogs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const hasPayments = useMemo(() => Number(order?.montoPagado ?? 0) > 0, [order?.montoPagado]);
 
   useEffect(() => {
     if (!open) return;
@@ -235,12 +233,6 @@ export function EditOrderDialog({
             />
           </div>
 
-          {hasPayments ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Este pedido tiene pagos registrados. Podés editar fecha, descripción, paciente y estado. Producto, cantidad y precio quedan bloqueados para no desajustar los saldos.
-            </div>
-          ) : null}
-
           <div className="space-y-3">
             {detailForms.map((detail, index) => (
               <div key={detail.id} className="rounded-lg border border-gray-200 p-4 space-y-4">
@@ -253,7 +245,7 @@ export function EditOrderDialog({
                   <Select
                     value={detail.id_producto}
                     onValueChange={(value) => updateDetailField(detail.id, "id_producto", value)}
-                    disabled={isLoadingCatalogs || hasPayments}
+                    disabled={isLoadingCatalogs}
                   >
                     <SelectTrigger id={`detail-product-${detail.id}`} className={errors[`producto-${detail.id}`] ? "border-red-500" : ""}>
                       <SelectValue placeholder="Seleccionar producto" />
@@ -278,7 +270,6 @@ export function EditOrderDialog({
                       min="1"
                       value={detail.cantidad}
                       onChange={(e) => updateDetailField(detail.id, "cantidad", e.target.value)}
-                      disabled={hasPayments}
                       className={errors[`cantidad-${detail.id}`] ? "border-red-500" : ""}
                     />
                     {errors[`cantidad-${detail.id}`] && <p className="text-sm text-red-500 mt-1">{errors[`cantidad-${detail.id}`]}</p>}
@@ -293,7 +284,6 @@ export function EditOrderDialog({
                       step="0.01"
                       value={detail.precio_unitario}
                       onChange={(e) => updateDetailField(detail.id, "precio_unitario", e.target.value)}
-                      disabled={hasPayments}
                       className={errors[`precio-${detail.id}`] ? "border-red-500" : ""}
                     />
                     {errors[`precio-${detail.id}`] && <p className="text-sm text-red-500 mt-1">{errors[`precio-${detail.id}`]}</p>}

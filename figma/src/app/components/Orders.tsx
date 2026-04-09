@@ -112,11 +112,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const handleDeleteOrder = async (order: IOrderWithCalculations, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (Number(order.montoPagado ?? 0) > 0) {
-      toast.error('No se puede eliminar un pedido que tiene pagos registrados');
-      return;
-    }
-
     const confirmDelete = window.confirm(`¿Eliminar el pedido #${order.id}? Esta acción lo marcará como eliminado.`);
     if (!confirmDelete) return;
 

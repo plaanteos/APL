@@ -582,14 +582,6 @@ export class OrderController {
         });
       }
 
-      // Verificar que no tenga pagos
-      if (existingOrder.detallesPago.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'No se puede eliminar un pedido que tiene pagos registrados',
-        });
-      }
-
       // Soft delete
       await prisma.pedido.update({
         where: { id: Number(id) },
@@ -777,19 +769,6 @@ export class OrderController {
         }
       }
 
-      const orderHasPayments = detalle.pedido.detallesPago.length > 0;
-      const touchesFinancialFields =
-        updateData.id_producto !== undefined ||
-        updateData.cantidad !== undefined ||
-        updateData.precio_unitario !== undefined;
-
-      if (orderHasPayments && touchesFinancialFields) {
-        return res.status(400).json({
-          success: false,
-          error: 'No se pueden modificar producto, cantidad o precio en un pedido con pagos registrados',
-        });
-      }
-
       const updatedDetalle = await prisma.detallePedido.update({
         where: { id: Number(detalleId) },
         data: updateData,
@@ -872,13 +851,6 @@ export class OrderController {
         return res.status(400).json({
           success: false,
           error: 'No se puede eliminar un detalle de un pedido eliminado',
-        });
-      }
-
-      if (detalle.pedido.detallesPago.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'No se puede eliminar un detalle de un pedido con pagos registrados',
         });
       }
 
