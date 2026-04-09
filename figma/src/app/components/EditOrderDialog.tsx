@@ -162,7 +162,16 @@ export function EditOrderDialog({
 
     setIsDeletingDetail(true);
     try {
-      await orderService.deleteDetalle(order.id, detailPendingDelete.id);
+      const result = await orderService.deleteDetalle(order.id, detailPendingDelete.id);
+
+      if (result.deletedOrder) {
+        toast.success(result.message || "Se eliminó el último detalle y el pedido completo fue eliminado.");
+        setDetailPendingDelete(null);
+        onOpenChange(false);
+        onOrderUpdated?.();
+        return;
+      }
+
       setDetailForms((prev) => prev.filter((detail) => detail.id !== detailPendingDelete.id));
       setErrors((prev) => {
         const next = { ...prev };
@@ -172,7 +181,7 @@ export function EditOrderDialog({
         delete next[`estado-${detailPendingDelete.id}`];
         return next;
       });
-      toast.success("Detalle eliminado permanentemente. Los montos del pedido ya reflejan el cambio.");
+      toast.success(result.message || "Detalle eliminado permanentemente. Los montos del pedido ya reflejan el cambio.");
       setDetailPendingDelete(null);
       onOrderUpdated?.();
     } catch (err: any) {
@@ -456,7 +465,9 @@ export function EditOrderDialog({
                 {detailPendingDelete
                   ? detailPendingDelete.isNew
                     ? `Este nuevo detalle se quitará del formulario antes de guardar.`
-                    : `El detalle ${detailForms.findIndex((detail) => detail.id === detailPendingDelete.id) + 1} se eliminará definitivamente del pedido. Los montos del pedido se recalcularán automáticamente. Esta acción no se puede deshacer.`
+                    : detailForms.length <= 1
+                      ? `Este es el último detalle del pedido. Si continuás, se eliminará permanentemente el pedido completo y se recalcularán automáticamente sus montos relacionados. Esta acción no se puede deshacer.`
+                      : `El detalle ${detailForms.findIndex((detail) => detail.id === detailPendingDelete.id) + 1} se eliminará definitivamente del pedido. Los montos del pedido se recalcularán automáticamente. Esta acción no se puede deshacer.`
                   : ""}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -471,6 +482,8 @@ export function EditOrderDialog({
               >
                 {detailPendingDelete?.isNew
                   ? "Quitar Detalle"
+                  : detailForms.length <= 1
+                    ? "Eliminar Pedido Completo"
                   : isDeletingDetail
                     ? "Eliminando..."
                     : "Eliminar Permanentemente"}

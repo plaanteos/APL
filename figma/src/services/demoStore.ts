@@ -467,20 +467,22 @@ export const demoStore = {
     return db.orders[orderIdx];
   },
 
-  async deleteOrderDetalle(orderId: ID, detalleId: ID): Promise<void> {
+  async deleteOrderDetalle(orderId: ID, detalleId: ID): Promise<{ deletedOrder: boolean }> {
     const orderIdx = db.orders.findIndex((o) => o.id === orderId);
     if (orderIdx === -1) throw new Error('Pedido no encontrado (demo)');
     if (db.orders[orderIdx].fecha_delete) throw new Error('Pedido eliminado (demo)');
 
     const details = db.orders[orderIdx].detalles || [];
     if (details.length <= 1) {
-      throw new Error('No se puede eliminar el único detalle del pedido. Elimine el pedido completo.');
+      await demoStore.deleteOrder(orderId);
+      return { deletedOrder: true };
     }
 
     const hasTarget = details.some((d) => d.id === detalleId);
     if (!hasTarget) throw new Error('Detalle no encontrado (demo)');
 
     db.orders[orderIdx].detalles = details.filter((d) => d.id !== detalleId);
+    return { deletedOrder: false };
   },
 
   async markOrderAsDelivered(orderId: ID): Promise<IOrderWithCalculations> {

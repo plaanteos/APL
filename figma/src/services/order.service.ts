@@ -146,13 +146,21 @@ class OrderService {
   /**
    * Eliminar detalle de pedido
    */
-  async deleteDetalle(pedidoId: ID, detalleId: ID): Promise<IOrder> {
+  async deleteDetalle(pedidoId: ID, detalleId: ID): Promise<{ message: string; deletedOrder?: boolean }> {
     if (isDemoMode()) {
-      await demoStore.deleteOrderDetalle(pedidoId, detalleId);
-      return this.getById(pedidoId);
+      const result = await demoStore.deleteOrderDetalle(pedidoId, detalleId);
+      return {
+        message: result.deletedOrder
+          ? 'Se eliminó el último detalle, por lo tanto el pedido completo fue eliminado permanentemente.'
+          : 'Detalle eliminado permanentemente de la base de datos.',
+        deletedOrder: result.deletedOrder,
+      };
     }
-    const response = await api.delete<ApiEnvelope<IOrder>>(`/orders/${pedidoId}/detalles/${detalleId}`);
-    return response.data.data;
+    const response = await api.delete<ApiEnvelope<{ deletedOrder?: boolean }>>(`/orders/${pedidoId}/detalles/${detalleId}`);
+    return {
+      message: response.data.message || 'Detalle eliminado',
+      deletedOrder: response.data.data?.deletedOrder,
+    };
   }
 
   /**
