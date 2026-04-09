@@ -400,7 +400,7 @@ export const demoStore = {
     return order;
   },
 
-  async updateOrder(orderId: ID, data: { fecha_pedido?: string; fecha_entrega?: string }): Promise<IOrder> {
+  async updateOrder(orderId: ID, data: { fecha_pedido?: string; fecha_entrega?: string; descripcion?: string }): Promise<IOrder> {
     const idx = db.orders.findIndex((o) => o.id === orderId);
     if (idx === -1) throw new Error('Pedido no encontrado (demo)');
 
@@ -412,6 +412,7 @@ export const demoStore = {
     db.orders[idx] = {
       ...existing,
       fecha_entrega: data.fecha_entrega ?? existing.fecha_entrega,
+      descripcion: data.descripcion ?? existing.descripcion,
     };
 
     return db.orders[idx];
@@ -452,6 +453,19 @@ export const demoStore = {
     const detailIdx = (db.orders[orderIdx].detalles || []).findIndex((d) => d.id === detalleId);
     if (detailIdx === -1) throw new Error('Detalle no encontrado (demo)');
 
+    const hasPayments = db.pagos.some((p) =>
+      (p.detalles || []).some((d) => d.id_pedido === orderId)
+    );
+
+    const touchesFinancialFields =
+      data.id_producto !== undefined ||
+      data.cantidad !== undefined ||
+      data.precio_unitario !== undefined;
+
+    if (hasPayments && touchesFinancialFields) {
+      throw new Error('No se pueden modificar producto, cantidad o precio en un pedido con pagos registrados');
+    }
+
     const prev = db.orders[orderIdx].detalles![detailIdx];
     const nextProductoId = data.id_producto ?? prev.id_producto;
     const nextEstadoId = data.id_estado ?? prev.id_estado;
@@ -474,6 +488,14 @@ export const demoStore = {
     const orderIdx = db.orders.findIndex((o) => o.id === orderId);
     if (orderIdx === -1) throw new Error('Pedido no encontrado (demo)');
     if (db.orders[orderIdx].fecha_delete) throw new Error('Pedido eliminado (demo)');
+
+    const hasPayments = db.pagos.some((p) =>
+      (p.detalles || []).some((d) => d.id_pedido === orderId)
+    );
+
+    if (hasPayments) {
+      throw new Error('No se puede eliminar un detalle de un pedido con pagos registrados');
+    }
 
     const details = db.orders[orderIdx].detalles || [];
     if (details.length <= 1) {

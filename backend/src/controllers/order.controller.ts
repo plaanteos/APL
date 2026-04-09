@@ -56,9 +56,11 @@ const updateOrderSchema = z.object({
     z.string().min(1).transform((str) => parseDateInput(str)),
     z.date(),
   ]).optional(),
+  descripcion: z.coerce.string().trim().max(2000, 'Descripción demasiado larga').optional(),
 });
 
 const updateDetalleSchema = z.object({
+  id_producto: z.coerce.number().int().positive().optional(),
   cantidad: z.coerce.number().int().positive().optional(),
   precio_unitario: z.coerce.number().positive().optional(),
   // Si se envía vacío, se normaliza a "-". Si no se envía, no se modifica.
@@ -722,7 +724,13 @@ export class OrderController {
 
       const detalle = await prisma.detallePedido.findUnique({
         where: { id: Number(detalleId) },
-        include: { pedido: true },
+        include: {
+          pedido: {
+            include: {
+              detallesPago: true,
+            },
+          },
+        },
       });
 
       if (
@@ -740,6 +748,45 @@ export class OrderController {
         return res.status(400).json({
           success: false,
           error: 'No se puede modificar un detalle de un pedido eliminado',
+        });
+      }
+
+      if (updateData.id_producto) {
+        const producto = await prisma.producto.findFirst({
+          where: {
+            id: updateData.id_producto,
+            id_administrador: adminId,
+          },
+        });
+
+        if (!producto) {
+          return res.status(404).json({
+            success: false,
+            error: 'Producto no encontrado',
+          });
+        }
+      }
+
+      if (updateData.id_estado) {
+        const estado = await prisma.estado.findUnique({ where: { id: updateData.id_estado } });
+        if (!estado || estado.fecha_delete) {
+          return res.status(404).json({
+            success: false,
+            error: 'Estado no encontrado o inactivo',
+          });
+        }
+      }
+
+      const orderHasPayments = detalle.pedido.detallesPago.length > 0;
+      const touchesFinancialFields =
+        updateData.id_producto !== undefined ||
+        updateData.cantidad !== undefined ||
+        updateData.precio_unitario !== undefined;
+
+      if (orderHasPayments && touchesFinancialFields) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se pueden modificar producto, cantidad o precio en un pedido con pagos registrados',
         });
       }
 
@@ -801,7 +848,13 @@ export class OrderController {
 
       const detalle = await prisma.detallePedido.findUnique({
         where: { id: Number(detalleId) },
-        include: { pedido: true },
+        include: {
+          pedido: {
+            include: {
+              detallesPago: true,
+            },
+          },
+        },
       });
 
       if (
@@ -819,6 +872,13 @@ export class OrderController {
         return res.status(400).json({
           success: false,
           error: 'No se puede eliminar un detalle de un pedido eliminado',
+        });
+      }
+
+      if (detalle.pedido.detallesPago.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar un detalle de un pedido con pagos registrados',
         });
       }
 

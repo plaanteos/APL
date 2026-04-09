@@ -84,9 +84,9 @@ class OrderService {
   }
 
   /**
-   * Actualizar pedido (solo fechas)
+   * Actualizar pedido
    */
-  async update(id: ID, data: { fecha_pedido?: string; fecha_entrega?: string }): Promise<IOrder> {
+  async update(id: ID, data: { fecha_pedido?: string; fecha_entrega?: string; descripcion?: string }): Promise<IOrder> {
     if (isDemoMode()) {
       return demoStore.updateOrder(id, data);
     }

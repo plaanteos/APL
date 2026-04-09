@@ -9,7 +9,6 @@ import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { EditOrderDialog } from "./EditOrderDialog";
 import { toast } from "sonner";
-import { EditOrderDetailDialog } from "./EditOrderDetailDialog";
 import {
   getPedidoStatus,
   type PedidoStatus,
@@ -40,15 +39,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
-  const [editDetailDialog, setEditDetailDialog] = useState<{
-    open: boolean;
-    order: IOrderWithCalculations | null;
-    detalle: any | null;
-  }>({
-    open: false,
-    order: null,
-    detalle: null,
-  });
 
   // Cargar clientes se manejaba aparte pero es mejor todo en fetchOrders para evitar carga parcial
   // Se mantienen states `clientsById` y `productosById` que se poblarán en `fetchOrders`.
@@ -137,44 +127,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
     } catch (err: any) {
       console.error('Error deleting order:', err);
       toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido');
-    }
-  };
-
-  const handleOpenEditDetail = (order: IOrderWithCalculations, detalle: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (Number(order.montoPagado ?? 0) > 0) {
-      toast.error('No se pueden editar detalles de un pedido con pagos registrados');
-      return;
-    }
-
-    setEditDetailDialog({
-      open: true,
-      order,
-      detalle,
-    });
-  };
-
-  const handleDeleteDetail = async (order: IOrderWithCalculations, detalle: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (Number(order.montoPagado ?? 0) > 0) {
-      toast.error('No se pueden eliminar detalles de un pedido con pagos registrados');
-      return;
-    }
-
-    const confirmDelete = window.confirm(
-      `¿Eliminar este detalle del pedido #${order.id}? Si es el único detalle, la API lo bloqueará.`
-    );
-    if (!confirmDelete) return;
-
-    try {
-      await orderService.deleteDetalle(order.id, detalle.id);
-      toast.success('Detalle eliminado');
-      await fetchOrders();
-    } catch (err: any) {
-      console.error('Error deleting order detail:', err);
-      toast.error(err?.response?.data?.error || 'No se pudo eliminar el detalle');
     }
   };
 
@@ -319,6 +271,14 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                       <p className="text-sm text-gray-500">Pedido #{order.id}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusPillClasses(pedidoStatus)}`}>
+                        {getStatusLabel(pedidoStatus)}
+                      </span>
+                      {order.montoPendiente > 0 && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-[#f7c6c7]/60 text-[#7a1f23] border border-[#f7c6c7]/70">
+                          Con deuda
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => handleOpenEdit(order, e)}
@@ -335,14 +295,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                       >
                         <Trash2 size={16} />
                       </button>
-                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusPillClasses(pedidoStatus)}`}>
-                        {getStatusLabel(pedidoStatus)}
-                      </span>
-                      {order.montoPendiente > 0 && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-[#f7c6c7]/60 text-[#7a1f23] border border-[#f7c6c7]/70">
-                          Con deuda
-                        </span>
-                      )}
                     </div>
                   </div>
 
@@ -391,24 +343,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                                       Number(detalle.precio_unitario ?? 0)
                                     ).toLocaleString()}
                                   </p>
-                                  <div className="flex justify-end gap-1 mt-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleOpenEditDetail(order, detalle, e)}
-                                      className="p-1 rounded hover:bg-white text-gray-500 hover:text-gray-700"
-                                      aria-label="Editar detalle"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleDeleteDetail(order, detalle, e)}
-                                      className="p-1 rounded hover:bg-white text-gray-500 hover:text-red-700"
-                                      aria-label="Eliminar detalle"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -469,20 +403,6 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         onOpenChange={(open) => setEditDialog({ open, order: open ? editDialog.order : null })}
         order={editDialog.order}
         onOrderUpdated={() => fetchOrders()}
-      />
-
-      <EditOrderDetailDialog
-        open={editDetailDialog.open}
-        onOpenChange={(open) =>
-          setEditDetailDialog({
-            open,
-            order: open ? editDetailDialog.order : null,
-            detalle: open ? editDetailDialog.detalle : null,
-          })
-        }
-        order={editDetailDialog.order}
-        detalle={editDetailDialog.detalle}
-        onUpdated={() => fetchOrders()}
       />
     </div>
   );
