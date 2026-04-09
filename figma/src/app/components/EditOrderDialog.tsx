@@ -164,14 +164,6 @@ export function EditOrderDialog({
     try {
       const result = await orderService.deleteDetalle(order.id, detailPendingDelete.id);
 
-      if (result.deletedOrder) {
-        toast.success(result.message || "Se eliminó el último detalle y el pedido completo fue eliminado.");
-        setDetailPendingDelete(null);
-        onOpenChange(false);
-        onOrderUpdated?.();
-        return;
-      }
-
       setDetailForms((prev) => prev.filter((detail) => detail.id !== detailPendingDelete.id));
       setErrors((prev) => {
         const next = { ...prev };
@@ -465,9 +457,7 @@ export function EditOrderDialog({
                 {detailPendingDelete
                   ? detailPendingDelete.isNew
                     ? `Este nuevo detalle se quitará del formulario antes de guardar.`
-                    : detailForms.length <= 1
-                      ? `Este es el último detalle del pedido. Si continuás, se eliminará permanentemente el pedido completo y se recalcularán automáticamente sus montos relacionados. Esta acción no se puede deshacer.`
-                      : `El detalle ${detailForms.findIndex((detail) => detail.id === detailPendingDelete.id) + 1} se eliminará definitivamente del pedido. Los montos del pedido se recalcularán automáticamente. Esta acción no se puede deshacer.`
+                    : `El detalle ${detailForms.findIndex((detail) => detail.id === detailPendingDelete.id) + 1} se eliminará definitivamente del pedido. El pedido se mantendrá activo aunque quede sin detalles, y no se modificarán los pagos ya registrados. Esta acción no se puede deshacer.`
                   : ""}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -482,8 +472,6 @@ export function EditOrderDialog({
               >
                 {detailPendingDelete?.isNew
                   ? "Quitar Detalle"
-                  : detailForms.length <= 1
-                    ? "Eliminar Pedido Completo"
                   : isDeletingDetail
                     ? "Eliminando..."
                     : "Eliminar Permanentemente"}

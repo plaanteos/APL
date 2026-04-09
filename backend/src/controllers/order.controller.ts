@@ -904,63 +904,6 @@ export class OrderController {
         where: { id_pedido: Number(id) },
       });
 
-      if (detallesCount <= 1) {
-        const result = await prisma.$transaction(async (tx) => {
-          const paymentLinks = await tx.detallePago.findMany({
-            where: { id_pedido: Number(id) },
-            select: { id_pago: true },
-          });
-
-          const affectedPaymentIds = [...new Set(paymentLinks.map((link) => Number(link.id_pago)))];
-
-          const removedPaymentApplications = await tx.detallePago.deleteMany({
-            where: { id_pedido: Number(id) },
-          });
-
-          let updatedPayments = 0;
-          let deletedPayments = 0;
-
-          for (const paymentId of affectedPaymentIds) {
-            const aggregates = await tx.detallePago.aggregate({
-              where: { id_pago: paymentId },
-              _sum: { valor: true },
-              _count: { id: true },
-            });
-
-            const remainingCount = Number(aggregates._count.id ?? 0);
-            const remainingValue = Number(aggregates._sum.valor ?? 0);
-
-            if (remainingCount === 0) {
-              await tx.pago.delete({ where: { id: paymentId } });
-              deletedPayments += 1;
-            } else {
-              await tx.pago.update({
-                where: { id: paymentId },
-                data: { valor: remainingValue },
-              });
-              updatedPayments += 1;
-            }
-          }
-
-          await tx.pedido.delete({
-            where: { id: Number(id) },
-          });
-
-          return {
-            deletedOrder: true,
-            removedPaymentApplications: removedPaymentApplications.count,
-            updatedPayments,
-            deletedPayments,
-          };
-        });
-
-        return res.json({
-          success: true,
-          message: 'Se eliminó el último detalle, por lo tanto el pedido completo fue eliminado permanentemente.',
-          data: result,
-        });
-      }
-
       await prisma.detallePedido.delete({
         where: { id: Number(detalleId) },
       });

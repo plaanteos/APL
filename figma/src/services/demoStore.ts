@@ -473,11 +473,6 @@ export const demoStore = {
     if (db.orders[orderIdx].fecha_delete) throw new Error('Pedido eliminado (demo)');
 
     const details = db.orders[orderIdx].detalles || [];
-    if (details.length <= 1) {
-      await demoStore.deleteOrder(orderId);
-      return { deletedOrder: true };
-    }
-
     const hasTarget = details.some((d) => d.id === detalleId);
     if (!hasTarget) throw new Error('Detalle no encontrado (demo)');
 
