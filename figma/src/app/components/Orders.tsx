@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp } from "lucide-react";
+import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp, Pencil, Trash2 } from "lucide-react";
 import orderService from "../../services/order.service";
 import clientService from "../../services/client.service";
 import productoService from "../../services/producto.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
+import { EditOrderDialog } from "./EditOrderDialog";
+import { toast } from "sonner";
+import { EditOrderDetailDialog } from "./EditOrderDetailDialog";
 import {
   getPedidoStatus,
   type PedidoStatus,
@@ -26,6 +29,10 @@ interface OrdersProps {
 
 export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersProps) {
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState<{ open: boolean; order: IOrderWithCalculations | null }>({
+    open: false,
+    order: null,
+  });
   const [statusFilter, setStatusFilter] = useState<string>(initialFilter);
   const [orders, setOrders] = useState<IOrderWithCalculations[]>([]);
   const [clientsById, setClientsById] = useState<Map<number, string>>(new Map());
@@ -33,6 +40,15 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const [editDetailDialog, setEditDetailDialog] = useState<{
+    open: boolean;
+    order: IOrderWithCalculations | null;
+    detalle: any | null;
+  }>({
+    open: false,
+    order: null,
+    detalle: null,
+  });
 
   // Cargar clientes se manejaba aparte pero es mejor todo en fetchOrders para evitar carga parcial
   // Se mantienen states `clientsById` y `productosById` que se poblarán en `fetchOrders`.
@@ -96,6 +112,70 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
 
   const handleOrderCreated = () => {
     fetchOrders();
+  };
+
+  const handleOpenEdit = (order: IOrderWithCalculations, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditDialog({ open: true, order });
+  };
+
+  const handleDeleteOrder = async (order: IOrderWithCalculations, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (Number(order.montoPagado ?? 0) > 0) {
+      toast.error('No se puede eliminar un pedido que tiene pagos registrados');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`¿Eliminar el pedido #${order.id}? Esta acción lo marcará como eliminado.`);
+    if (!confirmDelete) return;
+
+    try {
+      await orderService.softDelete(order.id);
+      toast.success('Pedido eliminado');
+      await fetchOrders();
+    } catch (err: any) {
+      console.error('Error deleting order:', err);
+      toast.error(err?.response?.data?.error || 'No se pudo eliminar el pedido');
+    }
+  };
+
+  const handleOpenEditDetail = (order: IOrderWithCalculations, detalle: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (Number(order.montoPagado ?? 0) > 0) {
+      toast.error('No se pueden editar detalles de un pedido con pagos registrados');
+      return;
+    }
+
+    setEditDetailDialog({
+      open: true,
+      order,
+      detalle,
+    });
+  };
+
+  const handleDeleteDetail = async (order: IOrderWithCalculations, detalle: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (Number(order.montoPagado ?? 0) > 0) {
+      toast.error('No se pueden eliminar detalles de un pedido con pagos registrados');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `¿Eliminar este detalle del pedido #${order.id}? Si es el único detalle, la API lo bloqueará.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await orderService.deleteDetalle(order.id, detalle.id);
+      toast.success('Detalle eliminado');
+      await fetchOrders();
+    } catch (err: any) {
+      console.error('Error deleting order detail:', err);
+      toast.error(err?.response?.data?.error || 'No se pudo eliminar el detalle');
+    }
   };
 
   const toggleOrderExpanded = (orderId: number, e: React.MouseEvent) => {
@@ -239,6 +319,22 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                       <p className="text-sm text-gray-500">Pedido #{order.id}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEdit(order, e)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        aria-label="Editar pedido"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteOrder(order, e)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-red-700"
+                        aria-label="Eliminar pedido"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                       <span className={`text-xs px-2 py-1 rounded-full ${getStatusPillClasses(pedidoStatus)}`}>
                         {getStatusLabel(pedidoStatus)}
                       </span>
@@ -295,6 +391,24 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                                       Number(detalle.precio_unitario ?? 0)
                                     ).toLocaleString()}
                                   </p>
+                                  <div className="flex justify-end gap-1 mt-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleOpenEditDetail(order, detalle, e)}
+                                      className="p-1 rounded hover:bg-white text-gray-500 hover:text-gray-700"
+                                      aria-label="Editar detalle"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDeleteDetail(order, detalle, e)}
+                                      className="p-1 rounded hover:bg-white text-gray-500 hover:text-red-700"
+                                      aria-label="Eliminar detalle"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -348,6 +462,27 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         open={showNewOrderDialog}
         onOpenChange={setShowNewOrderDialog}
         onOrderCreated={handleOrderCreated}
+      />
+
+      <EditOrderDialog
+        open={editDialog.open}
+        onOpenChange={(open) => setEditDialog({ open, order: open ? editDialog.order : null })}
+        order={editDialog.order}
+        onOrderUpdated={() => fetchOrders()}
+      />
+
+      <EditOrderDetailDialog
+        open={editDetailDialog.open}
+        onOpenChange={(open) =>
+          setEditDetailDialog({
+            open,
+            order: open ? editDetailDialog.order : null,
+            detalle: open ? editDetailDialog.detalle : null,
+          })
+        }
+        order={editDetailDialog.order}
+        detalle={editDetailDialog.detalle}
+        onUpdated={() => fetchOrders()}
       />
     </div>
   );

@@ -60,6 +60,14 @@ class OrderService {
    * Obtener pedido por ID con cálculos
    */
   async getById(id: ID): Promise<IOrderWithCalculations> {
+    if (isDemoMode()) {
+      const orders = await demoStore.getOrders();
+      const found = (orders || []).find((o) => Number(o.id) === Number(id));
+      if (!found) {
+        throw new Error('Pedido no encontrado (demo)');
+      }
+      return found;
+    }
     const response = await api.get<ApiEnvelope<IOrderWithCalculations>>(`/orders/${id}`);
     return response.data.data;
   }
@@ -79,6 +87,9 @@ class OrderService {
    * Actualizar pedido (solo fechas)
    */
   async update(id: ID, data: { fecha_pedido?: string; fecha_entrega?: string }): Promise<IOrder> {
+    if (isDemoMode()) {
+      return demoStore.updateOrder(id, data);
+    }
     const response = await api.put<ApiEnvelope<IOrder>>(`/orders/${id}`, data);
     return response.data.data;
   }
@@ -87,6 +98,10 @@ class OrderService {
    * Soft delete de pedido
    */
   async softDelete(id: ID): Promise<{ message: string }> {
+    if (isDemoMode()) {
+      await demoStore.deleteOrder(id);
+      return { message: 'Pedido eliminado' };
+    }
     const response = await api.delete<ApiEnvelope<{ message?: string }>>(`/orders/${id}`);
     return { message: response.data.message || 'Pedido eliminado' };
   }
@@ -118,6 +133,9 @@ class OrderService {
     detalleId: ID,
     data: Partial<IDetallePedidoFormData>
   ): Promise<IOrder> {
+    if (isDemoMode()) {
+      return demoStore.updateOrderDetalle(pedidoId, detalleId, data);
+    }
     const response = await api.put<ApiEnvelope<IOrder>>(
       `/orders/${pedidoId}/detalles/${detalleId}`,
       data
@@ -129,6 +147,10 @@ class OrderService {
    * Eliminar detalle de pedido
    */
   async deleteDetalle(pedidoId: ID, detalleId: ID): Promise<IOrder> {
+    if (isDemoMode()) {
+      await demoStore.deleteOrderDetalle(pedidoId, detalleId);
+      return this.getById(pedidoId);
+    }
     const response = await api.delete<ApiEnvelope<IOrder>>(`/orders/${pedidoId}/detalles/${detalleId}`);
     return response.data.data;
   }

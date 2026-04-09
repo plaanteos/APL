@@ -400,6 +400,92 @@ export const demoStore = {
     return order;
   },
 
+  async updateOrder(orderId: ID, data: { fecha_pedido?: string; fecha_entrega?: string }): Promise<IOrder> {
+    const idx = db.orders.findIndex((o) => o.id === orderId);
+    if (idx === -1) throw new Error('Pedido no encontrado (demo)');
+
+    const existing = db.orders[idx];
+    if (existing.fecha_delete) {
+      throw new Error('No se puede actualizar un pedido eliminado (demo)');
+    }
+
+    db.orders[idx] = {
+      ...existing,
+      fecha_entrega: data.fecha_entrega ?? existing.fecha_entrega,
+    };
+
+    return db.orders[idx];
+  },
+
+  async deleteOrder(orderId: ID): Promise<void> {
+    const idx = db.orders.findIndex((o) => o.id === orderId);
+    if (idx === -1) throw new Error('Pedido no encontrado (demo)');
+
+    const existing = db.orders[idx];
+    if (existing.fecha_delete) {
+      throw new Error('Pedido ya eliminado (demo)');
+    }
+
+    const hasPayments = db.pagos.some((p) =>
+      (p.detalles || []).some((d) => d.id_pedido === orderId)
+    );
+
+    if (hasPayments) {
+      throw new Error('No se puede eliminar un pedido que tiene pagos registrados (demo)');
+    }
+
+    db.orders[idx] = {
+      ...existing,
+      fecha_delete: nowIso(),
+    };
+  },
+
+  async updateOrderDetalle(
+    orderId: ID,
+    detalleId: ID,
+    data: Partial<{ id_producto: ID; cantidad: number; precio_unitario: number; paciente: string; id_estado: ID }>
+  ): Promise<IOrder> {
+    const orderIdx = db.orders.findIndex((o) => o.id === orderId);
+    if (orderIdx === -1) throw new Error('Pedido no encontrado (demo)');
+    if (db.orders[orderIdx].fecha_delete) throw new Error('Pedido eliminado (demo)');
+
+    const detailIdx = (db.orders[orderIdx].detalles || []).findIndex((d) => d.id === detalleId);
+    if (detailIdx === -1) throw new Error('Detalle no encontrado (demo)');
+
+    const prev = db.orders[orderIdx].detalles![detailIdx];
+    const nextProductoId = data.id_producto ?? prev.id_producto;
+    const nextEstadoId = data.id_estado ?? prev.id_estado;
+
+    db.orders[orderIdx].detalles![detailIdx] = {
+      ...prev,
+      id_producto: nextProductoId,
+      cantidad: data.cantidad ?? prev.cantidad,
+      precio_unitario: data.precio_unitario ?? prev.precio_unitario,
+      paciente: data.paciente ?? prev.paciente,
+      id_estado: nextEstadoId,
+      producto: db.productos.find((p) => p.id === nextProductoId),
+      estado: db.estados.find((e) => e.id === nextEstadoId),
+    };
+
+    return db.orders[orderIdx];
+  },
+
+  async deleteOrderDetalle(orderId: ID, detalleId: ID): Promise<void> {
+    const orderIdx = db.orders.findIndex((o) => o.id === orderId);
+    if (orderIdx === -1) throw new Error('Pedido no encontrado (demo)');
+    if (db.orders[orderIdx].fecha_delete) throw new Error('Pedido eliminado (demo)');
+
+    const details = db.orders[orderIdx].detalles || [];
+    if (details.length <= 1) {
+      throw new Error('No se puede eliminar el único detalle del pedido. Elimine el pedido completo.');
+    }
+
+    const hasTarget = details.some((d) => d.id === detalleId);
+    if (!hasTarget) throw new Error('Detalle no encontrado (demo)');
+
+    db.orders[orderIdx].detalles = details.filter((d) => d.id !== detalleId);
+  },
+
   async markOrderAsDelivered(orderId: ID): Promise<IOrderWithCalculations> {
     const idx = db.orders.findIndex((o) => o.id === orderId);
     if (idx === -1) throw new Error('Pedido no encontrado (demo)');
