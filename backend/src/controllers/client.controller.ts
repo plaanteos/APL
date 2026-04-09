@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
+import { ExcelService } from '../services/excel.service';
 import { prisma } from '../utils/prisma';
 
 type AuthUser = {
@@ -734,7 +735,6 @@ export class ClientController {
       }
 
       // Generar Excel
-      const { ExcelService } = await import('../services/excel.service');
       const buffer = await ExcelService.generateBalanceExcel(Number(id));
 
       // Configurar headers para descarga

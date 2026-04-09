@@ -1,3 +1,5 @@
+import { ExcelService } from '../services/excel.service';
+
 export const BALANCE_XLSX_MIME =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -5,7 +7,6 @@ export async function loadBalanceExcelForClient(
   balanceClientId: number,
   balanceClientName: string | undefined
 ): Promise<{ buffer: Buffer; filename: string }> {
-  const { ExcelService } = await import('../services/excel.service');
   const buffer = await ExcelService.generateResumenMensualExcel(balanceClientId);
   const safeName = String(balanceClientName || `cliente_${balanceClientId}`)
     .trim()

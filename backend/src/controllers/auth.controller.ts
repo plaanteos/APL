@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../services/audit.service';
+import { emailService } from '../services/email.service';
+import { whatsappService } from '../services/whatsapp.service';
 import { passwordSchema } from '../utils/passwordPolicy';
 import { authenticator } from 'otplib';
 import { prisma } from '../utils/prisma';
@@ -761,7 +763,6 @@ export class AuthController {
       // Enviar notificación(es). Por seguridad, nunca fallar la respuesta por errores de envío.
       // Email (Gmail/SMTP)
       try {
-        const { emailService } = await import('../services/email.service');
         await emailService.sendPasswordResetCodeEmail(email, resetCode, 15);
       } catch (sendError) {
         console.error('Forgot password: error enviando email:', sendError);
@@ -771,7 +772,6 @@ export class AuthController {
       try {
         const shouldSendWhatsApp = (process.env.PASSWORD_RESET_SEND_WHATSAPP || '').toLowerCase() === 'true';
         if (shouldSendWhatsApp && user.telefono) {
-          const { whatsappService } = await import('../services/whatsapp.service');
           await whatsappService.sendTextMessage({
             to: user.telefono,
             body: `Recuperación de contraseña APL. Tu código de verificación es: ${resetCode}. Expira en 15 minutos.`,
