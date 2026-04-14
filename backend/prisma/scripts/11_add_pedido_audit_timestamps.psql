@@ -1,0 +1,31 @@
+-- ================================================================
+-- AUDITORIA DE PEDIDOS: agregar fecha_insert y fecha_update
+-- y mantener fecha_update automaticamente en cada UPDATE.
+-- ================================================================
+
+ALTER TABLE "pedidos"
+  ADD COLUMN IF NOT EXISTS "fecha_insert" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW();
+
+ALTER TABLE "pedidos"
+  ADD COLUMN IF NOT EXISTS "fecha_update" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW();
+
+CREATE INDEX IF NOT EXISTS "pedidos_fecha_update_idx" ON "pedidos" ("fecha_update");
+
+CREATE OR REPLACE FUNCTION set_pedidos_fecha_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."fecha_insert" IS NULL THEN
+    NEW."fecha_insert" = NOW();
+  END IF;
+
+  NEW."fecha_update" = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_pedidos_set_fecha_update ON "pedidos";
+
+CREATE TRIGGER trg_pedidos_set_fecha_update
+BEFORE UPDATE ON "pedidos"
+FOR EACH ROW
+EXECUTE FUNCTION set_pedidos_fecha_update();

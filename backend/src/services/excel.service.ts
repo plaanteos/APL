@@ -1,6 +1,8 @@
 import ExcelJS from 'exceljs';
 import { prisma } from '../utils/prisma';
 
+const PESO_CURRENCY_FORMAT = '[$$-es-AR] #,##0.00';
+
 interface BalanceData {
     cliente: {
         id: number;
@@ -160,16 +162,16 @@ export class ExcelService {
 
         resumenSheet.getCell('A9').value = 'Monto Total:';
         resumenSheet.getCell('B9').value = balanceData.resumen.montoTotal;
-        resumenSheet.getCell('B9').numFmt = '$#,##0.00';
+        resumenSheet.getCell('B9').numFmt = PESO_CURRENCY_FORMAT;
         resumenSheet.getCell('B9').font = { bold: true };
 
         resumenSheet.getCell('A10').value = 'Monto Pagado:';
         resumenSheet.getCell('B10').value = balanceData.resumen.montoPagado;
-        resumenSheet.getCell('B10').numFmt = '$#,##0.00';
+        resumenSheet.getCell('B10').numFmt = PESO_CURRENCY_FORMAT;
 
         resumenSheet.getCell('A11').value = 'Monto Pendiente:';
         resumenSheet.getCell('B11').value = balanceData.resumen.montoPendiente;
-        resumenSheet.getCell('B11').numFmt = '$#,##0.00';
+        resumenSheet.getCell('B11').numFmt = PESO_CURRENCY_FORMAT;
         resumenSheet.getCell('B11').font = { bold: true };
 
         // Ajustar anchos de columna
@@ -198,9 +200,9 @@ export class ExcelService {
                 montoPendiente: pedido.montoPendiente,
             });
         });
-        pedidosSheet.getColumn(4).numFmt = '$#,##0.00';
-        pedidosSheet.getColumn(5).numFmt = '$#,##0.00';
-        pedidosSheet.getColumn(6).numFmt = '$#,##0.00';
+        pedidosSheet.getColumn(4).numFmt = PESO_CURRENCY_FORMAT;
+        pedidosSheet.getColumn(5).numFmt = PESO_CURRENCY_FORMAT;
+        pedidosSheet.getColumn(6).numFmt = PESO_CURRENCY_FORMAT;
 
         // Hoja 3: Detalle Completo
         const detalleSheet = workbook.addWorksheet('Detalle Completo');
@@ -226,15 +228,15 @@ export class ExcelService {
                 detalleSheet.getCell(`C${currentRow}`).value = detalle.cantidad;
                 detalleSheet.getCell(`D${currentRow}`).value = detalle.precio_unitario;
                 detalleSheet.getCell(`E${currentRow}`).value = detalle.subtotal;
-                detalleSheet.getCell(`D${currentRow}`).numFmt = '$#,##0.00';
-                detalleSheet.getCell(`E${currentRow}`).numFmt = '$#,##0.00';
+                detalleSheet.getCell(`D${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
+                detalleSheet.getCell(`E${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
                 currentRow++;
             });
 
             currentRow++;
             detalleSheet.getCell(`D${currentRow}`).value = 'Total:';
             detalleSheet.getCell(`E${currentRow}`).value = pedido.montoTotal;
-            detalleSheet.getCell(`E${currentRow}`).numFmt = '$#,##0.00';
+            detalleSheet.getCell(`E${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
             detalleSheet.getCell(`E${currentRow}`).font = { bold: true };
             currentRow += 2;
         });
@@ -347,7 +349,7 @@ export class ExcelService {
             sheet.getCell(rowIndex, 2).value = r.paciente;
             sheet.getCell(rowIndex, 3).value = r.trabajo;
             sheet.getCell(rowIndex, 4).value = r.importe;
-            sheet.getCell(rowIndex, 4).numFmt = '0';
+            sheet.getCell(rowIndex, 4).numFmt = PESO_CURRENCY_FORMAT;
 
             for (let col = 1; col <= 4; col++) {
                 const c = sheet.getCell(rowIndex, col);
@@ -365,7 +367,7 @@ export class ExcelService {
         // Total (normal) en columnas C-D
         sheet.getCell(rowIndex, 3).value = 'Total';
         sheet.getCell(rowIndex, 4).value = runningTotal;
-        sheet.getCell(rowIndex, 4).numFmt = '0';
+        sheet.getCell(rowIndex, 4).numFmt = PESO_CURRENCY_FORMAT;
 
         for (let col = 1; col <= 4; col++) {
             const c = sheet.getCell(rowIndex, col);

@@ -106,8 +106,11 @@ const formatOrderWithCalculations = (pedido: any) => {
     id: pedido.id,
     id_cliente: pedido.id_cliente,
     nombreCliente: pedido.cliente?.nombre || '',
+    fecha_insert: pedido.fecha_insert,
+    fecha_update: pedido.fecha_update,
     fecha_pedido: pedido.fecha_pedido,
     fecha_entrega: pedido.fecha_entrega,
+    fecha_delete: pedido.fecha_delete,
     id_administrador: pedido.id_administrador,
     descripcion: pedido.descripcion ?? '',
     detalles: (pedido.detalles || []).map((det: any) => ({
@@ -127,6 +130,13 @@ const formatOrderWithCalculations = (pedido: any) => {
     cantidadDetalles: pedido.detalles?.length || 0,
     cantidadPagos: pedido.detallesPago?.length || 0,
   };
+};
+
+const touchPedidoFechaUpdate = async (
+  executor: { $executeRaw: typeof prisma.$executeRaw },
+  pedidoId: number,
+) => {
+  await executor.$executeRaw`UPDATE "pedidos" SET "fecha_update" = NOW() WHERE "id" = ${pedidoId}`;
 };
 
 // ============================================
@@ -550,7 +560,7 @@ export class OrderController {
     }
   }
 
-  // DELETE /api/orders/:id - Eliminar permanentemente
+  // DELETE /api/orders/:id - Baja lógica del pedido
   static async deleteOrder(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -619,8 +629,9 @@ export class OrderController {
           }
         }
 
-        await tx.pedido.delete({
+        await tx.pedido.update({
           where: { id: Number(id) },
+          data: { fecha_delete: new Date() },
         });
 
         return {
@@ -633,8 +644,8 @@ export class OrderController {
       res.json({
         success: true,
         message: result.removedPaymentApplications > 0
-          ? 'Pedido eliminado permanentemente. Los pagos vinculados fueron recalculados automaticamente.'
-          : 'Pedido eliminado permanentemente de la base de datos.',
+          ? 'Pedido eliminado exitosamente. Los pagos vinculados fueron recalculados automaticamente.'
+          : 'Pedido eliminado exitosamente.',
         data: result,
       });
     } catch (error) {
@@ -700,15 +711,21 @@ export class OrderController {
         });
       }
 
-      const newDetalle = await prisma.detallePedido.create({
-        data: {
-          id_pedido: Number(id),
-          ...detalleData,
-        },
-        include: {
-          producto: true,
-          estado: true,
-        },
+      const newDetalle = await prisma.$transaction(async (tx) => {
+        const createdDetalle = await tx.detallePedido.create({
+          data: {
+            id_pedido: Number(id),
+            ...detalleData,
+          },
+          include: {
+            producto: true,
+            estado: true,
+          },
+        });
+
+        await touchPedidoFechaUpdate(tx, Number(id));
+
+        return createdDetalle;
       });
 
       res.status(201).json({
@@ -814,13 +831,19 @@ export class OrderController {
         }
       }
 
-      const updatedDetalle = await prisma.detallePedido.update({
-        where: { id: Number(detalleId) },
-        data: updateData,
-        include: {
-          producto: true,
-          estado: true,
-        },
+      const updatedDetalle = await prisma.$transaction(async (tx) => {
+        const detalleActualizado = await tx.detallePedido.update({
+          where: { id: Number(detalleId) },
+          data: updateData,
+          include: {
+            producto: true,
+            estado: true,
+          },
+        });
+
+        await touchPedidoFechaUpdate(tx, Number(id));
+
+        return detalleActualizado;
       });
 
       res.json({
@@ -904,8 +927,12 @@ export class OrderController {
         where: { id_pedido: Number(id) },
       });
 
-      await prisma.detallePedido.delete({
-        where: { id: Number(detalleId) },
+      await prisma.$transaction(async (tx) => {
+        await tx.detallePedido.delete({
+          where: { id: Number(detalleId) },
+        });
+
+        await touchPedidoFechaUpdate(tx, Number(id));
       });
 
       res.json({
@@ -1104,6 +1131,8 @@ export class OrderController {
         },
         data: { id_estado: estadoEntregado.id },
       });
+
+      await touchPedidoFechaUpdate(prisma, Number(id));
 
       const updatedOrder = await prisma.pedido.findFirst({
         where: {

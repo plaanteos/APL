@@ -76,6 +76,8 @@ model Cliente {
 model Pedido {
   id               Int             @id @default(autoincrement())
   id_cliente       Int
+  fecha_insert     DateTime        @default(now())
+  fecha_update     DateTime        @updatedAt
   fecha_pedido     DateTime        @default(now())
   fecha_entrega    DateTime
   fecha_delete     DateTime?
@@ -88,6 +90,7 @@ model Pedido {
 
   @@index([id_cliente])
   @@index([id_administrador])
+  @@index([fecha_update])
   @@index([fecha_pedido])
   @@index([fecha_entrega])
   @@index([fecha_delete])

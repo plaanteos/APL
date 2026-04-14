@@ -47,6 +47,8 @@ Campos y tipos:
 Campos y tipos:
 - **id** (INT, PK): identificador único del pedido.
 - **id_cliente** (INT, FK): cliente que realiza el pedido.
+- **fecha_insert** (TIMESTAMP): fecha de alta del pedido.
+- **fecha_update** (TIMESTAMP): última actualización del pedido.
 - **fecha_pedido** (DATE): fecha de realización del pedido.
 - **fecha_entrega** (DATE): fecha estimada o real de entrega.
 - **fecha_delete** (DATE): baja lógica del pedido.

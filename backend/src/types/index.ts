@@ -83,6 +83,8 @@ export interface ProductoDTO {
 export interface Pedido {
   id: number;
   id_cliente: number;
+  fecha_insert: Date;
+  fecha_update: Date;
   fecha_pedido: Date;
   fecha_entrega: Date;
   fecha_delete: Date | null;
@@ -98,8 +100,11 @@ export interface PedidoDTO {
   id: number;
   id_cliente: number;
   nombreCliente: string;
+  fecha_insert: Date;
+  fecha_update: Date;
   fecha_pedido: Date;
   fecha_entrega: Date;
+  fecha_delete?: Date | null;
   id_administrador: number;
   descripcion?: string;
   detalles: DetallePedidoDTO[];
