@@ -19,24 +19,27 @@ function getDetalleEstadoDescripcion(detalle: any): string {
   );
 }
 
-/** Misma lógica que la lista de pedidos (filtro "Pendientes"). */
 export function getPedidoStatus(order: IOrderWithCalculations): PedidoStatus {
   const detalles = order.detalles || [];
-  if (detalles.length > 0) {
-    const statuses = detalles
-      .map((d: any) => normalizeOrderStatus(getDetalleEstadoDescripcion(d)))
-      .filter(Boolean);
 
-    if (statuses.length > 0 && statuses.every((s) => s === "ENTREGADO")) {
-      // Entregado con deuda pendiente vs entregado y saldado
-      return Number(order.montoPendiente ?? 0) > 0
-        ? "ENTREGADO_CON_DEUDA"
-        : "ENTREGADO";
-    }
-    if (statuses.some((s) => s === "PAGADO")) return "PAGADO";
-    if (statuses.some((s) => s === "EN_PROCESO" || s === "LISTO_PARA_ENTREGA")) return "EN_PROCESO";
-    return "PENDIENTE";
+  if (detalles.length === 0) return "PENDIENTE";
+
+  const statuses = detalles
+    .map((d: any) => normalizeOrderStatus(getDetalleEstadoDescripcion(d)))
+    .filter(Boolean);
+
+  // Estado final: todos entregados Y sin deuda pendiente
+  const allEntregado = statuses.length > 0 && statuses.every((s) => s === "ENTREGADO");
+  if (allEntregado) {
+    return Number(order.montoPendiente ?? 0) > 0 ? "ENTREGADO_CON_DEUDA" : "ENTREGADO";
   }
+
+  // Pagado: todos los detalles marcados como "pagado" (aún no entregado)
+  const allPagado = statuses.length > 0 && statuses.every((s) => s === "PAGADO");
+  if (allPagado) return "PAGADO";
+
+  // En proceso: algún detalle en producción o listo
+  if (statuses.some((s) => s === "EN_PROCESO" || s === "LISTO_PARA_ENTREGA")) return "EN_PROCESO";
 
   return "PENDIENTE";
 }

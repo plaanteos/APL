@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import orderService from "../../services/order.service";
 import productoService from "../../services/producto.service";
 import estadoService from "../../services/estado.service";
-import { Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { IEstado, IOrderWithCalculations, IProducto } from "../types";
 
 interface EditOrderDialogProps {
@@ -78,7 +78,6 @@ export function EditOrderDialog({
   const [isDeletingDetail, setIsDeletingDetail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [detailPendingDelete, setDetailPendingDelete] = useState<DetailFormState | null>(null);
-  const [nextTempDetailId, setNextTempDetailId] = useState(-1);
 
   useEffect(() => {
     if (!open) return;
@@ -118,7 +117,6 @@ export function EditOrderDialog({
         id_estado: String(detalle.id_estado ?? ""),
       }))
     );
-    setNextTempDetailId(-1);
     setErrors({});
   }, [open, order]);
 
@@ -130,25 +128,6 @@ export function EditOrderDialog({
 
   const handleRequestDeleteDetail = (detail: DetailFormState) => {
     setDetailPendingDelete(detail);
-  };
-
-  const handleAddDetail = () => {
-    const defaultEstadoId = estados[0] ? String(estados[0].id) : "";
-    const defaultProductoId = productos[0] ? String(productos[0].id) : "";
-
-    setDetailForms((prev) => ([
-      ...prev,
-      {
-        id: nextTempDetailId,
-        isNew: true,
-        id_producto: defaultProductoId,
-        cantidad: "1",
-        precio_unitario: "",
-        paciente: "",
-        id_estado: defaultEstadoId,
-      },
-    ]));
-    setNextTempDetailId((prev) => prev - 1);
   };
 
   const confirmDeleteDetail = async () => {
@@ -318,18 +297,6 @@ export function EditOrderDialog({
           </div>
 
           <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAddDetail}
-                disabled={isSubmitting || isLoadingCatalogs}
-              >
-                <Plus size={16} className="mr-2" />
-                Agregar detalle
-              </Button>
-            </div>
-
             {detailForms.map((detail, index) => (
               <div key={detail.id} className="rounded-lg border border-gray-200 p-4 space-y-4">
                 <div className="flex items-center justify-between">

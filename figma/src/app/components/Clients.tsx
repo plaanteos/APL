@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Mail, Phone, MessageCircle, User, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Mail, Phone, MessageCircle, User, Loader2, Pencil, Trash2, MapPin } from "lucide-react";
 import clientService from "../../services/client.service";
 import type { IClient } from "../types";
 import { NewClientDialog } from "./NewClientDialog";
@@ -256,6 +256,12 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
                       <Phone size={14} />
                       <span className="truncate">{client.telefono}</span>
                     </div>
+                    {client.direccion && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin size={14} />
+                        <span className="truncate">{client.direccion}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

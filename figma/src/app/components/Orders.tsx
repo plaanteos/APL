@@ -105,12 +105,10 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
       const filtered = (data || []).filter((o) => {
         if (statusFilter === 'all') return true;
         const s = getPedidoStatus(o);
-        if (statusFilter === 'debt') {
-          return Number(o.montoPendiente ?? 0) > 0 && s !== 'PAGADO';
-        }
+        if (statusFilter === 'debt') return s === 'ENTREGADO_CON_DEUDA';
         if (statusFilter === 'delivered') return s === 'ENTREGADO' || s === 'ENTREGADO_CON_DEUDA';
-        if (statusFilter === 'pending') return Number(o.montoPendiente ?? 0) > 0;
-        if (statusFilter === 'paid') return s === 'PAGADO';
+        if (statusFilter === 'pending') return s === 'PENDIENTE' || s === 'EN_PROCESO';
+        if (statusFilter === 'paid') return s === 'PAGADO' || s === 'ENTREGADO';
         return true;
       });
 
@@ -344,7 +342,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
                       <span className={`text-xs px-2 py-1 rounded-full ${getStatusPillClasses(pedidoStatus)}`}>
                         {getStatusLabel(pedidoStatus)}
                       </span>
-                      {order.montoPendiente > 0 && (
+                      {pedidoStatus === 'ENTREGADO_CON_DEUDA' && (
                         <span className="text-xs px-2 py-1 rounded-full bg-[#f7c6c7]/60 text-[#7a1f23] border border-[#f7c6c7]/70">
                           Con deuda
                         </span>
