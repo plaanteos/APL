@@ -10,6 +10,7 @@ import { EditClientDialog } from "./EditClientDialog";
 import { WhatsAppConnectionNotice } from "./WhatsAppConnectionNotice";
 import { useAuth } from "../../hooks/useAuth";
 import { useWhatsAppConnectionStatus } from "../../hooks/useWhatsAppConnectionStatus";
+import { toast } from "sonner";
 
 interface ClientsProps {
   onNavigateToBalance: (clientId: number) => void;
@@ -90,6 +91,7 @@ export function Clients({ onNavigateToBalance }: ClientsProps) {
       await refreshClients(false);
     } catch (err: any) {
       console.error('Error deleting client:', err);
+      toast.error(err?.response?.data?.error || "No se pudo eliminar el cliente");
     }
   };
 

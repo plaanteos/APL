@@ -731,6 +731,42 @@ export function Balance({ selectedClientId }: BalanceProps) {
           </p>
         </Card>
 
+        {/* Desglose Ingresos */}
+        {filteredGlobalOrders.length > 0 && (() => {
+          const byClient = new Map<string, number>();
+          filteredGlobalOrders.forEach((o) => {
+            const name: string =
+              o.cliente?.nombre ||
+              o.nombreCliente ||
+              o.clienteNombre ||
+              o.nombre_cliente ||
+              `Cliente ${o.id_cliente ?? "—"}`;
+            byClient.set(name, (byClient.get(name) ?? 0) + Number(o.montoPagado ?? 0));
+          });
+          const sorted = [...byClient.entries()].sort(([a], [b]) => a.localeCompare(b, "es"));
+          return (
+            <Card className="p-4">
+              <h3 className="text-[#033f63] font-medium mb-3">Desglose de Ingresos</h3>
+              <div className="space-y-2">
+                {sorted.map(([clientName, amount]) => (
+                  <div key={clientName} className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600 truncate pr-2">{clientName}:</span>
+                    <span className="text-sm font-medium text-[#7c9885] whitespace-nowrap">
+                      {formatCurrency(amount)}
+                    </span>
+                  </div>
+                ))}
+                <div className="border-t pt-2 flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Total:</span>
+                  <span className="text-sm font-bold text-[#7c9885]">
+                    {formatCurrency(income)}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          );
+        })()}
+
         {/* Desglose Egresos */}
         {periodExpenseSummary && (
           <Card className="p-4">
