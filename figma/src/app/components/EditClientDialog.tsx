@@ -37,6 +37,7 @@ const clientSchema = z.object({
       /^[0-9+\-\s()]+$/,
       "Teléfono debe contener solo números y caracteres válidos",
     ),
+  direccion: z.string().max(200).optional(),
 });
 
 type ClientKind = "odontologo" | "clinica";
@@ -88,6 +89,7 @@ export function EditClientDialog({
     nombre: "",
     email: "",
     telefono: "",
+    direccion: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,6 +103,7 @@ export function EditClientDialog({
       nombre: stripKnownPrefixes(client.nombre),
       email: client.email ?? "",
       telefono: client.telefono ?? "",
+      direccion: client.direccion ?? "",
     });
     setErrors({});
   }, [open, client]);
@@ -253,6 +256,20 @@ export function EditClientDialog({
               {phoneHelperText}
             </p>
             {errors.telefono && <p className="text-sm text-red-500 mt-1">{errors.telefono}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="editDireccion">Dirección</Label>
+            <Input
+              id="editDireccion"
+              name="direccion"
+              autoComplete="street-address"
+              value={formData.direccion ?? ""}
+              onChange={(e) =>
+                setFormData({ ...formData, direccion: e.target.value })
+              }
+              placeholder="Ej: Av. Corrientes 1234, CABA"
+            />
           </div>
 
           <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">

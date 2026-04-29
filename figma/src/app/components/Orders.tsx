@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Plus, Filter, Loader2, ChevronDown, ChevronUp, Package, TrendingUp, Pencil, Trash2 } from "lucide-react";
+import { Plus, Eye, Loader2, ChevronDown, ChevronUp, Package, TrendingUp, Pencil, Trash2 } from "lucide-react";
 import orderService from "../../services/order.service";
 import clientService from "../../services/client.service";
 import productoService from "../../services/producto.service";
 import { IOrderWithCalculations } from "../types";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { EditOrderDialog } from "./EditOrderDialog";
+import { AddExpenseSheet } from "./AddExpenseSheet";
+import { OtherExpensesSheet } from "./OtherExpensesSheet";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -30,6 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
 
 interface OrdersProps {
   onNavigateToBalance: (clientId: number) => void;
@@ -38,6 +46,9 @@ interface OrdersProps {
 
 export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersProps) {
   const [showNewOrderDialog, setShowNewOrderDialog] = useState(false);
+  const [showAddExpenseSheet, setShowAddExpenseSheet] = useState(false);
+  const [showExpensesSheet, setShowExpensesSheet] = useState(false);
+  const [expensesCount, setExpensesCount] = useState(0);
   const [editDialog, setEditDialog] = useState<{ open: boolean; order: IOrderWithCalculations | null }>({
     open: false,
     order: null,
@@ -97,7 +108,7 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         if (statusFilter === 'debt') {
           return Number(o.montoPendiente ?? 0) > 0 && s !== 'PAGADO';
         }
-        if (statusFilter === 'delivered') return s === 'ENTREGADO';
+        if (statusFilter === 'delivered') return s === 'ENTREGADO' || s === 'ENTREGADO_CON_DEUDA';
         if (statusFilter === 'pending') return Number(o.montoPendiente ?? 0) > 0;
         if (statusFilter === 'paid') return s === 'PAGADO';
         return true;
@@ -183,6 +194,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         return 'bg-[#28666e]/20 text-[#28666e] border border-[#28666e]/40';
       case 'ENTREGADO':
         return 'bg-[#7c9885]/30 text-[#033f63] border border-[#7c9885]/60';
+      case 'ENTREGADO_CON_DEUDA':
+        return 'bg-orange-100 text-orange-800 border border-orange-300';
       default:
         return 'bg-gray-100 text-gray-800 border border-gray-200';
     }
@@ -198,6 +211,8 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
         return 'Pagado';
       case 'ENTREGADO':
         return 'Entregado';
+      case 'ENTREGADO_CON_DEUDA':
+        return 'Entregado c/deuda';
       default:
         return 'Pendiente';
     }
@@ -224,34 +239,77 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2>Pedidos</h2>
+      <h2 className="text-[#033f63] font-semibold text-lg">Pedidos</h2>
+
+      {/* Acciones */}
+      <div className="grid grid-cols-3 gap-2">
         <Button
           onClick={() => setShowNewOrderDialog(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-          size="sm"
+          className="bg-[#033f63] hover:bg-[#28666e] h-auto py-3"
         >
           <Plus size={16} className="mr-1" />
-          Nuevo
+          Pedido
+        </Button>
+        <Button
+          onClick={() => setShowAddExpenseSheet(true)}
+          variant="outline"
+          className="h-auto py-3 border-[#b5b682] text-[#b5b682] hover:bg-[#b5b682]/10"
+        >
+          <Plus size={16} className="mr-1" />
+          Gastos
+        </Button>
+        <Button
+          onClick={() => setShowExpensesSheet(true)}
+          variant="outline"
+          className="h-auto py-3 border-[#033f63] text-[#033f63] hover:bg-[#033f63]/10 flex items-center justify-center gap-1"
+        >
+          <Eye size={16} />
+          Ver Gastos
+          {expensesCount > 0 && (
+            <span className="flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-[#033f63] rounded-full">
+              {expensesCount}
+            </span>
+          )}
         </Button>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Filter size={16} className="text-gray-500" />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Filtrar por estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="pending">Pendientes</SelectItem>
-            <SelectItem value="paid">Pagados</SelectItem>
-            <SelectItem value="delivered">Entregados</SelectItem>
-            <SelectItem value="debt">Con deuda</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Filtro en formato Accordion */}
+      <Accordion type="single" collapsible className="bg-white rounded-xl border border-gray-200">
+        <AccordionItem value="status" className="border-none px-4">
+          <AccordionTrigger className="text-sm font-medium text-[#033f63] py-4 hover:no-underline">
+            {statusFilter === "all"
+              ? "Todos"
+              : statusFilter === "pending"
+              ? "Pendientes"
+              : statusFilter === "paid"
+              ? "Pagados"
+              : statusFilter === "delivered"
+              ? "Entregados"
+              : "Con deuda"}
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 space-y-1">
+            {([
+              { value: "all", label: "Todos" },
+              { value: "pending", label: "Pendientes" },
+              { value: "paid", label: "Pagados" },
+              { value: "delivered", label: "Entregados" },
+              { value: "debt", label: "Con deuda" },
+            ] as { value: string; label: string }[]).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  statusFilter === opt.value
+                    ? "bg-[#033f63] text-white font-medium"
+                    : "text-[#033f63] hover:bg-[#033f63]/10"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       {/* Orders List */}
       <div className="space-y-3">
@@ -441,6 +499,17 @@ export function Orders({ onNavigateToBalance, initialFilter = "all" }: OrdersPro
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AddExpenseSheet
+        open={showAddExpenseSheet}
+        onOpenChange={setShowAddExpenseSheet}
+        onExpenseAdded={() => setExpensesCount((c) => c + 1)}
+      />
+
+      <OtherExpensesSheet
+        open={showExpensesSheet}
+        onOpenChange={setShowExpensesSheet}
+      />
     </div>
   );
 }

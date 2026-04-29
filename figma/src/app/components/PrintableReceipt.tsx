@@ -4,6 +4,7 @@ interface PrintableReceiptProps {
   client: IClient;
   orders: IBalanceItem[];
   selectedOrderIds: number[];
+  issuedBy: string;
 }
 
 const formatDate = (value: unknown) => {
@@ -29,7 +30,7 @@ const escapeHtml = (value: unknown) =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const buildReceiptHtml = ({ client, orders, selectedOrderIds }: PrintableReceiptProps) => {
+const buildReceiptHtml = ({ client, orders, selectedOrderIds, issuedBy }: PrintableReceiptProps) => {
   const selectedOrders = orders.filter((order) =>
     selectedOrderIds.includes(order.pedidoId)
   );
@@ -42,12 +43,19 @@ const buildReceiptHtml = ({ client, orders, selectedOrderIds }: PrintableReceipt
     (sum, order) => sum + Number(order.montoPagado ?? 0),
     0
   );
-  const pendingAmount = selectedOrders.reduce(
-    (sum, order) => sum + Number(order.montoPendiente ?? 0),
-    0
-  );
+  const now = new Date();
+  const issuedAt = `${now.toLocaleDateString("es-UY", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })} - ${now.toLocaleTimeString("es-UY", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 
-  const rows = selectedOrders
+  const dash = "- - - - - - - - - - - - - - - - - - - - - -";
+
+  const orderRows = selectedOrders
     .map((order) => {
       const status = order.entregado
         ? "Entregado"
@@ -56,364 +64,189 @@ const buildReceiptHtml = ({ client, orders, selectedOrderIds }: PrintableReceipt
           : "Pagado";
 
       return `
-        <section class="order-block">
-          <div class="order-head">
-            <div>
-              <p class="patient">${escapeHtml(order.paciente || "Paciente sin nombre")}</p>
-              <p class="meta">Pedido #${escapeHtml(order.pedidoId)} · ${escapeHtml(formatDate(order.fecha))}</p>
-            </div>
-            <span class="badge">${escapeHtml(status)}</span>
-          </div>
-          <p class="work">${escapeHtml(order.productos || "Trabajo sin detalle")}</p>
-          <div class="amount-grid">
-            <div><span>Total</span><strong>${escapeHtml(formatMoney(order.montoTotal))}</strong></div>
-            <div><span>Pagado</span><strong>${escapeHtml(formatMoney(order.montoPagado))}</strong></div>
-            <div><span>Pendiente</span><strong>${escapeHtml(formatMoney(order.montoPendiente))}</strong></div>
-          </div>
-        </section>
-      `;
+<p class="row-patient">${escapeHtml(order.paciente || "Paciente sin nombre")}<span class="status">${escapeHtml(status)}</span></p>
+<p class="meta">${escapeHtml(formatDate(order.fecha))}</p>
+<p class="work">${escapeHtml(order.productos || "Trabajo sin detalle")}</p>
+<div class="amts">
+  <span>Total:</span><span>${escapeHtml(formatMoney(order.montoTotal))}</span>
+</div>
+<div class="amts">
+  <span>Pagado:</span><span>${escapeHtml(formatMoney(order.montoPagado))}</span>
+</div>
+<p class="dash">${dash}</p>`;
     })
     .join("");
 
-  const now = new Date();
-  const issuedAt = `${now.toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })} · ${now.toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-
   return `<!DOCTYPE html>
-  <html lang="es">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Comprobante APL</title>
-      <style>
-        @page {
-          size: 80mm auto;
-          margin: 6mm;
-        }
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comprobante APL</title>
+  <style>
+    /*
+     * Ticket térmico — compatible con rollos de 58mm y 80mm.
+     * @page sin 'size' fijo: el driver de la impresora usa el ancho real del papel.
+     * En pantalla se muestra una vista previa a 72mm (80mm roll preview).
+     */
+    @page {
+      margin: 2mm 4mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        :root {
-          color-scheme: light;
-          --ink: #12344d;
-          --muted: #60758a;
-          --line: #d8e2ea;
-          --paper: #ffffff;
-          --accent: #0f766e;
-          --accent-soft: #e6f7f4;
-          --warn: #8c6b11;
-          --warn-soft: #fff5d6;
-        }
+    html, body {
+      background: #eee;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      color: #000;
+    }
 
-        * {
-          box-sizing: border-box;
-        }
+    /* ── Vista previa en pantalla ── */
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 24px 0;
+    }
+    .ticket {
+      width: 72mm;          /* preview 80mm roll */
+      background: #fff;
+      padding: 10px 10px;
+      border: 1px dashed #aaa;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    }
 
-        html,
-        body {
-          margin: 0;
-          padding: 0;
-          background: #eef3f7;
-          font-family: "Segoe UI", Arial, sans-serif;
-          color: var(--ink);
-        }
+    /* ── Tipografía ── */
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
 
-        body {
-          display: flex;
-          justify-content: center;
-          padding: 24px 0;
-        }
+    .title-main {
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 0.08em;
+    }
+    .title-sub {
+      font-size: 10px;
+      text-align: center;
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
+    .doc-title {
+      font-size: 12px;
+      font-weight: bold;
+      text-align: center;
+      margin: 6px 0 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .issued-by { font-size: 10px; text-align: center; margin: 1px 0 2px; }
+    .date { font-size: 10px; text-align: center; margin-bottom: 4px; }
 
-        .ticket {
-          width: 68mm;
-          background: var(--paper);
-          border: 1px solid var(--line);
-          border-radius: 18px;
-          box-shadow: 0 18px 45px rgba(18, 52, 77, 0.15);
-          overflow: hidden;
-        }
+    /* separadores de guiones: usan ch para ancho monoespaciado */
+    .dash {
+      font-size: 10px;
+      color: #444;
+      text-align: center;
+      margin: 4px 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
 
-        .topbar {
-          padding: 16px 16px 14px;
-          background: linear-gradient(180deg, #103d5c 0%, #1a5b82 100%);
-          color: white;
-          text-align: center;
-        }
+    .label { font-size: 10px; color: #333; margin-bottom: 1px; }
+    .client-name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+    .meta { font-size: 10px; color: #333; margin: 1px 0; }
 
-        .brand {
-          font-size: 18px;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-          margin: 0;
-        }
+    .row-patient {
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 4px;
+      margin: 6px 0 1px;
+    }
+    .status { font-weight: normal; font-size: 10px; flex-shrink: 0; }
+    .work { font-size: 11px; font-weight: bold; margin: 3px 0 1px; }
+    .amts {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      margin: 1px 0;
+    }
 
-        .subtitle {
-          margin: 4px 0 0;
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          opacity: 0.82;
-        }
+    .total-section { margin-top: 3px; }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: bold;
+      border-top: 1px solid #000;
+      padding-top: 3px;
+      margin: 2px 0;
+    }
+    .paid-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      margin: 2px 0;
+    }
 
-        .content {
-          padding: 14px;
-        }
+    .count { font-size: 10px; text-align: center; margin: 3px 0; }
+    .footer-text { font-size: 10px; font-weight: bold; text-align: center; margin: 2px 0; }
+    .footer-legal { font-size: 9px; text-align: center; color: #444; margin-top: 2px; font-style: italic; }
 
-        .section + .section {
-          margin-top: 14px;
-        }
-
-        .label {
-          margin: 0 0 6px;
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--muted);
-        }
-
-        .document-title {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 800;
-          text-align: center;
-        }
-
-        .issued-at {
-          margin: 6px 0 0;
-          text-align: center;
-          font-size: 11px;
-          color: var(--muted);
-        }
-
-        .client-card {
-          border: 1px solid var(--line);
-          border-radius: 14px;
-          padding: 12px;
-          background: #f9fbfc;
-        }
-
-        .client-name {
-          margin: 0 0 8px;
-          font-size: 15px;
-          font-weight: 800;
-        }
-
-        .client-meta {
-          margin: 0;
-          font-size: 11px;
-          line-height: 1.55;
-          color: var(--muted);
-          word-break: break-word;
-        }
-
-        .order-block {
-          border: 1px dashed var(--line);
-          border-radius: 14px;
-          padding: 12px;
-          background: white;
-        }
-
-        .order-block + .order-block {
-          margin-top: 10px;
-        }
-
-        .order-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          align-items: flex-start;
-        }
-
-        .patient {
-          margin: 0;
-          font-size: 13px;
-          font-weight: 800;
-        }
-
-        .meta {
-          margin: 3px 0 0;
-          font-size: 10px;
-          color: var(--muted);
-        }
-
-        .badge {
-          flex-shrink: 0;
-          border-radius: 999px;
-          padding: 4px 8px;
-          font-size: 9px;
-          font-weight: 800;
-          background: var(--accent-soft);
-          color: var(--accent);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-
-        .work {
-          margin: 10px 0;
-          font-size: 11px;
-          line-height: 1.5;
-        }
-
-        .amount-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 6px;
-        }
-
-        .amount-grid div {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          font-size: 11px;
-          color: var(--muted);
-        }
-
-        .amount-grid strong {
-          color: var(--ink);
-          font-size: 11px;
-        }
-
-        .summary {
-          border-radius: 16px;
-          padding: 12px;
-          background: linear-gradient(180deg, #f4f8fb 0%, #eef4f8 100%);
-          border: 1px solid var(--line);
-        }
-
-        .summary-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          font-size: 11px;
-          color: var(--muted);
-        }
-
-        .summary-row + .summary-row {
-          margin-top: 7px;
-        }
-
-        .summary-row.total {
-          margin-top: 10px;
-          padding-top: 10px;
-          border-top: 1px solid var(--line);
-          font-size: 14px;
-          font-weight: 900;
-          color: var(--ink);
-        }
-
-        .summary-row.pending strong {
-          color: var(--warn);
-        }
-
-        .footer {
-          padding: 0 14px 14px;
-          text-align: center;
-        }
-
-        .footer-box {
-          border-top: 1px dashed var(--line);
-          padding-top: 12px;
-        }
-
-        .thanks {
-          margin: 0;
-          font-size: 11px;
-          font-weight: 700;
-        }
-
-        .legal {
-          margin: 6px 0 0;
-          font-size: 9px;
-          color: var(--muted);
-          line-height: 1.5;
-        }
-
-        @media print {
-          html,
-          body {
-            background: white;
-            padding: 0;
-          }
-
-          .ticket {
-            width: 100%;
-            border: 0;
-            border-radius: 0;
-            box-shadow: none;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <main class="ticket">
-        <header class="topbar">
-          <p class="brand">APL DENTAL</p>
-          <p class="subtitle">Comprobante de pedidos</p>
-        </header>
-
-        <section class="content">
-          <div class="section">
-            <p class="document-title">Recibo de balance</p>
-            <p class="issued-at">Emitido ${escapeHtml(issuedAt)}</p>
-          </div>
-
-          <div class="section client-card">
-            <p class="label">Cliente</p>
-            <p class="client-name">${escapeHtml(client.nombre)}</p>
-            <p class="client-meta">Tel: ${escapeHtml(client.telefono || "No registrado")}</p>
-            <p class="client-meta">Email: ${escapeHtml(client.email || "No registrado")}</p>
-          </div>
-
-          <div class="section">
-            <p class="label">Detalle</p>
-            ${rows || '<section class="order-block"><p class="work">No hay pedidos seleccionados.</p></section>'}
-          </div>
-
-          <div class="section summary">
-            <div class="summary-row">
-              <span>Pedidos incluidos</span>
-              <strong>${escapeHtml(selectedOrders.length)}</strong>
-            </div>
-            <div class="summary-row">
-              <span>Total abonado</span>
-              <strong>${escapeHtml(formatMoney(paidAmount))}</strong>
-            </div>
-            <div class="summary-row pending">
-              <span>Total pendiente</span>
-              <strong>${escapeHtml(formatMoney(pendingAmount))}</strong>
-            </div>
-            <div class="summary-row total">
-              <span>Total general</span>
-              <strong>${escapeHtml(formatMoney(totalAmount))}</strong>
-            </div>
-          </div>
-        </section>
-
-        <footer class="footer">
-          <div class="footer-box">
-            <p class="thanks">Gracias por confiar en APL Dental</p>
-            <p class="legal">Documento generado automaticamente desde el modulo de balance.</p>
-          </div>
-        </footer>
-      </main>
-      <script>
-        window.onload = () => {
-          window.focus();
-          setTimeout(() => window.print(), 150);
-        };
-        window.onafterprint = () => window.close();
-      </script>
-    </body>
-  </html>`;
+    /* ── Impresión real (58mm o 80mm — el driver define el ancho) ── */
+    @media print {
+      html, body {
+        background: white;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+      }
+      .ticket {
+        width: 100%;      /* ocupa todo el ancho del papel */
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <p class="title-main">APL DENTAL</p>
+    <p class="title-sub">Laboratorio Protésico</p>
+    <p class="dash">${dash}</p>
+    <p class="doc-title">Comprobante de Pedidos</p>
+    <p class="issued-by">Emitido por: ${escapeHtml(issuedBy)}</p>
+    <p class="date">${escapeHtml(issuedAt)}</p>
+    <p class="dash">${dash}</p>
+    <p class="label">Cliente:</p>
+    <p class="client-name">${escapeHtml(client.nombre)}</p>
+    <p class="meta">Tel:${escapeHtml(client.telefono || "No registrado")}</p>
+    <p class="meta">Email:${escapeHtml(client.email || "No registrado")}</p>
+    <p class="dash">${dash}</p>
+    ${orderRows || `<p class="meta" style="text-align:center">No hay pedidos seleccionados.</p><p class="dash">${dash}</p>`}
+    <div class="total-section">
+      <div class="total-row"><span>TOTAL:</span><span>${escapeHtml(formatMoney(totalAmount))}</span></div>
+      <div class="paid-row"><span>Total Pagado:</span><span>${escapeHtml(formatMoney(paidAmount))}</span></div>
+    </div>
+    <p class="dash">${dash}</p>
+    <p class="count">${escapeHtml(selectedOrders.length)} pedido${selectedOrders.length !== 1 ? "s" : ""}</p>
+    <p class="dash">${dash}</p>
+    <p class="footer-text bold">Gracias por confiar en APL Dental</p>
+    <p class="footer-legal">Este comprobante fue generado automáticamente</p>
+  </div>
+  <script>
+    window.onload = () => { window.focus(); setTimeout(() => window.print(), 150); };
+    window.onafterprint = () => window.close();
+  </script>
+</body>
+</html>`;
 };
 
 export const printReceipt = (props: PrintableReceiptProps) => {
-  const printWindow = window.open("", "apl-print-receipt", "width=420,height=840");
+  const printWindow = window.open("", "apl-print-receipt", "width=340,height=720,scrollbars=yes");
   if (!printWindow) {
     throw new Error("No se pudo abrir la ventana de impresión. Revisa si el navegador bloqueó el popup.");
   }

@@ -77,6 +77,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
     nombre: "",
     email: "",
     telefono: "",
+    direccion: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,6 +134,7 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
         nombre: "",
         email: "",
         telefono: "",
+        direccion: "",
       });
       setClientKind('odontologo');
       setErrors({});
@@ -230,6 +232,20 @@ export function NewClientDialog({ open, onOpenChange, onClientCreated }: NewClie
             {errors.telefono && (
               <p className="text-sm text-red-500 mt-1">{errors.telefono}</p>
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="direccion">Dirección</Label>
+            <Input
+              id="direccion"
+              name="direccion"
+              autoComplete="street-address"
+              value={formData.direccion ?? ""}
+              onChange={(e) =>
+                setFormData({ ...formData, direccion: e.target.value })
+              }
+              placeholder="Ej: Av. Corrientes 1234, CABA"
+            />
           </div>
 
           <DialogFooter>

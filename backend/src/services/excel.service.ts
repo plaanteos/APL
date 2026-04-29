@@ -2,6 +2,17 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../utils/prisma';
 
 const PESO_CURRENCY_FORMAT = '[$$-es-AR] #,##0.00';
+const BLUE_FILL = '4472C4';
+const LIGHT_BLUE_FILL = 'D9E2F3';
+const LIGHT_GREEN_FILL = 'E2F0D9';
+const LIGHT_RED_FILL = 'FCE4D6';
+
+const THIN_BORDER = {
+    top: { style: 'thin' as const },
+    left: { style: 'thin' as const },
+    bottom: { style: 'thin' as const },
+    right: { style: 'thin' as const },
+};
 
 interface BalanceData {
     cliente: {
@@ -38,6 +49,41 @@ interface BalanceData {
 }
 
 export class ExcelService {
+    private static formatDate(value: Date | null | undefined): string {
+        if (!value) {
+            return '-';
+        }
+
+        return new Date(value).toLocaleDateString('es-ES');
+    }
+
+    private static formatCurrencyCell(cell: ExcelJS.Cell, value: number, bold = false): void {
+        cell.value = Number(value ?? 0);
+        cell.numFmt = PESO_CURRENCY_FORMAT;
+        if (bold) {
+            cell.font = { ...(cell.font ?? {}), bold: true };
+        }
+        cell.alignment = { vertical: 'middle', horizontal: 'right' };
+    }
+
+    private static applyTableBorder(row: ExcelJS.Row, fromCol: number, toCol: number): void {
+        for (let col = fromCol; col <= toCol; col++) {
+            row.getCell(col).border = THIN_BORDER;
+            row.getCell(col).alignment = { vertical: 'middle', horizontal: col === toCol ? 'right' : 'left' };
+        }
+    }
+
+    private static styleBlueHeader(cell: ExcelJS.Cell): void {
+        cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: BLUE_FILL },
+        };
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = THIN_BORDER;
+    }
+
     private static async buildBalanceData(clientId: number): Promise<BalanceData> {
         // Obtener datos del cliente con todos sus pedidos y pagos
         const cliente = await prisma.cliente.findUnique({
@@ -126,128 +172,132 @@ export class ExcelService {
     }
 
     /**
-     * Genera el Excel de BALANCE (descarga) como estaba originalmente (múltiples hojas)
+     * Genera el Excel de BALANCE DE CLIENTE con el layout solicitado.
      */
     static async generateBalanceExcel(clientId: number): Promise<Buffer> {
         const balanceData = await ExcelService.buildBalanceData(clientId);
 
-        // Crear libro de Excel
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'APL Laboratorio Dental';
         workbook.created = new Date();
 
-        // Hoja 1: Resumen (BALANCE)
         const resumenSheet = workbook.addWorksheet('Resumen');
-
-        // Título
-        resumenSheet.mergeCells('A1:D1');
+        resumenSheet.mergeCells('A1:E1');
         resumenSheet.getCell('A1').value = 'BALANCE DE CLIENTE';
-        resumenSheet.getCell('A1').font = { size: 16, bold: true };
-        resumenSheet.getCell('A1').alignment = { horizontal: 'center' };
+        ExcelService.styleBlueHeader(resumenSheet.getCell('A1'));
+        resumenSheet.getCell('A1').font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
 
-        // Información del cliente
-        resumenSheet.getCell('A3').value = 'Cliente:';
-        resumenSheet.getCell('B3').value = balanceData.cliente.nombre;
-        resumenSheet.getCell('A4').value = 'Email:';
-        resumenSheet.getCell('B4').value = balanceData.cliente.email;
-        resumenSheet.getCell('A5').value = 'Teléfono:';
-        resumenSheet.getCell('B5').value = balanceData.cliente.telefono;
+        const infoRows = [
+            ['A2', 'Cliente:', 'B2', balanceData.cliente.nombre],
+            ['A3', 'Email:', 'B3', balanceData.cliente.email],
+            ['A4', 'Teléfono:', 'B4', balanceData.cliente.telefono],
+        ] as const;
 
-        // Resumen financiero
-        resumenSheet.getCell('A7').value = 'RESUMEN FINANCIERO';
-        resumenSheet.getCell('A7').font = { bold: true, size: 12 };
-
-        resumenSheet.getCell('A8').value = 'Total Pedidos:';
-        resumenSheet.getCell('B8').value = balanceData.resumen.totalPedidos;
-
-        resumenSheet.getCell('A9').value = 'Monto Total:';
-        resumenSheet.getCell('B9').value = balanceData.resumen.montoTotal;
-        resumenSheet.getCell('B9').numFmt = PESO_CURRENCY_FORMAT;
-        resumenSheet.getCell('B9').font = { bold: true };
-
-        resumenSheet.getCell('A10').value = 'Monto Pagado:';
-        resumenSheet.getCell('B10').value = balanceData.resumen.montoPagado;
-        resumenSheet.getCell('B10').numFmt = PESO_CURRENCY_FORMAT;
-
-        resumenSheet.getCell('A11').value = 'Monto Pendiente:';
-        resumenSheet.getCell('B11').value = balanceData.resumen.montoPendiente;
-        resumenSheet.getCell('B11').numFmt = PESO_CURRENCY_FORMAT;
-        resumenSheet.getCell('B11').font = { bold: true };
-
-        // Ajustar anchos de columna
-        resumenSheet.getColumn(1).width = 20;
-        resumenSheet.getColumn(2).width = 30;
-
-        // Hoja 2: Pedidos
-        const pedidosSheet = workbook.addWorksheet('Pedidos');
-        pedidosSheet.columns = [
-            { header: 'Pedido #', key: 'id', width: 10 },
-            { header: 'Fecha Pedido', key: 'fecha_pedido', width: 15 },
-            { header: 'Fecha Entrega', key: 'fecha_entrega', width: 15 },
-            { header: 'Monto Total', key: 'montoTotal', width: 15 },
-            { header: 'Monto Pagado', key: 'montoPagado', width: 15 },
-            { header: 'Monto Pendiente', key: 'montoPendiente', width: 15 },
-        ];
-
-        pedidosSheet.getRow(1).font = { bold: true };
-        balanceData.pedidos.forEach(pedido => {
-            pedidosSheet.addRow({
-                id: pedido.id,
-                fecha_pedido: pedido.fecha_pedido.toLocaleDateString('es-ES'),
-                fecha_entrega: pedido.fecha_entrega ? pedido.fecha_entrega.toLocaleDateString('es-ES') : 'Pendiente',
-                montoTotal: pedido.montoTotal,
-                montoPagado: pedido.montoPagado,
-                montoPendiente: pedido.montoPendiente,
-            });
-        });
-        pedidosSheet.getColumn(4).numFmt = PESO_CURRENCY_FORMAT;
-        pedidosSheet.getColumn(5).numFmt = PESO_CURRENCY_FORMAT;
-        pedidosSheet.getColumn(6).numFmt = PESO_CURRENCY_FORMAT;
-
-        // Hoja 3: Detalle Completo
-        const detalleSheet = workbook.addWorksheet('Detalle Completo');
-        let currentRow = 1;
-
-        balanceData.pedidos.forEach((pedido) => {
-            detalleSheet.mergeCells(`A${currentRow}:F${currentRow}`);
-            detalleSheet.getCell(`A${currentRow}`).value = `PEDIDO #${pedido.id} - ${pedido.fecha_pedido.toLocaleDateString('es-ES')}`;
-            detalleSheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
-            currentRow++;
-
-            detalleSheet.getCell(`A${currentRow}`).value = 'Producto';
-            detalleSheet.getCell(`B${currentRow}`).value = 'Paciente';
-            detalleSheet.getCell(`C${currentRow}`).value = 'Cantidad';
-            detalleSheet.getCell(`D${currentRow}`).value = 'Precio Unit.';
-            detalleSheet.getCell(`E${currentRow}`).value = 'Subtotal';
-            detalleSheet.getRow(currentRow).font = { bold: true };
-            currentRow++;
-
-            pedido.detalles.forEach(detalle => {
-                detalleSheet.getCell(`A${currentRow}`).value = detalle.producto;
-                detalleSheet.getCell(`B${currentRow}`).value = detalle.paciente;
-                detalleSheet.getCell(`C${currentRow}`).value = detalle.cantidad;
-                detalleSheet.getCell(`D${currentRow}`).value = detalle.precio_unitario;
-                detalleSheet.getCell(`E${currentRow}`).value = detalle.subtotal;
-                detalleSheet.getCell(`D${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
-                detalleSheet.getCell(`E${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
-                currentRow++;
-            });
-
-            currentRow++;
-            detalleSheet.getCell(`D${currentRow}`).value = 'Total:';
-            detalleSheet.getCell(`E${currentRow}`).value = pedido.montoTotal;
-            detalleSheet.getCell(`E${currentRow}`).numFmt = PESO_CURRENCY_FORMAT;
-            detalleSheet.getCell(`E${currentRow}`).font = { bold: true };
-            currentRow += 2;
+        infoRows.forEach(([labelCell, label, valueCell, value]) => {
+            resumenSheet.getCell(labelCell).value = label;
+            resumenSheet.getCell(labelCell).font = { bold: false };
+            resumenSheet.getCell(valueCell).value = value;
         });
 
-        detalleSheet.getColumn(1).width = 25;
-        detalleSheet.getColumn(2).width = 20;
-        detalleSheet.getColumn(3).width = 10;
-        detalleSheet.getColumn(4).width = 15;
-        detalleSheet.getColumn(5).width = 15;
+        resumenSheet.mergeCells('B2:E2');
+        resumenSheet.mergeCells('B3:E3');
+        resumenSheet.mergeCells('B4:E4');
 
-        // Generar buffer
+        resumenSheet.mergeCells('A6:B6');
+        resumenSheet.getCell('A6').value = 'RESUMEN FINANCIERO';
+        ExcelService.styleBlueHeader(resumenSheet.getCell('A6'));
+
+        resumenSheet.getCell('A7').value = 'Total Pedidos:';
+        resumenSheet.getCell('B7').value = balanceData.resumen.totalPedidos;
+        resumenSheet.getCell('B7').alignment = { horizontal: 'right', vertical: 'middle' };
+
+        resumenSheet.getCell('A8').value = 'Monto Total:';
+        ExcelService.formatCurrencyCell(resumenSheet.getCell('B8'), balanceData.resumen.montoTotal, true);
+
+        resumenSheet.getCell('A9').value = 'Monto Pagado:';
+        ExcelService.formatCurrencyCell(resumenSheet.getCell('B9'), balanceData.resumen.montoPagado);
+
+        resumenSheet.getCell('A10').value = 'Monto Pendiente:';
+        ExcelService.formatCurrencyCell(resumenSheet.getCell('B10'), balanceData.resumen.montoPendiente, true);
+
+        for (let rowNumber = 2; rowNumber <= 10; rowNumber++) {
+            ExcelService.applyTableBorder(resumenSheet.getRow(rowNumber), 1, 2);
+        }
+
+        resumenSheet.mergeCells('A12:E12');
+        resumenSheet.getCell('A12').value = 'DETALLE PEDIDOS';
+        ExcelService.styleBlueHeader(resumenSheet.getCell('A12'));
+
+        const detailHeaderRow = resumenSheet.getRow(13);
+        detailHeaderRow.values = ['Pedido #', 'Fecha Entrega', 'Paciente', 'Trabajo', 'Monto Total'];
+        for (let col = 1; col <= 5; col++) {
+            ExcelService.styleBlueHeader(detailHeaderRow.getCell(col));
+        }
+        detailHeaderRow.height = 20;
+
+        let currentRow = 14;
+        for (const pedido of balanceData.pedidos) {
+            const firstDetail = pedido.detalles[0];
+            const row = resumenSheet.getRow(currentRow);
+            row.getCell(1).value = pedido.id;
+            row.getCell(2).value = ExcelService.formatDate(pedido.fecha_entrega);
+            row.getCell(3).value = firstDetail?.paciente || '-';
+            row.getCell(4).value = firstDetail?.producto || '-';
+            ExcelService.formatCurrencyCell(row.getCell(5), pedido.montoTotal);
+            ExcelService.applyTableBorder(row, 1, 5);
+            row.height = 20;
+            currentRow++;
+        }
+
+        const totalRow = resumenSheet.getRow(currentRow);
+        totalRow.getCell(1).value = 'TOTAL';
+        totalRow.getCell(1).font = { bold: true };
+        totalRow.getCell(5).value = balanceData.resumen.montoTotal;
+        totalRow.getCell(5).numFmt = PESO_CURRENCY_FORMAT;
+        totalRow.getCell(5).font = { bold: true };
+        ExcelService.applyTableBorder(totalRow, 1, 5);
+        for (let col = 1; col <= 5; col++) {
+            totalRow.getCell(col).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: LIGHT_BLUE_FILL },
+            };
+        }
+
+        currentRow++;
+        const paidRow = resumenSheet.getRow(currentRow);
+        paidRow.getCell(1).value = 'Monto pagado';
+        paidRow.getCell(1).font = { bold: true };
+        ExcelService.formatCurrencyCell(paidRow.getCell(5), balanceData.resumen.montoPagado, true);
+        ExcelService.applyTableBorder(paidRow, 1, 5);
+        for (let col = 1; col <= 5; col++) {
+            paidRow.getCell(col).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: LIGHT_GREEN_FILL },
+            };
+        }
+
+        currentRow++;
+        const pendingRow = resumenSheet.getRow(currentRow);
+        pendingRow.getCell(1).value = 'Monto pendiente';
+        pendingRow.getCell(1).font = { bold: true };
+        ExcelService.formatCurrencyCell(pendingRow.getCell(5), balanceData.resumen.montoPendiente, true);
+        ExcelService.applyTableBorder(pendingRow, 1, 5);
+        for (let col = 1; col <= 5; col++) {
+            pendingRow.getCell(col).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: LIGHT_RED_FILL },
+            };
+        }
+
+        resumenSheet.getColumn(1).width = 18;
+        resumenSheet.getColumn(2).width = 28;
+        resumenSheet.getColumn(3).width = 18;
+        resumenSheet.getColumn(4).width = 20;
+        resumenSheet.getColumn(5).width = 18;
+
         const buffer = await workbook.xlsx.writeBuffer();
         return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
     }

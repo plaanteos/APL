@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import logger from '../utils/logger';
 
 /**
@@ -47,7 +47,8 @@ export const whatsappRateLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minuto
     max: 60, // Límite de 60 mensajes
     keyGenerator: (req: any) => {
-        return (req.user?.id || req.ip).toString();
+        if (req.user?.id) return req.user.id.toString();
+        return ipKeyGenerator(req);
     },
     message: {
         success: false,

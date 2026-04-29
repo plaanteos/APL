@@ -20,12 +20,14 @@ const createClientSchema = z.object({
   nombre: z.coerce.string().trim().min(2, 'Nombre debe tener al menos 2 caracteres'),
   email: z.coerce.string().trim().email('Email inválido'),
   telefono: z.coerce.string().trim().min(8, 'Teléfono debe tener al menos 8 caracteres'),
+  direccion: z.coerce.string().trim().max(200).optional(),
 });
 
 const updateClientSchema = z.object({
   nombre: z.coerce.string().trim().min(2, 'Nombre debe tener al menos 2 caracteres').optional(),
   email: z.coerce.string().trim().email('Email inválido').optional(),
   telefono: z.coerce.string().trim().min(8, 'Teléfono debe tener al menos 8 caracteres').optional(),
+  direccion: z.coerce.string().trim().max(200).optional(),
 });
 
 export class ClientController {

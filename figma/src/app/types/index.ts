@@ -30,6 +30,7 @@ export interface IClient {
   nombre: string;
   email: string;
   telefono: string;
+  direccion?: string;
   id_administrador: ID;
   // Campos calculados (no en DB)
   totalOrders?: number;
@@ -256,6 +257,7 @@ export interface IClientFormData {
   nombre: string;
   email: string;
   telefono: string;
+  direccion?: string;
 }
 
 export interface IProductoFormData {

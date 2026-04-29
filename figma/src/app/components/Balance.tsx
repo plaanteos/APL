@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
 import { toast } from "sonner";
 import { NewOrderDialog } from "./NewOrderDialog";
 import { PaymentDialog } from "./PaymentDialog";
@@ -30,6 +36,7 @@ import {
 } from "../../services/whatsapp.service";
 import { useAuth } from "../../hooks/useAuth";
 import { useWhatsAppConnectionStatus } from "../../hooks/useWhatsAppConnectionStatus";
+import { downloadBalancePeriodExcel } from "../../utils/balanceExcel";
 
 interface BalanceProps {
   selectedClientId: number | null;
@@ -290,6 +297,9 @@ export function Balance({ selectedClientId }: BalanceProps) {
         client: activeClient,
         orders: filteredPedidos,
         selectedOrderIds,
+        issuedBy: user
+          ? ((user as any).usuario || user.username || (user as any).nombre || `${user.nombres ?? ""} ${user.apellidos ?? ""}`.trim() || "Usuario")
+          : "Usuario",
       });
       toast.success("Abriendo comprobante de impresión");
     } catch (error: any) {
@@ -468,61 +478,19 @@ export function Balance({ selectedClientId }: BalanceProps) {
     ? balanceData.cliente
     : selectedClient;
 
-  // ─── Descarga CSV mensual / anual (sin dependencias externas) ────────────────
-  const handleDownloadPeriodExcel = () => {
+  // ─── Descarga Excel mensual / anual ──────────────────────────────────────────
+  const handleDownloadPeriodExcel = async () => {
     try {
-      const periodLabel = period === "monthly" ? monthValue : yearValue;
-      const income = viewTotals.totalPagado;
-      const expenses = periodExpenseSummary?.total ?? 0;
-      const balance = income - expenses;
+      await downloadBalancePeriodExcel({
+        period,
+        monthValue,
+        yearValue,
+        orders: filteredGlobalOrders,
+        expenses: periodExpenses,
+        expenseSummary: periodExpenseSummary,
+      });
 
-      const esc = (v: any) => {
-        const s = String(v ?? "");
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
-      const csvRow = (cells: any[]) => cells.map(esc).join(",");
-
-      const lines: string[] = [];
-
-      lines.push("=== RESUMEN ===");
-      lines.push(csvRow(["Concepto", "Monto"]));
-      lines.push(csvRow(["Total Ingresos", income]));
-      lines.push(csvRow(["Total Egresos - Insumos", periodExpenseSummary?.totalInsumos ?? 0]));
-      lines.push(csvRow(["Total Egresos - Cadeteria", periodExpenseSummary?.totalCadeteria ?? 0]));
-      lines.push(csvRow(["Total Egresos", expenses]));
-      lines.push(csvRow(["Balance", balance]));
-      lines.push("");
-      lines.push("=== PEDIDOS ===");
-      lines.push(csvRow(["Fecha", "Paciente", "Trabajo", "Total", "Pagado", "Pendiente", "Entregado"]));
-      filteredGlobalOrders.forEach((p) => // Use filteredGlobalOrders for orders list
-        lines.push(csvRow([
-          formatDate(p.fecha), p.paciente || "-", p.productos,
-          p.montoTotal, p.montoPagado, p.montoPendiente,
-          p.entregado ? "Si" : "No",
-        ]))
-      );
-      lines.push("");
-      lines.push("=== GASTOS ===");
-      lines.push(csvRow(["Fecha", "Tipo", "Descripcion", "Monto"]));
-      periodExpenses.forEach((e) =>
-        lines.push(csvRow([
-          formatExpenseDate(e.fecha),
-          e.tipo === "supplies" ? "Insumos" : "Cadeteria",
-          e.descripcion, e.monto,
-        ]))
-      );
-
-      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Balance_${period === "monthly" ? "Mensual" : "Anual"}_${periodLabel}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-
-      toast.success("CSV descargado exitosamente");
+      toast.success("Excel descargado exitosamente");
     } catch {
       toast.error("Error al descargar");
     }
@@ -641,7 +609,11 @@ export function Balance({ selectedClientId }: BalanceProps) {
                       {formatCurrency(item.montoPendiente ?? 0)}
                     </td>
                     <td className="py-4 px-3 align-top">
-                      {isDelivered ? (
+                      {isDelivered && hasDebt ? (
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs text-orange-800 border border-orange-300">
+                          Entregado c/deuda
+                        </span>
+                      ) : isDelivered ? (
                         <span className="inline-flex items-center rounded-full bg-[#28666e]/20 px-3 py-1 text-xs text-[#28666e]">
                           Entregado
                         </span>
@@ -656,32 +628,36 @@ export function Balance({ selectedClientId }: BalanceProps) {
                       )}
                     </td>
                     {period === "all" && (
-                      <td className="py-4 px-3 text-center align-top">
-                        {hasDebt ? (
-                          <Button
-                            type="button"
-                            onClick={() => openPaymentFor(item)}
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9"
-                            title="Registrar pago"
-                          >
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                        ) : !isDelivered && isPaid ? (
-                          <Button
-                            type="button"
-                            onClick={() => handleMarkAsDelivered(item.pedidoId)}
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9"
-                            title="Confirmar entrega"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                      <td className="py-4 px-3 align-top">
+                        <div className="flex flex-row items-center gap-1">
+                          {hasDebt && (
+                            <Button
+                              type="button"
+                              onClick={() => openPaymentFor(item)}
+                              variant="outline"
+                              size="icon"
+                              className="h-9 w-9"
+                              title="Registrar pago"
+                            >
+                              <DollarSign className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {!isDelivered && (
+                            <Button
+                              type="button"
+                              onClick={() => handleMarkAsDelivered(item.pedidoId)}
+                              variant="outline"
+                              size="icon"
+                              className="h-9 w-9"
+                              title="Confirmar entrega"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {isDelivered && !hasDebt && (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -790,7 +766,7 @@ export function Balance({ selectedClientId }: BalanceProps) {
           className="w-full flex items-center justify-center gap-2 border-[#7c9885] text-[#7c9885] hover:bg-[#7c9885]/10"
         >
           <Download size={18} />
-          <span>Descargar CSV</span>
+          <span>Descargar Excel</span>
         </Button>
       </div>
     );
@@ -820,98 +796,105 @@ export function Balance({ selectedClientId }: BalanceProps) {
     <>
       <div className="p-4 space-y-4 print:hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-[#033f63] font-semibold text-lg">Balance</h2>
+      <h2 className="text-[#033f63] font-semibold text-lg">Balance</h2>
+      <div className="grid grid-cols-3 gap-2">
         <Button
           onClick={() => setShowNewOrderDialog(true)}
-          className="bg-[#033f63] hover:bg-[#28666e]"
-          size="sm"
+          className="bg-[#033f63] hover:bg-[#28666e] h-auto py-3"
         >
           <Plus size={16} className="mr-1" />
           Pedido
         </Button>
+        <Button
+          onClick={() => setShowAddExpenseSheet(true)}
+          variant="outline"
+          className="h-auto py-3 border-[#b5b682] text-[#b5b682] hover:bg-[#b5b682]/10"
+        >
+          <Plus size={16} className="mr-1" />
+          Gastos
+        </Button>
+        <Button
+          onClick={() => setShowExpensesSheet(true)}
+          variant="outline"
+          className="h-auto py-3 border-[#033f63] text-[#033f63] hover:bg-[#033f63]/10 flex items-center justify-center gap-1"
+        >
+          <Eye size={16} />
+          Ver Gastos
+          {expensesCount > 0 && (
+            <span className="flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-[#033f63] rounded-full">
+              {expensesCount}
+            </span>
+          )}
+        </Button>
       </div>
 
-      {/* Filtros: cliente + período */}
-      <Card className="p-4">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Período / Tipo de Balance (Aparece primero como pidió el cliente) */}
-          <div className="space-y-2">
-            <label htmlFor="balancePeriod" className="text-sm font-medium text-gray-700">
-              Tipo de balance
-            </label>
-            <Select value={period} onValueChange={(v) => setPeriod(v as BalancePeriod)}>
-              <SelectTrigger id="balancePeriod" className="w-full">
-                <SelectValue placeholder="Seleccionar filtro" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Balance por Cliente</SelectItem>
-                <SelectItem value="monthly">Balance Mensual</SelectItem>
-                <SelectItem value="yearly">Balance Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Cliente (Solo si está en 'Balance por Cliente') */}
-          {period === "all" && (
-            <div className="space-y-2">
-              <label htmlFor="balanceClient" className="text-sm font-medium text-gray-700">
-                Seleccionar cliente
-              </label>
-              <Select
-                value={currentClientId?.toString() || ""}
-                onValueChange={(val) => setCurrentClientId(Number(val))}
-                name="clientId"
+      {/* Filtros: tipo de balance + cliente (formato Accordion) */}
+      <Accordion type="single" collapsible className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        <AccordionItem value="period" className="border-none px-4">
+          <AccordionTrigger className="text-sm font-medium text-[#033f63] py-4 hover:no-underline">
+            {period === "all" ? "Balance por Cliente" : period === "monthly" ? "Balance Mensual" : "Balance Anual"}
+          </AccordionTrigger>
+          <AccordionContent className="pb-4 space-y-1">
+            {([
+              { value: "all", label: "Balance por Cliente" },
+              { value: "monthly", label: "Balance Mensual" },
+              { value: "yearly", label: "Balance Anual" },
+            ] as { value: BalancePeriod; label: string }[]).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setPeriod(opt.value)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  period === opt.value
+                    ? "bg-[#033f63] text-white font-medium"
+                    : "text-[#033f63] hover:bg-[#033f63]/10"
+                }`}
               >
-                <SelectTrigger id="balanceClient" className="w-full">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id.toString()}>
-                      {client.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {activeClient && (
-                <p className="text-xs text-gray-500">
-                  Mostrando balance de:{" "}
-                  <span className="font-medium text-gray-700">{activeClient.nombre}</span>
-                </p>
-              )}
-            </div>
-          )}
-          </div>
-
-          {period === "monthly" && (
-            <div className="space-y-2">
-              <label htmlFor="balanceMonth" className="text-sm font-medium text-gray-700">Mes</label>
+                {opt.label}
+              </button>
+            ))}
+            {period === "monthly" && (
               <Input
-                id="balanceMonth"
                 type="month"
                 value={monthValue}
                 onChange={(e) => setMonthValue(e.target.value)}
+                className="mt-2"
               />
-            </div>
-          )}
-
-          {period === "yearly" && (
-            <div className="space-y-2">
-              <label htmlFor="balanceYear" className="text-sm font-medium text-gray-700">Año</label>
+            )}
+            {period === "yearly" && (
               <Input
-                id="balanceYear"
                 type="number"
                 min="2000"
                 max="2100"
                 value={yearValue}
                 onChange={(e) => setYearValue(e.target.value)}
+                className="mt-2"
               />
-            </div>
-          )}
-        </div>
-      </Card>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+        {period === "all" && (
+          <AccordionItem value="client" className="border-none px-4">
+            <AccordionTrigger className="text-sm font-medium text-[#033f63] py-4 hover:no-underline">
+              {activeClient?.nombre || selectedClient?.nombre || "Seleccionar cliente"}
+            </AccordionTrigger>
+            <AccordionContent className="pb-4 space-y-1 max-h-48 overflow-y-auto">
+              {clients.map((client) => (
+                <button
+                  key={client.id}
+                  onClick={() => setCurrentClientId(client.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    currentClientId === client.id
+                      ? "bg-[#033f63] text-white font-medium"
+                      : "text-[#033f63] hover:bg-[#033f63]/10"
+                  }`}
+                >
+                  {client.nombre}
+                </button>
+              ))}
+            </AccordionContent>
+          </AccordionItem>
+        )}
+      </Accordion>
 
       {period === "all" ? (
         isLoadingBalance ? (
@@ -982,33 +965,6 @@ export function Balance({ selectedClientId }: BalanceProps) {
           </div>
 
           {isWhatsAppConnected === false && <WhatsAppConnectionNotice />}
-
-          {/* Otros Gastos */}
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={() => setShowAddExpenseSheet(true)}
-              variant="outline"
-              size="sm"
-              className="flex items-center justify-center gap-2 h-auto py-3 border-[#b5b682] text-[#b5b682] hover:bg-[#b5b682]/10"
-            >
-              <Plus size={18} />
-              <span className="text-sm">Agregar Otros Gastos</span>
-            </Button>
-            <Button
-              onClick={() => setShowExpensesSheet(true)}
-              variant="outline"
-              size="sm"
-              className="flex items-center justify-center gap-2 h-auto py-3 border-[#033f63] text-[#033f63] hover:bg-[#033f63]/10"
-            >
-              <Eye size={18} />
-              <span className="text-sm">Ver Otros Gastos</span>
-              {expensesCount > 0 && (
-                <span className="flex items-center justify-center w-5 h-5 ml-1 text-xs font-medium text-white bg-[#033f63] rounded-full">
-                  {expensesCount}
-                </span>
-              )}
-            </Button>
-          </div>
 
           {/* Panel de acciones cuando hay pedidos seleccionados */}
           {selectedOrderIds.length > 0 && (

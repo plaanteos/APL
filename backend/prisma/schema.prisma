@@ -57,6 +57,7 @@ model Cliente {
   email            String        @db.VarChar(100)
   id_administrador Int
   celular          String?      @db.VarChar(20)
+  direccion        String?      @db.VarChar(200)
   id_tipo          Int?
 
   administrador    Administrador @relation(fields: [id_administrador], references: [id])
